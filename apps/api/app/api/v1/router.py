@@ -15,6 +15,7 @@ from app.api.v1 import (
     voicecheck,
     voicecheck_diagnoses,
     voicecheck_enhance,
+    voz_clinica,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -31,4 +32,5 @@ api_router.include_router(vocal.router)
 api_router.include_router(voicecheck_diagnoses.router)
 api_router.include_router(voicecheck_enhance.router)
 api_router.include_router(voicecheck.router)
+api_router.include_router(voz_clinica.router)
 api_router.include_router(admin.router)

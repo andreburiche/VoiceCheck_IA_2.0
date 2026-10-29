@@ -1,0 +1,137 @@
+"""VoiceCheck IA 2.0 — rotas /api/v1/voz-clinica contra a API no ar (pula se estiver fora)."""
+
+from __future__ import annotations
+
+import io
+import os
+import uuid
+
+import httpx
+import pytest
+
+from voz_clinica_sintese import para_wav, sintetizar
+
+BASE = os.getenv("PUBLIC_API_URL", "http://localhost:8000")
+
+
+def _registrar(c: httpx.Client, prefixo: str) -> None:
+    email = f"{prefixo}_{uuid.uuid4().hex[:8]}@example.com"
+    reg = c.post("/api/v1/auth/register", json={"email": email, "password": "senha12345", "name": prefixo})
+    assert reg.status_code == 201, reg.text
+    c.cookies.update(reg.cookies)
+    c.headers["X-CSRF-Token"] = reg.json()["csrf_token"]
+
+
+def _cliente(prefixo: str) -> httpx.Client:
+    c = httpx.Client(base_url=BASE, timeout=60.0)
+    try:
+        if c.get("/health").status_code != 200:
+            pytest.skip("API down")
+    except httpx.ConnectError:
+        pytest.skip("API down")
+    _registrar(c, prefixo)
+    return c
+
+
+@pytest.fixture
+def client() -> httpx.Client:
+    return _cliente("vozclin")
+
+
+def _wav(**kw) -> bytes:
+    return para_wav(sintetizar(**kw).audio)
+
+
+def test_status_lista_motores(client: httpx.Client) -> None:
+    r = client.get("/api/v1/voz-clinica/status")
+    assert r.status_code == 200, r.text
+    assert "interno" in r.json()["motores"]
+    assert set(r.json()["protocolos"]) == {"idv10", "qvv", "grbasi"}
+
+
+def test_analisar_sem_paciente_nao_salva(client: httpx.Client) -> None:
+    r = client.post(
+        "/api/v1/voz-clinica/analisar",
+        files={"file": ("vogal.wav", io.BytesIO(_wav(f0=200, sj=0.01)), "audio/wav")},
+        data={"f0_min": "100", "f0_max": "600"},
+    )
+    assert r.status_code == 200, r.text
+    corpo = r.json()
+    assert corpo["avaliacao_id"] is None
+    assert corpo["resultado"]["f0"]["media_hz"] == pytest.approx(200, rel=0.02)
+    assert corpo["resultado"]["perturbacao"]["jitter_local_pct"] > 0
+
+
+def test_fluxo_paciente_salva_lista_e_exclui(client: httpx.Client) -> None:
+    paciente = f"Paciente {uuid.uuid4().hex[:6]}"
+    a = client.post(
+        "/api/v1/voz-clinica/analisar",
+        files={"file": ("vogal.wav", io.BytesIO(_wav(f0=150)), "audio/wav")},
+        data={"paciente": f"  {paciente}  "},  # espaços extras são removidos
+    )
+    assert a.status_code == 200, a.text
+    assert a.json()["avaliacao_id"]
+
+    q = client.post("/api/v1/voz-clinica/protocolos/qvv", json={"respostas": [3] * 10, "paciente": paciente})
+    assert q.status_code == 200, q.text
+    assert q.json()["resultado"]["total"] == 50
+
+    lista = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"]
+    assert [i["tipo"] for i in lista] == ["qvv", "acustica"]  # mais recente primeiro
+
+    pacientes = client.get("/api/v1/voz-clinica/pacientes").json()["items"]
+    assert any(p["paciente"] == paciente and p["avaliacoes"] == 2 for p in pacientes)
+
+    d = client.delete(f"/api/v1/voz-clinica/avaliacoes/{lista[0]['id']}")
+    assert d.status_code == 204
+    restantes = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"]
+    assert [i["tipo"] for i in restantes] == ["acustica"]
+
+
+def test_outro_usuario_nao_ve_nem_exclui(client: httpx.Client) -> None:
+    paciente = f"Privado {uuid.uuid4().hex[:6]}"
+    r = client.post("/api/v1/voz-clinica/protocolos/idv10", json={"respostas": [1] * 10, "paciente": paciente})
+    ident = r.json()["avaliacao_id"]
+
+    intruso = _cliente("intruso")
+    assert intruso.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"] == []
+    assert intruso.delete(f"/api/v1/voz-clinica/avaliacoes/{ident}").status_code == 404
+
+
+def test_erros_de_entrada(client: httpx.Client) -> None:
+    nao_wav = client.post(
+        "/api/v1/voz-clinica/analisar",
+        files={"file": ("x.wav", io.BytesIO(b"isto nao e wav"), "audio/wav")},
+    )
+    assert nao_wav.status_code == 400
+    assert "WAV" in nao_wav.json()["detail"]
+
+    item_ruim = client.post("/api/v1/voz-clinica/protocolos/idv10", json={"respostas": [0, 0, 9] + [0] * 7})
+    assert item_ruim.status_code == 400
+    assert "item 3" in item_ruim.json()["detail"]
+
+    assert client.post("/api/v1/voz-clinica/protocolos/ease", json={"respostas": []}).status_code == 404
+
+
+def test_exige_login_e_csrf() -> None:
+    c = httpx.Client(base_url=BASE, timeout=30.0)
+    try:
+        if c.get("/health").status_code != 200:
+            pytest.skip("API down")
+    except httpx.ConnectError:
+        pytest.skip("API down")
+    assert c.get("/api/v1/voz-clinica/avaliacoes").status_code == 401
+
+    logado = _cliente("semcsrf")
+    del logado.headers["X-CSRF-Token"]
+    r = logado.post("/api/v1/voz-clinica/protocolos/qvv", json={"respostas": [1] * 10})
+    assert r.status_code == 403
+
+
+def test_dsi(client: httpx.Client) -> None:
+    r = client.post(
+        "/api/v1/voz-clinica/dsi",
+        json={"tmf_s": 20, "f0_alta_hz": 600, "i_baixa_db_spl": 50, "jitter_pct": 0.5},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["dsi"] == pytest.approx(4.59, abs=0.01)
