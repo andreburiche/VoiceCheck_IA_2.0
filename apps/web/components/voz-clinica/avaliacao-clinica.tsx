@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { friendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { BiofeedbackAoVivo } from "@/components/voz-clinica/biofeedback-ao-vivo";
+import { Espectrograma } from "@/components/voz-clinica/espectrograma";
 import { Fonetograma } from "@/components/voz-clinica/fonetograma";
 import { JogosTerapia } from "@/components/voz-clinica/jogos-terapia";
 import { GraficoEvolucao } from "@/components/voz-clinica/grafico-evolucao";
@@ -219,6 +220,7 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
       {urlAudio ? (
         <audio className="mt-4 w-full" src={urlAudio} controls aria-label="Ouvir a gravação" />
       ) : null}
+      {gravacao && !gravando ? <Espectrograma wav={gravacao.wav} /> : null}
       <Avisos itens={gravacao?.avisos ?? []} />
 
       <div className="mt-4">

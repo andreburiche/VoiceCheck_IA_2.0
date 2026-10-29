@@ -14,6 +14,7 @@ paciente. Biofeedback e jogos (VoxGames, Voice Analyst) ficam para a fase 2.
 | --- | --- |
 | Paciente | Nome ou código. Com ele preenchido, cada resultado fica salvo; sem ele, só aparece na tela |
 | Gravar | Microfone **sem** cancelamento de eco, supressão de ruído e ganho automático (o Treino usa esses filtros; aqui eles distorceriam as medidas). Avisa se o navegador não obedecer, se saturar ou se o sinal ficar baixo |
+| Espectrograma | Logo após gravar: banda estreita (janela gaussiana de 30 ms — harmônicos e quebras) ou larga (5 ms — formantes e pulsos), 0–5 kHz, faixa dinâmica de 70 dB, pré-ênfase, curva de F0 opcional (YIN a cada 10 ms). Calculado no navegador (~0,1–0,2 s para 5 s de áudio) |
 | Analisar | F0 e variação, jitter (local, RAP, PPQ5), shimmer (local, dB, APQ3, APQ5), HNR, CPPS, F1–F3, tempo de fonação, quebras de voz |
 | IDV-10 | 10 itens de 0 a 4; total 0–40; nota de corte 7,5 |
 | QVV | 10 itens de 1 a 5; escores 0–100 (total, físico, socioemocional); nota de corte 91,25 |
@@ -45,6 +46,8 @@ apps/web/lib/voz-clinica-jogos.ts                      lógica dos jogos e class
 apps/web/components/voz-clinica/jogos-terapia.tsx      tela dos jogos
 apps/web/lib/voz-clinica-fonetograma.ts                campo vocal por semitom
 apps/web/components/voz-clinica/fonetograma.tsx        tela do fonetograma (canvas)
+apps/web/lib/voz-clinica-espectrograma.ts              FFT, espectrograma, leitura de WAV, escala de cor
+apps/web/components/voz-clinica/espectrograma.tsx      espectrograma da gravação (canvas)
 apps/api/app/services/voz_clinica/fonetograma.py       resumo do campo no servidor
         │  multipart / JSON, cookie de sessão + CSRF
         ▼
@@ -117,4 +120,5 @@ no Docker com os comandos acima.
 2. ~~Relatório PDF da avaliação clínica~~ (feito).
 3. ~~Biofeedback ao vivo~~ e ~~jogos de terapia~~ (feitos).
 4. ~~Fonetograma~~ (feito; em dBFS — dB SPL exige calibração).
-5. Próximos: prática em casa (celular, offline), anamnese e EASE-BR, espectrograma.
+5. ~~Espectrograma~~ (feito).
+6. Próximos: prática em casa (celular, offline), anamnese e EASE-BR.
