@@ -1,0 +1,194 @@
+/** VoiceCheck IA 2.0 — cliente das rotas /api/v1/voz-clinica. */
+import { apiFetch } from "@/lib/api";
+
+export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi";
+export type Protocolo = Exclude<TipoAvaliacao, "acustica">;
+
+export type AnaliseAcustica = {
+  motor: "praat" | "interno";
+  versao_praat?: string;
+  duracao_s: number;
+  f0?: {
+    media_hz: number;
+    mediana_hz: number;
+    dp_hz: number;
+    min_hz: number;
+    max_hz: number;
+    dp_semitons: number;
+    faixa_semitons: number;
+  };
+  intensidade?: { media_dbfs: number | null; min_dbfs: number | null; max_dbfs: number | null };
+  perturbacao?: {
+    jitter_local_pct?: number | null;
+    jitter_rap_pct?: number | null;
+    jitter_ppq5_pct?: number | null;
+    shimmer_local_pct?: number | null;
+    shimmer_local_db?: number | null;
+    shimmer_apq3_pct?: number | null;
+    shimmer_apq5_pct?: number | null;
+    ciclos?: number;
+  };
+  ruido?: { hnr_db: number | null };
+  cpps_db?: number | null;
+  formantes?: { f1_hz: number | null; f2_hz: number | null; f3_hz: number | null };
+  fonacao?: { tmf_s: number; fracao_surdos_pct: number; quebras_de_voz: number };
+  avisos: string[];
+};
+
+export type ResultadoIdv10 = {
+  protocolo: "IDV-10";
+  total: number;
+  maximo: number;
+  acima_do_corte: boolean;
+  corte: number;
+};
+
+export type ResultadoQvv = {
+  protocolo: "QVV";
+  total: number;
+  fisico: number;
+  socioemocional: number;
+  abaixo_do_corte: boolean;
+  corte_total: number;
+  itens_com_problema: number[];
+};
+
+export type ResultadoGrbasi = {
+  protocolo: "GRBASI";
+  registro: string;
+  parametros: Record<string, { nome: string; nota: number; nivel: string }>;
+};
+
+export type ResultadoProtocolo = ResultadoIdv10 | ResultadoQvv | ResultadoGrbasi;
+
+export type Salvo<T> = { avaliacao_id: string | null; resultado: T };
+
+export type Avaliacao = {
+  id: string;
+  paciente: string;
+  tipo: TipoAvaliacao;
+  motor: string | null;
+  resultado: AnaliseAcustica | ResultadoProtocolo;
+  criado_em: string;
+};
+
+export type PacienteResumo = { paciente: string; avaliacoes: number; ultima: string };
+
+const BASE = "/api/v1/voz-clinica";
+
+export function statusVozClinica() {
+  return apiFetch<{ motores: string[]; protocolos: string[] }>(`${BASE}/status`);
+}
+
+export function analisarGravacao(
+  wav: Blob,
+  opcoes: { f0Min: number; f0Max: number; paciente?: string | null },
+) {
+  const dados = new FormData();
+  dados.append("file", wav, "gravacao.wav");
+  dados.append("f0_min", String(opcoes.f0Min));
+  dados.append("f0_max", String(opcoes.f0Max));
+  if (opcoes.paciente) dados.append("paciente", opcoes.paciente);
+  return apiFetch<Salvo<AnaliseAcustica>>(`${BASE}/analisar`, {
+    method: "POST",
+    body: dados,
+    timeoutMs: 90_000,
+  });
+}
+
+export function calcularProtocolo(
+  nome: Protocolo,
+  respostas: number[] | Record<string, number>,
+  paciente?: string | null,
+) {
+  return apiFetch<Salvo<ResultadoProtocolo>>(`${BASE}/protocolos/${nome}`, {
+    method: "POST",
+    json: { respostas, paciente: paciente || null },
+  });
+}
+
+export function listarPacientes() {
+  return apiFetch<{ items: PacienteResumo[] }>(`${BASE}/pacientes`);
+}
+
+export function listarAvaliacoes(paciente: string) {
+  return apiFetch<{ items: Avaliacao[] }>(`${BASE}/avaliacoes?paciente=${encodeURIComponent(paciente)}`);
+}
+
+export function excluirAvaliacao(id: string) {
+  return apiFetch<void>(`${BASE}/avaliacoes/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+// ---------------------------------------------------------------------------
+// Apresentação (pura, testável)
+// ---------------------------------------------------------------------------
+
+export const FAIXAS_F0 = {
+  feminina: { f0Min: 100, f0Max: 600, rotulo: "Feminina ou infantil (100–600 Hz)" },
+  masculina: { f0Min: 75, f0Max: 300, rotulo: "Masculina (75–300 Hz)" },
+} as const;
+
+export function numeroBR(valor: number | null | undefined, casas = 2): string {
+  if (valor === null || valor === undefined || !Number.isFinite(valor)) return "—";
+  return valor.toLocaleString("pt-BR", { maximumFractionDigits: casas, minimumFractionDigits: 0 });
+}
+
+/** Linhas da tabela de resultados acústicos: [medida, valor formatado]. */
+export function linhasAcusticas(r: AnaliseAcustica): [string, string][] {
+  if (!r.f0) return [];
+  const p = r.perturbacao ?? {};
+  const comUnidade = (v: number | null | undefined, casas: number, unidade: string) =>
+    numeroBR(v, casas) === "—" ? "—" : `${numeroBR(v, casas)} ${unidade}`;
+  return [
+    ["F0 média", comUnidade(r.f0.media_hz, 1, "Hz")],
+    ["Variação da F0 (desvio-padrão)", comUnidade(r.f0.dp_semitons, 2, "semitons")],
+    ["Jitter local", comUnidade(p.jitter_local_pct, 2, "%")],
+    ["Shimmer local", comUnidade(p.shimmer_local_pct, 2, "%")],
+    ["HNR", comUnidade(r.ruido?.hnr_db, 1, "dB")],
+    ["CPPS", comUnidade(r.cpps_db, 1, "dB")],
+    [
+      "F1 / F2",
+      r.formantes?.f1_hz && r.formantes?.f2_hz
+        ? `${numeroBR(r.formantes.f1_hz, 0)} / ${numeroBR(r.formantes.f2_hz, 0)} Hz`
+        : "—",
+    ],
+    ["Tempo de fonação", comUnidade(r.fonacao?.tmf_s, 1, "s")],
+    ["Quebras de voz", numeroBR(r.fonacao?.quebras_de_voz, 0)],
+  ];
+}
+
+/** Frase-resumo de um protocolo, para o resultado e o histórico. */
+export function resumoProtocolo(r: ResultadoProtocolo): string {
+  if (r.protocolo === "IDV-10") {
+    return `${r.total} de ${r.maximo} pontos — ${r.acima_do_corte ? "acima" : "dentro"} da nota de corte (${numeroBR(r.corte, 1)})`;
+  }
+  if (r.protocolo === "QVV") {
+    return (
+      `Total ${numeroBR(r.total, 1)} · físico ${numeroBR(r.fisico, 1)} · socioemocional ${numeroBR(r.socioemocional, 1)}` +
+      ` — ${r.abaixo_do_corte ? "abaixo" : "acima"} da nota de corte (${numeroBR(r.corte_total, 2)})`
+    );
+  }
+  return `Registro ${r.registro}`;
+}
+
+/** Resumo de uma avaliação salva (histórico do paciente). */
+export function resumoAvaliacao(a: Avaliacao): string {
+  if (a.tipo === "acustica") {
+    const r = a.resultado as AnaliseAcustica;
+    const p = r.perturbacao ?? {};
+    return [
+      `F0 ${numeroBR(r.f0?.media_hz, 1)} Hz`,
+      `jitter ${numeroBR(p.jitter_local_pct, 2)}%`,
+      `shimmer ${numeroBR(p.shimmer_local_pct, 2)}%`,
+      `CPPS ${numeroBR(r.cpps_db, 1)} dB`,
+    ].join(" · ");
+  }
+  return resumoProtocolo(a.resultado as ResultadoProtocolo);
+}
+
+export const ROTULO_TIPO: Record<TipoAvaliacao, string> = {
+  acustica: "Análise acústica",
+  idv10: "IDV-10",
+  qvv: "QVV",
+  grbasi: "GRBASI",
+};

@@ -16,8 +16,9 @@ Plataforma SaaS (pt-BR) para upload de áudio/vídeo, separação real de stems 
 | 7 | Planos, cotas, admin, /metrics | Concluída |
 | 8 | Hardening, E2E smoke, RUNBOOK prod | Concluída |
 | + | CI, acordes, smoke-load, homologação | Concluída |
+| 2.0 | Avaliação clínica da voz: acústica, IDV-10, QVV, GRBASI, histórico por paciente | Em validação |
 
-Documentação: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) · [`docs/DECISIONS.md`](docs/DECISIONS.md) · [`docs/RUNBOOK.md`](docs/RUNBOOK.md) · [`docs/HOMOLOGATION.md`](docs/HOMOLOGATION.md) · [`docs/A11Y_CHECKLIST.md`](docs/A11Y_CHECKLIST.md)
+Documentação: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) · [`docs/DECISIONS.md`](docs/DECISIONS.md) · [`docs/RUNBOOK.md`](docs/RUNBOOK.md) · [`docs/HOMOLOGATION.md`](docs/HOMOLOGATION.md) · [`docs/A11Y_CHECKLIST.md`](docs/A11Y_CHECKLIST.md) · [`docs/VOZ_CLINICA.md`](docs/VOZ_CLINICA.md)
 
 ## Stack
 
