@@ -3,6 +3,7 @@ from app.models.entities import (
     AudioAsset,
     ClinicalEvaluation,
     ExportJob,
+    HomePracticePlan,
     LoopRegion,
     Marker,
     MixPreset,
@@ -46,4 +47,5 @@ __all__ = [
     "VoiceCheckDiagnosis",
     "PasswordResetToken",
     "ClinicalEvaluation",
+    "HomePracticePlan",
 ]

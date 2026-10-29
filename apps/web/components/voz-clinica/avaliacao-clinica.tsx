@@ -14,6 +14,7 @@ import { BiofeedbackAoVivo } from "@/components/voz-clinica/biofeedback-ao-vivo"
 import { Espectrograma } from "@/components/voz-clinica/espectrograma";
 import { Fonetograma } from "@/components/voz-clinica/fonetograma";
 import { JogosTerapia } from "@/components/voz-clinica/jogos-terapia";
+import { PraticaCasa } from "@/components/voz-clinica/pratica-casa";
 import { GraficoEvolucao } from "@/components/voz-clinica/grafico-evolucao";
 import { MAX_PONTOS, seriesEvolucao } from "@/lib/voz-clinica-evolucao";
 import { imprimirRelatorioClinico } from "@/lib/voz-clinica-relatorio";
@@ -585,6 +586,7 @@ const ABAS = [
   { id: "fonetograma", rotulo: "Fonetograma" },
   { id: "biofeedback", rotulo: "Biofeedback" },
   { id: "jogos", rotulo: "Jogos" },
+  { id: "pratica", rotulo: "Prática em casa" },
 ] as const;
 type Aba = (typeof ABAS)[number]["id"];
 
@@ -716,6 +718,11 @@ export function AvaliacaoClinica() {
           <JogosTerapia paciente={nome} aoSalvar={aoSalvar} />
         </div>
       ) : null}
+
+      {/* montada mesmo escondida: o plano em edição não se perde ao trocar de aba */}
+      <div role="tabpanel" id={`${idPaciente}-painel-pratica`} aria-labelledby={`${idPaciente}-aba-pratica`} hidden={aba !== "pratica"}>
+        <PraticaCasa paciente={nome} ativo={aba === "pratica"} aoMudar={aoSalvar} />
+      </div>
 
       <Historico paciente={nome} versao={versao} />
     </div>

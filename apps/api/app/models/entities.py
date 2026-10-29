@@ -522,14 +522,38 @@ class ClinicalEvaluation(Base, TimestampMixin):
     __tablename__ = "clinical_evaluations"
     __table_args__ = (
         Index("ix_clinical_evaluations_owner_patient", "owner_id", "patient_name", "created_at"),
+        UniqueConstraint("owner_id", "client_ref", name="uq_clinical_evaluations_owner_client_ref"),
     )
 
     id: Mapped[str] = mapped_column(CHAR(36), primary_key=True, default=_uuid)
     owner_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     #: Como o profissional identifica o paciente (nome ou código).
     patient_name: Mapped[str] = mapped_column(String(120), nullable=False)
-    #: acustica | idv10 | qvv | grbasi
+    #: acustica | idv10 | qvv | grbasi | easebr | anamnese | biofeedback | jogo | fonetograma | pratica
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     #: Motor da análise acústica (praat | interno); vazio nos protocolos.
     engine: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     result: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    #: Id gerado no celular (prática em casa): reenviar a mesma sessão não duplica.
+    client_ref: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+
+
+class HomePracticePlan(Base, TimestampMixin):
+    """Plano de prática em casa: exercícios que o paciente faz pelo celular.
+
+    O paciente entra por um link secreto (sem conta). Só o hash do token fica
+    salvo; o link pode expirar ou ser revogado pelo profissional.
+    """
+
+    __tablename__ = "home_practice_plans"
+    __table_args__ = (Index("ix_home_practice_plans_owner_patient", "owner_id", "patient_name", "created_at"),)
+
+    id: Mapped[str] = mapped_column(CHAR(36), primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    patient_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    #: Como a página do celular chama o paciente (opcional; o nome completo não vai ao celular).
+    greeting: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    exercises: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -5,6 +5,7 @@ from app.api.v1 import (
     audio_assets,
     auth,
     practice,
+    pratica_casa,
     processing,
     projects,
     studio,
@@ -33,4 +34,5 @@ api_router.include_router(voicecheck_diagnoses.router)
 api_router.include_router(voicecheck_enhance.router)
 api_router.include_router(voicecheck.router)
 api_router.include_router(voz_clinica.router)
+api_router.include_router(pratica_casa.router)
 api_router.include_router(admin.router)

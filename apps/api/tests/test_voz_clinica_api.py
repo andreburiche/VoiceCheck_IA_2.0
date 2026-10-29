@@ -236,3 +236,81 @@ def test_anamnese_guarda_so_campos_preenchidos(client: httpx.Client) -> None:
 def test_anamnese_rejeita_entrada_invalida(client: httpx.Client, ruim: dict) -> None:
     corpo = {"paciente": "X", "queixa": "rouquidão", **ruim}
     assert client.post("/api/v1/voz-clinica/anamnese", json=corpo).status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Prática em casa
+# ---------------------------------------------------------------------------
+
+PLANO = {
+    "exercicios": [
+        {"tipo": "sustentar", "titulo": "Vogal /a/", "repeticoes": 3, "meta_s": 12},
+        {"tipo": "pitch", "titulo": "Grave", "repeticoes": 2, "duracao_s": 10, "faixa_hz": {"min": 100, "max": 150}},
+    ],
+}
+
+
+def _celular(token: str) -> httpx.Client:
+    """Sem cookie e sem CSRF: só o segredo do link."""
+    return httpx.Client(base_url=BASE, timeout=30.0, headers={"X-Pratica-Token": token})
+
+
+def _sessao(exercicio=0, reps=None, quando=None):
+    from datetime import datetime, timezone
+    return {"id": str(uuid.uuid4()), "exercicio": exercicio,
+            "feito_em": (quando or datetime.now(timezone.utc)).isoformat(),
+            "repeticoes": reps or [{"duracao_s": 14, "fonacao_s": 13.2}]}
+
+
+def test_pratica_link_sincroniza_sem_duplicar(client: httpx.Client) -> None:
+    paciente = f"Casa {uuid.uuid4().hex[:6]}"
+    r = client.post("/api/v1/voz-clinica/pratica", json={**PLANO, "paciente": paciente, "saudacao": "Ana"})
+    assert r.status_code == 201, r.text
+    criado = r.json()
+    token = criado["token"]
+    with _celular(token) as cel:
+        plano = cel.get("/api/v1/pratica-casa/plano").json()
+        assert plano["saudacao"] == "Ana" and "paciente" not in plano and len(plano["exercicios"]) == 2
+        s1 = _sessao()
+        s2 = _sessao(1, [{"duracao_s": 10, "fonacao_s": 8, "dentro_pct": 75, "f0_mediana_hz": 120}])
+        ruim = _sessao(5)
+        ruim["exercicio"] = 4  # o plano só tem 2
+        r = cel.post("/api/v1/pratica-casa/sessoes", json={"sessoes": [s1, s2, ruim]})
+        assert r.status_code == 200, r.text
+        assert r.json()["recebidas"] == [s1["id"], s2["id"]]
+        assert [x["id"] for x in r.json()["recusadas"]] == [ruim["id"]]
+        # reenvio da fila (ex.: resposta perdida): não duplica
+        assert cel.post("/api/v1/pratica-casa/sessoes", json={"sessoes": [s1]}).json()["recebidas"] == [s1["id"]]
+        # o celular não lê o histórico
+        assert cel.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).status_code == 401
+
+    itens = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"]
+    assert sorted(i["resultado"]["tipo"] for i in itens) == ["pitch", "sustentar"]
+    sust = next(i for i in itens if i["resultado"]["tipo"] == "sustentar")
+    assert sust["tipo"] == "pratica" and sust["resultado"]["resumo"]["melhor_s"] == 13.2
+    lista = client.get("/api/v1/voz-clinica/pratica", params={"paciente": paciente}).json()["items"]
+    assert lista[0]["sessoes"] == 2 and "token" not in lista[0]
+
+    # revogado: o link para na hora
+    assert client.post(f"/api/v1/voz-clinica/pratica/{criado['id']}/revogar").json()["ativo"] is False
+    with _celular(token) as cel:
+        assert cel.get("/api/v1/pratica-casa/plano").status_code == 410
+        assert cel.post("/api/v1/pratica-casa/sessoes", json={"sessoes": [_sessao()]}).status_code == 410
+
+
+def test_pratica_token_errado_e_outro_profissional(client: httpx.Client) -> None:
+    with _celular("x" * 43) as cel:
+        assert cel.get("/api/v1/pratica-casa/plano").status_code == 404
+    with httpx.Client(base_url=BASE) as sem:
+        assert sem.get("/api/v1/pratica-casa/plano").status_code == 401
+    criado = client.post("/api/v1/voz-clinica/pratica", json={**PLANO, "paciente": "Outro"}).json()
+    outro = _cliente("vozclin2")
+    assert outro.post(f"/api/v1/voz-clinica/pratica/{criado['id']}/revogar").status_code == 404
+    assert outro.get("/api/v1/voz-clinica/pratica", params={"paciente": "Outro"}).json()["items"] == []
+
+
+def test_pratica_limita_links_ativos(client: httpx.Client) -> None:
+    paciente = f"Limite {uuid.uuid4().hex[:6]}"
+    for _ in range(3):
+        assert client.post("/api/v1/voz-clinica/pratica", json={**PLANO, "paciente": paciente}).status_code == 201
+    assert client.post("/api/v1/voz-clinica/pratica", json={**PLANO, "paciente": paciente}).status_code == 409

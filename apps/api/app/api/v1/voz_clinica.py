@@ -2,7 +2,7 @@
 
 Análise acústica (F0, jitter, shimmer, HNR, CPPS, formantes, tempo de fonação),
 protocolos de autoavaliação (IDV-10, QVV, EASE-BR), escala perceptiva (GRBASI),
-anamnese vocal e DSI.
+anamnese vocal, DSI e planos de prática em casa (link para o celular do paciente).
 Todo número é calculado aqui no servidor; quando um paciente é informado, o
 resultado fica salvo para acompanhar a evolução entre sessões.
 """
@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy import func, select
@@ -20,7 +21,8 @@ from app.api.v1.voicecheck import _read_limited
 from app.core.config import get_settings
 from app.core.deps import CurrentUser, DbSession, verify_csrf
 from app.core.rate_limit import enforce_rate_limit
-from app.models import ClinicalEvaluation
+from app.api.v1.pratica_casa import plano_out, sessoes_por_plano
+from app.models import ClinicalEvaluation, HomePracticePlan
 from app.schemas.voz_clinica import (
     AnamneseEntrada,
     AvaliacaoLista,
@@ -31,6 +33,10 @@ from app.schemas.voz_clinica import (
     DsiEntrada,
     PacienteLista,
     PacienteResumo,
+    PlanoCriado,
+    PlanoEntrada,
+    PlanoLista,
+    PlanoOut,
     ProtocoloEntrada,
     ResultadoSalvo,
     StatusOut,
@@ -38,6 +44,7 @@ from app.schemas.voz_clinica import (
 from app.services import voz_clinica
 from app.services.voz_clinica.fonetograma import resumir_campo
 from app.services.voz_clinica.indices import dsi
+from app.services.voz_clinica.pratica import hash_token, novo_token
 from app.services.voz_clinica.protocolos import PROTOCOLOS, ErroProtocolo
 
 logger = logging.getLogger(__name__)
@@ -179,6 +186,72 @@ def salvar_anamnese(entrada: AnamneseEntrada, user: CurrentUser, db: DbSession) 
     resultado = {k: v for k, v in entrada.model_dump(exclude={"paciente"}).items() if v not in (None, "", [])}
     salvo = _salvar(db, user, nome, "anamnese", resultado)
     return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
+
+
+#: Planos ativos por paciente: evita links esquecidos circulando.
+MAX_PLANOS_ATIVOS = 3
+
+
+@router.post("/pratica", response_model=PlanoCriado, status_code=status.HTTP_201_CREATED,
+             dependencies=[Depends(verify_csrf)])
+def criar_plano(entrada: PlanoEntrada, user: CurrentUser, db: DbSession) -> PlanoCriado:
+    """Cria o plano e devolve o segredo do link UMA vez (só o hash fica salvo)."""
+    nome = _paciente(entrada.paciente)
+    if nome is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente")
+    agora = datetime.now(timezone.utc)
+    ativos = db.scalars(
+        select(HomePracticePlan).where(
+            HomePracticePlan.owner_id == user.id, HomePracticePlan.patient_name == nome,
+            HomePracticePlan.revoked_at.is_(None), HomePracticePlan.expires_at > agora,
+        )
+    ).all()
+    if len(ativos) >= MAX_PLANOS_ATIVOS:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"{nome} já tem {len(ativos)} links ativos. Revogue um antes de criar outro.",
+        )
+    token = novo_token()
+    plano = HomePracticePlan(
+        owner_id=user.id, patient_name=nome, greeting=" ".join(entrada.saudacao.split()) or None,
+        token_hash=hash_token(token),
+        exercises=[e.model_dump(exclude_none=True) for e in entrada.exercicios],
+        expires_at=agora + timedelta(days=entrada.validade_dias),
+    )
+    db.add(plano)
+    db.commit()
+    db.refresh(plano)
+    base = plano_out(plano, {}, {})
+    return PlanoCriado(**base.model_dump(), token=token)
+
+
+@router.get("/pratica", response_model=PlanoLista)
+def listar_planos(user: CurrentUser, db: DbSession, paciente: str) -> PlanoLista:
+    nome = _paciente(paciente)
+    if nome is None:
+        return PlanoLista(items=[])
+    planos = db.scalars(
+        select(HomePracticePlan)
+        .where(HomePracticePlan.owner_id == user.id, HomePracticePlan.patient_name == nome)
+        .order_by(HomePracticePlan.created_at.desc())
+        .limit(50)
+    ).all()
+    total, ultima = sessoes_por_plano(db, user.id, nome)
+    return PlanoLista(items=[plano_out(p, total, ultima) for p in planos])
+
+
+@router.post("/pratica/{plano_id}/revogar", response_model=PlanoOut, dependencies=[Depends(verify_csrf)])
+def revogar_plano(plano_id: str, user: CurrentUser, db: DbSession) -> PlanoOut:
+    """O link para de funcionar na hora; as sessões já recebidas continuam no histórico."""
+    plano = db.get(HomePracticePlan, plano_id)
+    if plano is None or plano.owner_id != user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plano não encontrado")
+    if plano.revoked_at is None:
+        plano.revoked_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(plano)
+    total, ultima = sessoes_por_plano(db, user.id, plano.patient_name)
+    return plano_out(plano, total, ultima)
 
 
 @router.post("/dsi", dependencies=[Depends(verify_csrf)])

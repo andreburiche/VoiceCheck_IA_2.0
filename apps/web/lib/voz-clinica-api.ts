@@ -5,9 +5,10 @@ import { resumoAnamnese } from "@/lib/voz-clinica-anamnese";
 import type { ResumoBiofeedback } from "@/lib/voz-clinica-biofeedback";
 import type { PontoCampo, ResumoCampo } from "@/lib/voz-clinica-fonetograma";
 import { JOGOS, type ResultadoJogo } from "@/lib/voz-clinica-jogos";
+import { resumoPratica, type ExercicioPratica, type ResultadoPratica } from "@/lib/voz-clinica-pratica";
 
 
-export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma";
+export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica";
 export type Protocolo = "idv10" | "qvv" | "grbasi" | "easebr";
 
 /** Resumo de sessão de biofeedback salvo (medido no navegador). */
@@ -97,7 +98,7 @@ export type Avaliacao = {
   paciente: string;
   tipo: TipoAvaliacao;
   motor: string | null;
-  resultado: AnaliseAcustica | ResultadoProtocolo | Anamnese | ResultadoBiofeedback | ResultadoJogoSalvo | ResultadoFonetograma;
+  resultado: AnaliseAcustica | ResultadoProtocolo | Anamnese | ResultadoPratica | ResultadoBiofeedback | ResultadoJogoSalvo | ResultadoFonetograma;
   criado_em: string;
 };
 
@@ -141,6 +142,31 @@ export function salvarAnamnese(paciente: string, anamnese: Anamnese) {
     method: "POST",
     json: { paciente, ...anamnese },
   });
+}
+
+export type PlanoPratica = {
+  id: string;
+  paciente: string;
+  saudacao: string;
+  exercicios: ExercicioPratica[];
+  criado_em: string;
+  expira_em: string;
+  revogado_em: string | null;
+  ativo: boolean;
+  sessoes: number;
+  ultima_sessao: string | null;
+};
+
+export function criarPlanoPratica(entrada: { paciente: string; saudacao: string; exercicios: ExercicioPratica[]; validade_dias: number }) {
+  return apiFetch<PlanoPratica & { token: string }>(`${BASE}/pratica`, { method: "POST", json: entrada });
+}
+
+export function listarPlanosPratica(paciente: string) {
+  return apiFetch<{ items: PlanoPratica[] }>(`${BASE}/pratica?paciente=${encodeURIComponent(paciente)}`);
+}
+
+export function revogarPlanoPratica(id: string) {
+  return apiFetch<PlanoPratica>(`${BASE}/pratica/${encodeURIComponent(id)}/revogar`, { method: "POST" });
 }
 
 export function salvarBiofeedback(paciente: string, resumo: ResumoBiofeedback) {
@@ -240,6 +266,7 @@ export function resumoProtocolo(r: ResultadoProtocolo): string {
 
 /** Resumo de uma avaliação salva (histórico do paciente). */
 export function resumoAvaliacao(a: Avaliacao): string {
+  if (a.tipo === "pratica") return resumoPratica(a.resultado as ResultadoPratica);
   if (a.tipo === "anamnese") return resumoAnamnese(a.resultado as Anamnese);
   if (a.tipo === "fonetograma") {
     const r = (a.resultado as ResultadoFonetograma).resumo;
@@ -287,4 +314,5 @@ export const ROTULO_TIPO: Record<TipoAvaliacao, string> = {
   grbasi: "GRBASI",
   easebr: "EASE-BR",
   anamnese: "Anamnese",
+  pratica: "Prática em casa",
 };

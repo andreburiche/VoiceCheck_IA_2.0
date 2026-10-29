@@ -8,7 +8,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 TipoAvaliacao = Literal[
-    "acustica", "idv10", "qvv", "grbasi", "easebr", "anamnese", "biofeedback", "jogo", "fonetograma"
+    "acustica", "idv10", "qvv", "grbasi", "easebr", "anamnese", "biofeedback", "jogo", "fonetograma", "pratica"
 ]
 JogoId = Literal["altitude", "trilha", "sopro", "surdo-sonoro"]
 
@@ -210,3 +210,126 @@ class AnamneseEntrada(BaseModel):
         if not any(v not in (None, "", []) for v in dados.values()):
             raise ValueError("preencha ao menos um campo da anamnese")
         return self
+
+
+# ---------------------------------------------------------------------------
+# Prática em casa
+# ---------------------------------------------------------------------------
+
+TipoExercicio = Literal["sustentar", "pitch", "volume"]
+
+
+class ExercicioPratica(BaseModel):
+    """Um exercício do plano. sustentar: vogal longa (meta opcional); pitch/volume: manter a voz numa faixa."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tipo: TipoExercicio
+    titulo: str = Field(min_length=1, max_length=60)
+    instrucao: str = Field(default="", max_length=300)
+    repeticoes: int = Field(ge=1, le=10)
+    #: pitch/volume: duração de cada tentativa. sustentar: ignorado (vai até a voz parar, máx. 60 s).
+    duracao_s: float | None = Field(default=None, ge=3, le=60)
+    meta_s: float | None = Field(default=None, ge=1, le=60)
+    faixa_hz: FaixaHz | None = None
+    faixa_db: FaixaDb | None = None
+
+    @field_validator("titulo", "instrucao")
+    @classmethod
+    def _limpar(cls, v: str) -> str:
+        return " ".join(v.split()) if "\n" not in v else v.strip()
+
+    @model_validator(mode="after")
+    def _coerente(self) -> "ExercicioPratica":
+        if not self.titulo:
+            raise ValueError("título vazio")
+        if self.tipo == "sustentar":
+            if self.faixa_hz or self.faixa_db or self.duracao_s:
+                raise ValueError("sustentar não usa faixa nem duração fixa")
+        else:
+            if self.duracao_s is None:
+                raise ValueError(f"{self.tipo}: informe a duração de cada tentativa")
+            if self.meta_s is not None:
+                raise ValueError(f"{self.tipo}: meta em segundos só vale para sustentar")
+            if self.tipo == "pitch" and (self.faixa_hz is None or self.faixa_db is not None):
+                raise ValueError("pitch: informe só a faixa em Hz")
+            if self.tipo == "volume" and (self.faixa_db is None or self.faixa_hz is not None):
+                raise ValueError("volume: informe só a faixa em dBFS")
+        return self
+
+
+class PlanoEntrada(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    paciente: str = Field(min_length=1, max_length=120)
+    #: Como o celular chama o paciente ("Olá, Ana"). Vazio = sem nome na página do celular.
+    saudacao: str = Field(default="", max_length=60)
+    exercicios: list[ExercicioPratica] = Field(min_length=1, max_length=6)
+    validade_dias: int = Field(default=30, ge=1, le=180)
+
+
+class PlanoOut(BaseModel):
+    id: str
+    paciente: str
+    saudacao: str
+    exercicios: list[dict[str, Any]]
+    criado_em: datetime
+    expira_em: datetime
+    revogado_em: datetime | None
+    ativo: bool
+    sessoes: int
+    ultima_sessao: datetime | None
+
+
+class PlanoCriado(PlanoOut):
+    #: Mostrado uma única vez: só o hash fica salvo.
+    token: str
+
+
+class PlanoLista(BaseModel):
+    items: list[PlanoOut]
+
+
+class PlanoPublico(BaseModel):
+    """O que o celular recebe: sem nome completo, sem histórico."""
+
+    saudacao: str
+    exercicios: list[dict[str, Any]]
+    expira_em: datetime
+
+
+class RepeticaoPratica(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    duracao_s: float = Field(ge=0, le=120)
+    fonacao_s: float = Field(ge=0, le=120)
+    dentro_pct: float | None = Field(default=None, ge=0, le=100)
+    f0_mediana_hz: float | None = Field(default=None, ge=30, le=2000)
+
+
+class SessaoPratica(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    #: Gerado no celular (UUID): reenviar a mesma sessão não duplica.
+    id: str = Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+    exercicio: int = Field(ge=0, le=5)
+    feito_em: datetime
+    repeticoes: list[RepeticaoPratica] = Field(min_length=1, max_length=10)
+
+
+class SessoesEntrada(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sessoes: list[SessaoPratica] = Field(min_length=1, max_length=50)
+
+
+class SessaoRecusada(BaseModel):
+    id: str
+    motivo: str
+
+
+class SincronizacaoOut(BaseModel):
+    #: Gravadas agora ou já recebidas antes: o celular pode apagar da fila.
+    recebidas: list[str]
+    #: Não combinam com o plano: o celular também apaga (reenviar não adianta).
+    recusadas: list[SessaoRecusada]

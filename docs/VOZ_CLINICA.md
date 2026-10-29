@@ -1,7 +1,7 @@
 # VoiceCheck IA 2.0 — Avaliação clínica da voz
 
 **Data:** 2026-10-29
-**Rota no site:** `/voz-clinica` (menu "Avaliação clínica"), com abas Avaliação · Anamnese · Fonetograma · Biofeedback · Jogos; o histórico do paciente fica sempre abaixo
+**Rota no site:** `/voz-clinica` (menu "Avaliação clínica"), com abas Avaliação · Anamnese · Fonetograma · Biofeedback · Jogos · Prática em casa; o histórico do paciente fica sempre abaixo
 **API:** `/api/v1/voz-clinica`
 
 A versão 2.0 junta, numa só tela, o que hoje exige vários programas:
@@ -26,6 +26,7 @@ paciente. Biofeedback e jogos (VoxGames, Voice Analyst) ficam para a fase 2.
 | Relatório em PDF | Botão no histórico: análise acústica e protocolos mais recentes, gráficos de evolução, todas as sessões, profissional e observações (opcionais). HTML A4 impresso pelo navegador ("Salvar como PDF"), mesmo mecanismo dos relatórios do VoiceCheck |
 | Biofeedback ao vivo | Pitch (nota e Hz) e volume (dBFS) na tela enquanto o paciente fala ou canta, com faixas-alvo definidas pelo profissional, indicação "abaixo / dentro / acima" escrita (não só cor), curva dos últimos 8 s e % do tempo na faixa. Pitch por YIN a ~60 leituras/s com mediana de 3 contra leituras isoladas. O áudio não sai do aparelho; ao parar, o resumo da sessão pode ser salvo no histórico (tipo `biofeedback`) e entra na evolução |
 | Jogos de terapia | Quatro jogos próprios (não copiam nomes, visual nem mecânica de produtos comerciais): **Altitude** (o volume controla a altura; seguir patamares), **Trilha** (o pitch controla a altura; patamares e deslizes), **Sopro longo** (sustentar a voz até a meta) e **Surdo ou sonoro** (s/z, f/v, ch/j). Faixas, duração, dificuldade e meta definidas pelo profissional. Resultado de cada partida pode ser salvo (tipo `jogo`) e tem curva própria na evolução |
+| Prática em casa | Aba própria. O profissional monta até 6 exercícios — **vogal sustentada** (meta opcional), **voz na faixa de altura** (Hz) ou **volume controlado** (dBFS), com repetições, duração e instrução — e gera um **link secreto** (validade de 1 a 180 dias, até 3 ativos por paciente, revogável). Envio por WhatsApp ou cópia; o link aparece uma única vez (só o hash fica salvo). O paciente abre `/pratica` no celular **sem conta**: vê só os exercícios e um nome de tratamento opcional (nunca o nome completo nem o histórico). O áudio é analisado no celular (YIN + dBFS) e só os números de cada repetição são enviados; o servidor confere com o plano e recalcula o resumo (tipo `pratica`). **Funciona offline** depois da primeira abertura (service worker + fila no celular): sessões feitas sem internet são enviadas quando a conexão volta, sem duplicar (id gerado no celular). Sessões feitas antes de o link expirar podem ser enviadas até 7 dias depois. Curvas próprias na evolução (melhor tempo; % na faixa) |
 | Fonetograma | Campo vocal: para cada semitom alcançado (≥ 0,15 s), a menor e a maior intensidade, ignorando os primeiros 50 ms de cada nota (ataque). Glissandos em voz fraca e forte, com pausa e retomada somando ao mesmo campo. Nota mais grave e mais aguda, extensão em semitons, faixa dinâmica média e área. Intensidade **relativa (dBFS)**. Ao salvar, o servidor recalcula o resumo a partir dos pontos (tipo `fonetograma`); extensão e faixa dinâmica entram na evolução |
 
 Os textos das perguntas não estão no sistema: o profissional lê da versão
@@ -52,6 +53,14 @@ apps/web/lib/voz-clinica-espectrograma.ts              FFT, espectrograma, leitu
 apps/web/components/voz-clinica/espectrograma.tsx      espectrograma da gravação (canvas)
 apps/web/lib/voz-clinica-anamnese.ts                   opções, rótulos e resumo da anamnese
 apps/web/components/voz-clinica/anamnese.tsx           formulário da anamnese
+apps/web/lib/voz-clinica-pratica.ts                    medição das repetições, fila offline, link, resumo
+apps/web/components/voz-clinica/pratica-casa.tsx       painel do profissional (planos e links)
+apps/web/app/pratica/page.tsx                          página pública do paciente (fora do login)
+apps/web/components/pratica/pratica-celular.tsx        tela do celular
+apps/web/public/pratica-sw.js, pratica.webmanifest     offline e "adicionar à tela inicial"
+apps/api/app/api/v1/pratica_casa.py                    rotas do celular (token no cabeçalho)
+apps/api/app/services/voz_clinica/pratica.py           token, datas e resumo das sessões
+apps/api/alembic/versions/20261029_0010_*.py           tabela home_practice_plans + client_ref
 apps/api/app/services/voz_clinica/fonetograma.py       resumo do campo no servidor
         │  multipart / JSON, cookie de sessão + CSRF
         ▼
@@ -74,6 +83,11 @@ Todo número é calculado no servidor; o navegador só envia o WAV ou as respost
 | `POST /jogos` | resultado da partida (`jogo`, pontuação, detalhes numéricos) com `paciente` | sim |
 | `POST /fonetograma` | pontos por semitom (`midi`, `min_db`, `max_db`, `tempo_s`, até 85) com `paciente`; resumo recalculado no servidor | sim |
 | `POST /anamnese` | campos da anamnese (todos opcionais, ao menos um; campos desconhecidos são recusados) com `paciente` | sim |
+| `POST /pratica` | `paciente`, `saudacao`, `exercicios` (1–6), `validade_dias` → devolve o `token` uma única vez | sim |
+| `GET /pratica?paciente=` | — (planos com situação e sessões recebidas) | — |
+| `POST /pratica/{id}/revogar` | — | sim |
+| `GET /api/v1/pratica-casa/plano` | cabeçalho `X-Pratica-Token` (sem login) | — |
+| `POST /api/v1/pratica-casa/sessoes` | cabeçalho `X-Pratica-Token`; até 50 sessões com `id` (UUID), `exercicio`, `feito_em`, `repeticoes` | sim (idempotente) |
 | `POST /dsi` | `{"tmf_s", "f0_alta_hz", "i_baixa_db_spl", "jitter_pct"}` | não |
 | `GET /pacientes` | — | — |
 | `GET /avaliacoes?paciente=` | — | — |
@@ -116,6 +130,7 @@ no Docker com os comandos acima.
 - Notas de corte IDV-10 7,5 e QVV 91,25: Behlau et al. (2016).
 - Intensidade sai em dBFS (relativa). dB SPL exige microfone calibrado.
 - Dados de saúde: o nome do paciente, os resultados e a **anamnese** (refluxo, medicamentos, cirurgias) são dados sensíveis (LGPD). Antes do uso real: base legal/consentimento, prazo de guarda e quem acessa.
+- **Prática em casa:** o microfone do celular só abre em **https://** — publicar o site com certificado antes de enviar links (em rede local por http não funciona). O volume do celular não é calibrado: combinar a faixa em dBFS testando no aparelho do próprio paciente. Quem tem o link envia resultados para aquele paciente: orientar a não repassar o link, e revogar se vazar.
 - EASE-BR: escore conforme Rocha et al. (2014). A validação psicométrica brasileira ainda não tinha nota de corte publicada; não interpretar o total como "normal/alterado".
 - A análise não é diagnóstico médico.
 - **Surdo ou sonoro**: a classificação (pitch, energia abaixo de 400 Hz e cruzamentos por zero) foi validada só com sinais sintéticos. Testar com gravações reais de crianças e adultos antes de usar a pontuação clinicamente; os limiares estão em `voz-clinica-jogos.ts`.
@@ -128,4 +143,6 @@ no Docker com os comandos acima.
 4. ~~Fonetograma~~ (feito; em dBFS — dB SPL exige calibração).
 5. ~~Espectrograma~~ (feito).
 6. ~~Anamnese vocal e EASE-BR~~ (feitos).
-7. Próximo: prática em casa (celular, offline).
+7. ~~Prática em casa (celular, offline)~~ (feita).
+
+Com isso, a tela cobre as funções dos seis programas levantados (VoxMetria, VoxGames, Praat, Voice Analyst, lingWAVES, iVox). Próximo passo: validação no Docker (rotas contra MySQL, motor Praat) e com pacientes reais.

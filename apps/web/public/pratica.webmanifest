@@ -1,0 +1,16 @@
+{
+  "name": "VoiceCheck — Prática em casa",
+  "short_name": "Prática de voz",
+  "description": "Exercícios de voz combinados com o seu fonoaudiólogo.",
+  "lang": "pt-BR",
+  "start_url": "/pratica",
+  "scope": "/pratica",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#070B14",
+  "theme_color": "#070B14",
+  "icons": [
+    { "src": "/brand/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/brand/voicecheck-mark-v2.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

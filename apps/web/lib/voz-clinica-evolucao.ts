@@ -5,6 +5,7 @@
  */
 import type { AnaliseAcustica, Avaliacao, ResultadoBiofeedback, ResultadoEaseBr, ResultadoGrbasi, ResultadoIdv10, ResultadoFonetograma, ResultadoJogoSalvo, ResultadoQvv } from "@/lib/voz-clinica-api";
 import { JOGOS, type JogoId } from "@/lib/voz-clinica-jogos";
+import type { ResultadoPratica } from "@/lib/voz-clinica-pratica";
 
 export type PontoEvolucao = { data: string; valor: number };
 
@@ -75,6 +76,24 @@ const EXTRATORES: Extrator[] = [
     chave: "grbasi_g", titulo: "GRBASI — grau geral (G)", unidade: "", casas: 0, tipo: "grbasi", dominio: [0, 3],
     leitura: "0 normal, 1 leve, 2 moderado, 3 intenso.",
     valor: (a) => (a.resultado as ResultadoGrbasi).parametros?.G?.nota,
+  },
+  {
+    chave: "pratica_sustentar", titulo: "Prática em casa — vogal sustentada", unidade: "s", casas: 1, tipo: "pratica", dominio: null,
+    filtro: (a) => (a.resultado as ResultadoPratica).tipo === "sustentar",
+    leitura: "Melhor tempo de cada sessão feita no celular do paciente.",
+    valor: (a) => (a.resultado as ResultadoPratica).resumo?.melhor_s,
+  },
+  {
+    chave: "pratica_pitch", titulo: "Prática em casa — altura na faixa", unidade: "%", casas: 1, tipo: "pratica", dominio: [0, 100],
+    filtro: (a) => (a.resultado as ResultadoPratica).tipo === "pitch",
+    leitura: "Tempo com voz dentro da faixa de altura combinada, em cada sessão feita em casa.",
+    valor: (a) => (a.resultado as ResultadoPratica).resumo?.dentro_pct,
+  },
+  {
+    chave: "pratica_volume", titulo: "Prática em casa — volume na faixa", unidade: "%", casas: 1, tipo: "pratica", dominio: [0, 100],
+    filtro: (a) => (a.resultado as ResultadoPratica).tipo === "volume",
+    leitura: "Tempo com som dentro da faixa de volume combinada, em cada sessão feita em casa.",
+    valor: (a) => (a.resultado as ResultadoPratica).resumo?.dentro_pct,
   },
   {
     chave: "easebr", titulo: "EASE-BR", unidade: "pts", casas: 0, tipo: "easebr", dominio: [0, 66],
