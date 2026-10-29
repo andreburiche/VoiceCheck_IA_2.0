@@ -523,6 +523,7 @@ class ClinicalEvaluation(Base, TimestampMixin):
     __table_args__ = (
         Index("ix_clinical_evaluations_owner_patient", "owner_id", "patient_name", "created_at"),
         UniqueConstraint("owner_id", "client_ref", name="uq_clinical_evaluations_owner_client_ref"),
+        Index("ix_clinical_evaluations_plan_created", "practice_plan_id", "created_at"),
     )
 
     id: Mapped[str] = mapped_column(CHAR(36), primary_key=True, default=_uuid)
@@ -536,6 +537,12 @@ class ClinicalEvaluation(Base, TimestampMixin):
     result: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     #: Id gerado no celular (prática em casa): reenviar a mesma sessão não duplica.
     client_ref: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
+    #: Plano de prática em casa de onde veio a sessão (conta sessões por plano e por dia).
+    practice_plan_id: Mapped[Optional[str]] = mapped_column(
+        CHAR(36),
+        ForeignKey("home_practice_plans.id", ondelete="SET NULL", name="fk_clinical_evaluations_practice_plan"),
+        nullable=True,
+    )
 
 
 class HomePracticePlan(Base, TimestampMixin):

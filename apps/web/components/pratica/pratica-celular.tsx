@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { API_URL } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { medianaDe3, nivelDbfs, pitchYin, posicaoNaFaixa, rotuloNota } from "@/lib/voz-clinica-biofeedback";
-import { RESTRICOES_CLINICAS } from "@/lib/voz-clinica-gravador";
+import { abrirMicrofoneAoVivo } from "@/lib/voz-clinica-gravador";
 import {
   aplicarEnvio,
+  aplicarEnvioAnterior,
   apagarEstado,
+  descartarAnterior,
   diasSeguidos,
   estadoParaToken,
   estadoRepeticaoInicial,
@@ -22,6 +24,8 @@ import {
   salvarEstado,
   segundos,
   tokenDoEndereco,
+  tokenDoTexto,
+  totalPendente,
   type EstadoCelular,
   type EstadoRepeticao,
   type ExercicioPratica,
@@ -62,6 +66,8 @@ async function chamar<T>(caminho: string, token: string, corpo?: unknown): Promi
   if (!r.ok) throw new ErroPratica("erro");
   return (await r.json()) as T;
 }
+
+type RespostaEnvio = { recebidas: string[]; recusadas: { id: string }[] };
 
 const novoId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -145,6 +151,14 @@ function Exercicio({
   const [leitura, setLeitura] = useState<Leitura | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const audio = useRef<{ ctx: AudioContext; stream: MediaStream; analisador: AnalyserNode } | null>(null);
+  const abrindo = useRef(false);
+  const montado = useRef(true);
+  useEffect(() => {
+    montado.current = true;
+    return () => {
+      montado.current = false;
+    };
+  }, []);
   const quadro = useRef<number | null>(null);
   const terminou = reps.length >= ex.repeticoes;
 
@@ -166,15 +180,13 @@ function Exercicio({
 
   async function comecar() {
     setErro(null);
+    if (abrindo.current || audio.current) return; // dois toques não abrem dois microfones
+    abrindo.current = true;
     try {
       if (!window.isSecureContext) throw new Error("seguro");
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: RESTRICOES_CLINICAS, video: false });
-      const ctx = new AudioContext();
-      if (ctx.state === "suspended") await ctx.resume();
-      const analisador = ctx.createAnalyser();
-      analisador.fftSize = 2048;
-      ctx.createMediaStreamSource(stream).connect(analisador);
-      audio.current = { ctx, stream, analisador };
+      const mic = await abrirMicrofoneAoVivo(() => montado.current);
+      if (!mic) return; // a tela saiu enquanto o navegador pedia o microfone
+      audio.current = mic;
     } catch (e) {
       fecharAudio();
       setErro(
@@ -185,6 +197,8 @@ function Exercicio({
             : "Não foi possível abrir o microfone deste celular.",
       );
       return;
+    } finally {
+      abrindo.current = false;
     }
     setGravando(true);
     const buffer = new Float32Array(2048);
@@ -340,8 +354,10 @@ export function PraticaCelular() {
   const [aviso, setAviso] = useState<string | null>(null);
   const [aberto, setAberto] = useState<number | null>(null);
   const [semEspaco, setSemEspaco] = useState(false);
-  const enviandoRef = useRef(false);
+  const [colado, setColado] = useState("");
   const estadoRef = useRef<EstadoCelular | null>(null);
+  const execucao = useRef<Promise<void> | null>(null);
+  const deNovo = useRef(false);
 
   const gravar = useCallback((novo: EstadoCelular) => {
     estadoRef.current = novo;
@@ -350,66 +366,124 @@ export function PraticaCelular() {
     if (a) setSemEspaco(!salvarEstado(a, novo));
   }, []);
 
-  const enviar = useCallback(async (atual: EstadoCelular) => {
-    if (enviandoRef.current || !atual.fila.length) return atual;
-    enviandoRef.current = true;
-    setEnviando(true);
-    let e = atual;
-    try {
-      for (let i = 0; i < atual.fila.length; i += 50) {
-        const lote = atual.fila.slice(i, i + 50);
-        const r = await chamar<{ recebidas: string[]; recusadas: { id: string }[] }>("/sessoes", e.token, { sessoes: lote });
-        e = aplicarEnvio(e, r.recebidas, r.recusadas.map((x) => x.id));
-        gravar(e);
-      }
-      setOnline(true);
-    } catch (erro) {
-      const falha = falhaDe(erro);
-      if (falha === "sem-rede") setOnline(false);
-      else if (falha === "inativo") setFase("inativo");
-      else if (falha === "nao-encontrado") setFase("nao-encontrado");
-    } finally {
-      enviandoRef.current = false;
-      setEnviando(false);
+  /**
+   * Envia tudo o que está na fila. Sempre lê o estado mais recente (estadoRef): uma sessão
+   * concluída durante um envio não é sobrescrita e entra na próxima volta do laço.
+   * Chamadas durante um envio esperam o mesmo envio terminar.
+   */
+  const enviar = useCallback((): Promise<void> => {
+    if (execucao.current) {
+      deNovo.current = true;
+      return execucao.current;
     }
-    return e;
-  }, [gravar]);
-
-  // abertura: lê o link, guarda o segredo, busca o plano (ou usa o guardado se estiver offline)
-  useEffect(() => {
-    const a = armazem();
-    const doLink = tokenDoEndereco(window.location.hash);
-    if (doLink) history.replaceState(null, "", window.location.pathname); // tira o segredo da barra de endereço
-    const guardado = a ? lerEstado(a) : null;
-    const token = doLink ?? guardado?.token;
-    if (!token) return setFase("sem-link");
-    let e = estadoParaToken(guardado, token);
-    gravar(e);
-    registrarServiceWorker();
-    void (async () => {
+    const rodar = async () => {
+      setEnviando(true);
       try {
-        const plano = await chamar<PlanoPublico>("/plano", token);
-        e = { ...e, plano };
-        gravar(e);
+        do {
+          deNovo.current = false;
+          // 1) filas de links anteriores, cada uma com o próprio token
+          for (const grupo of [...(estadoRef.current?.anteriores ?? [])]) {
+            try {
+              for (let i = 0; i < grupo.fila.length; i += 50) {
+                const r = await chamar<RespostaEnvio>("/sessoes", grupo.token, { sessoes: grupo.fila.slice(i, i + 50) });
+                gravar(aplicarEnvioAnterior(estadoRef.current!, grupo.token, r.recebidas, r.recusadas.map((x) => x.id)));
+              }
+            } catch (erro) {
+              const falha = falhaDe(erro);
+              if (falha === "inativo" || falha === "nao-encontrado") gravar(descartarAnterior(estadoRef.current!, grupo.token));
+              else throw erro;
+            }
+          }
+          // 2) fila do link atual, em lotes, até esvaziar
+          for (;;) {
+            const atual = estadoRef.current;
+            if (!atual?.fila.length) break;
+            const lote = atual.fila.slice(0, 50);
+            const r = await chamar<RespostaEnvio>("/sessoes", atual.token, { sessoes: lote });
+            gravar(aplicarEnvio(estadoRef.current!, r.recebidas, r.recusadas.map((x) => x.id)));
+            if (!r.recebidas.length && !r.recusadas.length) break; // resposta vazia: não fica em laço
+          }
+        } while (deNovo.current);
         setOnline(true);
-        setFase("pronto");
-        await enviar(e);
       } catch (erro) {
         const falha = falhaDe(erro);
-        if (falha === "inativo") return setFase("inativo");
-        if (falha === "nao-encontrado") return setFase("nao-encontrado");
+        if (falha === "sem-rede") setOnline(false);
+        else if (falha === "inativo") setFase("inativo");
+        else if (falha === "nao-encontrado") setFase("nao-encontrado");
+      } finally {
+        setEnviando(false);
+      }
+    };
+    // rodar() pode terminar sem nenhum await (fila vazia): a marca de "enviando" só é
+    // limpa depois de gravada, senão ficaria presa e nenhum envio aconteceria mais
+    const envio: Promise<void> = rodar().finally(() => {
+      if (execucao.current === envio) execucao.current = null;
+    });
+    execucao.current = envio;
+    return envio;
+  }, [gravar]);
+
+  /** Abre um link (do endereço, guardado ou colado): guarda o segredo e busca o plano. */
+  const abrir = useCallback(async (token: string) => {
+    const a = armazem();
+    let e = estadoParaToken(a ? lerEstado(a) : estadoRef.current, token);
+    gravar(e);
+    setAviso(null);
+    try {
+      const plano = await chamar<PlanoPublico>("/plano", token);
+      e = { ...estadoRef.current!, plano };
+      gravar(e);
+      setOnline(true);
+      setFase("pronto");
+    } catch (erro) {
+      const falha = falhaDe(erro);
+      if (falha === "inativo") {
+        setFase("inativo"); // ainda tenta enviar o que ficou: o servidor aceita por 7 dias depois do fim
+      } else if (falha === "nao-encontrado") {
+        setFase("nao-encontrado");
+      } else {
         setOnline(false);
         setFase(e.plano ? "pronto" : "sem-link");
         if (!e.plano) setAviso("Sem internet. Abra o link uma vez com internet para baixar os exercícios.");
+        return;
       }
-    })();
+    }
+    await enviar();
   }, [enviar, gravar]);
+
+  // abertura: o segredo vem do endereço (#t=...) ou do que ficou guardado neste celular
+  useEffect(() => {
+    const doLink = tokenDoEndereco(window.location.hash);
+    if (doLink) history.replaceState(null, "", window.location.pathname); // tira o segredo da barra de endereço
+    const a = armazem();
+    const token = doLink ?? (a ? lerEstado(a)?.token : undefined);
+    registrarServiceWorker();
+    if (!token) {
+      setFase("sem-link");
+      return;
+    }
+    void abrir(token);
+  }, [abrir]);
+
+  // link novo aberto com a página já aberta: só o "#" muda e a página não recarrega
+  useEffect(() => {
+    const mudou = () => {
+      const token = tokenDoEndereco(window.location.hash);
+      if (!token) return;
+      history.replaceState(null, "", window.location.pathname);
+      setAberto(null);
+      setFase("carregando");
+      void abrir(token);
+    };
+    window.addEventListener("hashchange", mudou);
+    return () => window.removeEventListener("hashchange", mudou);
+  }, [abrir]);
 
   // voltou a internet: envia a fila
   useEffect(() => {
     const voltou = () => {
       setOnline(true);
-      if (estadoRef.current) void enviar(estadoRef.current);
+      void enviar();
     };
     const caiu = () => setOnline(false);
     window.addEventListener("online", voltou);
@@ -421,32 +495,62 @@ export function PraticaCelular() {
   }, [enviar]);
 
   async function concluir(indice: number, reps: RepeticaoMedida[]) {
-    if (!estado) return;
+    const atual = estadoRef.current;
+    if (!atual) return;
     const sessao = { id: novoId(), exercicio: indice, feito_em: new Date().toISOString(), repeticoes: reps };
-    const e = registrarSessao(estado, sessao);
-    gravar(e);
+    gravar(registrarSessao(atual, sessao));
     setAberto(null);
-    const depois = await enviar(e);
-    const foi = !depois.fila.some((s) => s.id === sessao.id);
+    await enviar();
+    const foi = !estadoRef.current?.fila.some((x) => x.id === sessao.id);
     setAviso(foi ? "Sessão salva e enviada ao seu fonoaudiólogo." : "Sessão salva neste celular. Ela será enviada quando houver internet.");
+  }
+
+  function abrirColado(ev: React.FormEvent) {
+    ev.preventDefault();
+    const token = tokenDoTexto(colado);
+    if (!token) return setAviso("Não encontrei o link na mensagem. Copie a mensagem inteira do seu fonoaudiólogo e cole aqui.");
+    setColado("");
+    setFase("carregando");
+    void abrir(token);
   }
 
   const plano = estado?.plano;
   const agora = new Date();
   const hoje = estado ? feitasHoje(estado.feitas, agora) : new Map<number, number>();
   const seguidos = estado ? diasSeguidos(estado.feitas, agora) : 0;
-  const pendentes = estado?.fila.length ?? 0;
+  const pendentes = totalPendente(estado);
 
   return (
     <main id="conteudo-principal" className="mx-auto min-h-[100dvh] w-full max-w-md px-4 pb-10 pt-6" data-testid="pc-pagina">
       {fase === "carregando" ? <p className="mt-10 text-center text-ink-muted" role="status">Carregando seus exercícios…</p> : null}
 
       {fase === "sem-link" ? (
-        <Aviso titulo="Prática em casa" texto={aviso ?? "Abra o link que o seu fonoaudiólogo enviou para ver os exercícios."} />
+        <Aviso titulo="Prática em casa" texto="Abra o link que o seu fonoaudiólogo enviou ou cole a mensagem dele aqui.">
+          {/* no iPhone, o app da tela inicial não enxerga o que o Safari guardou: colar o link resolve */}
+          <form onSubmit={abrirColado} className="mt-4 space-y-3 text-left">
+            <label htmlFor="pc-colar" className="block text-sm font-medium text-ink">Link ou mensagem recebida</label>
+            <textarea id="pc-colar" value={colado} onChange={(e) => setColado(e.target.value)} rows={3}
+              className="w-full rounded-lg border border-line bg-canvas px-3 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+              data-testid="pc-colar" />
+            <Button type="submit" className="h-12 w-full" disabled={!colado.trim()}>Abrir exercícios</Button>
+          </form>
+          {aviso ? <p className="mt-3 text-sm text-signal-warn" role="alert">{aviso}</p> : null}
+        </Aviso>
       ) : null}
       {fase === "inativo" ? (
         <Aviso titulo="Este link não está mais ativo" texto="O prazo terminou ou o link foi trocado. Peça um novo link ao seu fonoaudiólogo.">
-          {pendentes ? <p className="mt-3 text-sm text-signal-warn">{pendentes} {pendentes === 1 ? "sessão não pôde ser enviada" : "sessões não puderam ser enviadas"}.</p> : null}
+          {pendentes ? (
+            <div className="mt-4 space-y-3">
+              <p className="text-sm text-signal-warn" data-testid="pc-pendentes-inativo">
+                {pendentes} {pendentes === 1 ? "sessão feita aqui ainda não foi enviada" : "sessões feitas aqui ainda não foram enviadas"}. Elas podem ser enviadas até 7 dias depois do fim do link.
+              </p>
+              <Button type="button" variant="secondary" className="h-11 w-full" disabled={enviando} onClick={() => void enviar()}>
+                {enviando ? "Enviando…" : "Tentar enviar agora"}
+              </Button>
+            </div>
+          ) : estado?.feitas.length ? (
+            <p className="mt-3 text-sm text-ink-muted">Todas as sessões feitas neste celular foram enviadas.</p>
+          ) : null}
         </Aviso>
       ) : null}
       {fase === "nao-encontrado" ? (
@@ -476,7 +580,7 @@ export function PraticaCelular() {
                 : `${pendentes} ${pendentes === 1 ? "sessão aguardando" : "sessões aguardando"} envio.`}
             </span>
             {pendentes > 0 ? (
-              <Button type="button" variant="ghost" className="h-10 w-10 px-0" disabled={enviando} onClick={() => estado && void enviar(estado)} aria-label="Enviar agora">
+              <Button type="button" variant="ghost" className="h-10 w-10 px-0" disabled={enviando} onClick={() => void enviar()} aria-label="Enviar agora">
                 <RefreshCw className={cn("h-4 w-4", enviando && "animate-spin motion-reduce:animate-none")} aria-hidden />
               </Button>
             ) : null}
@@ -520,6 +624,7 @@ export function PraticaCelular() {
                   const a = armazem();
                   if (a) apagarEstado(a);
                   estadoRef.current = null;
+                  setAviso(null);
                   setEstado(null);
                   setFase("sem-link");
                 }}>

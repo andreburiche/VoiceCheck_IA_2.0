@@ -154,21 +154,26 @@ export function PraticaCasa({ paciente, ativo, aoMudar }: { paciente: string; at
   // sessões chegam do celular a qualquer hora: se o total mudou, o histórico recarrega
   const totalSessoes = useRef<number | null>(null);
 
+  const pedido = useRef(0);
   const carregar = useCallback(async () => {
+    const meu = ++pedido.current;
     if (!paciente) return setPlanos(null);
     try {
       const itens = (await listarPlanosPratica(paciente)).items;
+      if (meu !== pedido.current) return; // resposta de outro paciente, já trocado
       setPlanos(itens);
       const total = itens.reduce((n, p) => n + p.sessoes, 0);
       if (totalSessoes.current !== null && total !== totalSessoes.current) aoMudar();
       totalSessoes.current = total;
     } catch (e) {
+      if (meu !== pedido.current) return;
       setErro(friendlyError(e, "Não foi possível carregar os planos."));
     }
   }, [paciente, aoMudar]);
 
   useEffect(() => {
     totalSessoes.current = null; // outro paciente: começa a contar de novo
+    setPlanos(null); // não mostra os links do paciente anterior enquanto carrega
   }, [paciente]);
 
   useEffect(() => {

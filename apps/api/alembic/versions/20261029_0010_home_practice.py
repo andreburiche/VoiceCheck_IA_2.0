@@ -47,10 +47,27 @@ def upgrade() -> None:
     op.create_unique_constraint(
         "uq_clinical_evaluations_owner_client_ref", "clinical_evaluations", ["owner_id", "client_ref"]
     )
+    # Plano de origem: conta sessões por plano e por dia (teto contra inundar o histórico).
+    op.add_column("clinical_evaluations", sa.Column("practice_plan_id", sa.CHAR(36), nullable=True))
+    op.create_index(
+        "ix_clinical_evaluations_plan_created", "clinical_evaluations", ["practice_plan_id", "created_at"]
+    )
+    op.create_foreign_key(
+        "fk_clinical_evaluations_practice_plan",
+        "clinical_evaluations",
+        "home_practice_plans",
+        ["practice_plan_id"],
+        ["id"],
+        ondelete="SET NULL",
+    )
 
 
 def downgrade() -> None:
+    # No MySQL, a chave estrangeira sai antes do índice que ela usa.
+    op.drop_constraint("fk_clinical_evaluations_practice_plan", "clinical_evaluations", type_="foreignkey")
+    op.drop_index("ix_clinical_evaluations_plan_created", table_name="clinical_evaluations")
+    op.drop_column("clinical_evaluations", "practice_plan_id")
     op.drop_constraint("uq_clinical_evaluations_owner_client_ref", "clinical_evaluations", type_="unique")
     op.drop_column("clinical_evaluations", "client_ref")
-    op.drop_index("ix_home_practice_plans_owner_patient", table_name="home_practice_plans")
+    # o índice composto serve à chave estrangeira owner_id: sai junto com a tabela
     op.drop_table("home_practice_plans")

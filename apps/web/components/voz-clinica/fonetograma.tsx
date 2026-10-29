@@ -9,7 +9,7 @@ import { hzToMidiFloat, midiToNoteName } from "@/lib/pitch-math";
 import { fixoBR, salvarFonetograma } from "@/lib/voz-clinica-api";
 import { medianaDe3, nivelDbfs, pitchYin } from "@/lib/voz-clinica-biofeedback";
 import { pontosDoCampo, registrar, resumirCampo, type MapaCampo, type PontoCampo } from "@/lib/voz-clinica-fonetograma";
-import { RESTRICOES_CLINICAS, gravadorSuportado } from "@/lib/voz-clinica-gravador";
+import { abrirMicrofoneAoVivo, gravadorSuportado } from "@/lib/voz-clinica-gravador";
 
 const DB_MIN = -60;
 const DB_MAX = 0;
@@ -88,6 +88,14 @@ export function Fonetograma({ paciente, aoSalvar }: { paciente: string; aoSalvar
   const mapa = useRef<MapaCampo>(new Map());
   const duracaoRef = useRef(0);
   const audio = useRef<{ ctx: AudioContext; stream: MediaStream; analisador: AnalyserNode } | null>(null);
+  const abrindo = useRef(false);
+  const montado = useRef(true);
+  useEffect(() => {
+    montado.current = true;
+    return () => {
+      montado.current = false;
+    };
+  }, []);
   const quadro = useRef<number | null>(null);
 
   useEffect(() => setSuportado(gravadorSuportado()), []);
@@ -111,18 +119,18 @@ export function Fonetograma({ paciente, aoSalvar }: { paciente: string; aoSalvar
   async function gravar() {
     setErro(null);
     setSalvo(false);
+    if (abrindo.current || audio.current) return; // dois toques não abrem dois microfones
+    abrindo.current = true;
     try {
       if (!window.isSecureContext) throw new Error("O microfone só funciona em https:// ou em http://localhost.");
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: RESTRICOES_CLINICAS, video: false });
-      const ctx = new AudioContext();
-      if (ctx.state === "suspended") await ctx.resume();
-      const analisador = ctx.createAnalyser();
-      analisador.fftSize = 2048;
-      ctx.createMediaStreamSource(stream).connect(analisador);
-      audio.current = { ctx, stream, analisador };
+      const mic = await abrirMicrofoneAoVivo(() => montado.current);
+      if (!mic) return; // a tela saiu enquanto o navegador pedia o microfone
+      audio.current = mic;
     } catch (e) {
       setErro(e instanceof DOMException && e.name === "NotAllowedError" ? "Permita o uso do microfone no navegador." : friendlyError(e, "Não foi possível abrir o microfone."));
       return;
+    } finally {
+      abrindo.current = false;
     }
     setGravando(true);
     const buffer = new Float32Array(2048);

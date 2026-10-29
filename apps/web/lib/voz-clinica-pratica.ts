@@ -227,6 +227,12 @@ export function tokenDoEndereco(hash: string): string | null {
   return m ? m[1]! : null;
 }
 
+/** Link colado pelo paciente (pode vir com texto da mensagem em volta). */
+export function tokenDoTexto(texto: string): string | null {
+  const m = /\/pratica#(t=[A-Za-z0-9_-]{20,128})/.exec(texto);
+  return m ? tokenDoEndereco(`#${m[1]}`) : null;
+}
+
 export function mensagemWhatsApp(link: string, saudacao: string): string {
   const oi = saudacao.trim() ? `Olá, ${saudacao.trim()}! ` : "Olá! ";
   return `${oi}Seus exercícios de voz para fazer em casa estão neste link: ${link}\nAbra no celular e toque em “Adicionar à tela inicial” para usar mesmo sem internet. Não compartilhe este link.`;
@@ -247,6 +253,8 @@ export type EstadoCelular = {
   fila: SessaoPendente[];
   /** Últimas sessões feitas neste celular (para mostrar o progresso, mesmo offline). */
   feitas: FeitaNoCelular[];
+  /** Filas de links anteriores ainda não enviadas (cada uma vai com o próprio token). */
+  anteriores: { token: string; fila: SessaoPendente[] }[];
 };
 
 const CHAVE = "vc-pratica-v1";
@@ -261,7 +269,13 @@ export function lerEstado(armazem: Armazem): EstadoCelular | null {
     if (!bruto) return null;
     const e = JSON.parse(bruto) as EstadoCelular;
     if (typeof e?.token !== "string" || !Array.isArray(e.fila)) return null;
-    return { token: e.token, plano: e.plano ?? null, fila: e.fila, feitas: Array.isArray(e.feitas) ? e.feitas : [] };
+    return {
+      token: e.token,
+      plano: e.plano ?? null,
+      fila: e.fila,
+      feitas: Array.isArray(e.feitas) ? e.feitas : [],
+      anteriores: Array.isArray(e.anteriores) ? e.anteriores.filter((g) => typeof g?.token === "string" && Array.isArray(g.fila)) : [],
+    };
   } catch {
     return null;
   }
@@ -285,9 +299,36 @@ export function apagarEstado(armazem: Armazem): void {
 }
 
 /** Novo link no mesmo celular: troca o plano; a fila do link anterior só é mantida se for o mesmo token. */
+/**
+ * Novo link no mesmo celular: troca o plano. O que o link anterior ainda não enviou
+ * não se perde: vai para `anteriores` e é enviado com o token antigo.
+ */
 export function estadoParaToken(atual: EstadoCelular | null, token: string): EstadoCelular {
   if (atual && atual.token === token) return atual;
-  return { token, plano: null, fila: [], feitas: [] };
+  const anteriores = (atual?.anteriores ?? []).filter((g) => g.token !== token && g.fila.length);
+  if (atual?.fila.length) anteriores.push({ token: atual.token, fila: atual.fila });
+  const voltando = atual?.anteriores.find((g) => g.token === token);
+  return { token, plano: null, fila: voltando?.fila ?? [], feitas: [], anteriores };
+}
+
+/** Resposta do envio de uma fila antiga. */
+export function aplicarEnvioAnterior(e: EstadoCelular, token: string, recebidas: string[], recusadas: string[]): EstadoCelular {
+  const sai = new Set([...recebidas, ...recusadas]);
+  return {
+    ...e,
+    anteriores: e.anteriores
+      .map((g) => (g.token === token ? { ...g, fila: g.fila.filter((s) => !sai.has(s.id)) } : g))
+      .filter((g) => g.fila.length),
+  };
+}
+
+/** Link antigo encerrado de vez (revogado ou fora da carência): não há como enviar. */
+export function descartarAnterior(e: EstadoCelular, token: string): EstadoCelular {
+  return { ...e, anteriores: e.anteriores.filter((g) => g.token !== token) };
+}
+
+export function totalPendente(e: EstadoCelular | null): number {
+  return e ? e.fila.length + e.anteriores.reduce((n, g) => n + g.fila.length, 0) : 0;
 }
 
 export function registrarSessao(e: EstadoCelular, s: SessaoPendente): EstadoCelular {

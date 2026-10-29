@@ -26,7 +26,7 @@ paciente. Biofeedback e jogos (VoxGames, Voice Analyst) ficam para a fase 2.
 | Relatório em PDF | Botão no histórico: análise acústica e protocolos mais recentes, gráficos de evolução, todas as sessões, profissional e observações (opcionais). HTML A4 impresso pelo navegador ("Salvar como PDF"), mesmo mecanismo dos relatórios do VoiceCheck |
 | Biofeedback ao vivo | Pitch (nota e Hz) e volume (dBFS) na tela enquanto o paciente fala ou canta, com faixas-alvo definidas pelo profissional, indicação "abaixo / dentro / acima" escrita (não só cor), curva dos últimos 8 s e % do tempo na faixa. Pitch por YIN a ~60 leituras/s com mediana de 3 contra leituras isoladas. O áudio não sai do aparelho; ao parar, o resumo da sessão pode ser salvo no histórico (tipo `biofeedback`) e entra na evolução |
 | Jogos de terapia | Quatro jogos próprios (não copiam nomes, visual nem mecânica de produtos comerciais): **Altitude** (o volume controla a altura; seguir patamares), **Trilha** (o pitch controla a altura; patamares e deslizes), **Sopro longo** (sustentar a voz até a meta) e **Surdo ou sonoro** (s/z, f/v, ch/j). Faixas, duração, dificuldade e meta definidas pelo profissional. Resultado de cada partida pode ser salvo (tipo `jogo`) e tem curva própria na evolução |
-| Prática em casa | Aba própria. O profissional monta até 6 exercícios — **vogal sustentada** (meta opcional), **voz na faixa de altura** (Hz) ou **volume controlado** (dBFS), com repetições, duração e instrução — e gera um **link secreto** (validade de 1 a 180 dias, até 3 ativos por paciente, revogável). Envio por WhatsApp ou cópia; o link aparece uma única vez (só o hash fica salvo). O paciente abre `/pratica` no celular **sem conta**: vê só os exercícios e um nome de tratamento opcional (nunca o nome completo nem o histórico). O áudio é analisado no celular (YIN + dBFS) e só os números de cada repetição são enviados; o servidor confere com o plano e recalcula o resumo (tipo `pratica`). **Funciona offline** depois da primeira abertura (service worker + fila no celular): sessões feitas sem internet são enviadas quando a conexão volta, sem duplicar (id gerado no celular). Sessões feitas antes de o link expirar podem ser enviadas até 7 dias depois. Curvas próprias na evolução (melhor tempo; % na faixa) |
+| Prática em casa | Aba própria. O profissional monta até 6 exercícios — **vogal sustentada** (meta opcional), **voz na faixa de altura** (Hz) ou **volume controlado** (dBFS), com repetições, duração e instrução — e gera um **link secreto** (validade de 1 a 180 dias, até 3 ativos por paciente, revogável). Envio por WhatsApp ou cópia; o link aparece uma única vez (só o hash fica salvo). O paciente abre `/pratica` no celular **sem conta**: vê só os exercícios e um nome de tratamento opcional (nunca o nome completo nem o histórico). O áudio é analisado no celular (YIN + dBFS) e só os números de cada repetição são enviados; o servidor confere com o plano e recalcula o resumo (tipo `pratica`). **Funciona offline** depois da primeira abertura (service worker + fila no celular): sessões feitas sem internet são enviadas quando a conexão volta, sem duplicar (id gerado no celular). Sessões feitas antes de o link expirar podem ser enviadas até 7 dias depois; trocar de link no mesmo celular não perde o que o anterior não enviou. Teto de 24 sessões por dia e 400 por link (contra inundar o histórico). No iPhone, o app da tela inicial não enxerga o que o Safari guardou: na primeira abertura, o paciente cola a mensagem com o link. Curvas próprias na evolução (melhor tempo; % na faixa) |
 | Fonetograma | Campo vocal: para cada semitom alcançado (≥ 0,15 s), a menor e a maior intensidade, ignorando os primeiros 50 ms de cada nota (ataque). Glissandos em voz fraca e forte, com pausa e retomada somando ao mesmo campo. Nota mais grave e mais aguda, extensão em semitons, faixa dinâmica média e área. Intensidade **relativa (dBFS)**. Ao salvar, o servidor recalcula o resumo a partir dos pontos (tipo `fonetograma`); extensão e faixa dinâmica entram na evolução |
 
 Os textos das perguntas não estão no sistema: o profissional lê da versão
@@ -60,7 +60,7 @@ apps/web/components/pratica/pratica-celular.tsx        tela do celular
 apps/web/public/pratica-sw.js, pratica.webmanifest     offline e "adicionar à tela inicial"
 apps/api/app/api/v1/pratica_casa.py                    rotas do celular (token no cabeçalho)
 apps/api/app/services/voz_clinica/pratica.py           token, datas e resumo das sessões
-apps/api/alembic/versions/20261029_0010_*.py           tabela home_practice_plans + client_ref
+apps/api/alembic/versions/20261029_0010_*.py           tabela home_practice_plans + client_ref e practice_plan_id
 apps/api/app/services/voz_clinica/fonetograma.py       resumo do campo no servidor
         │  multipart / JSON, cookie de sessão + CSRF
         ▼
@@ -121,6 +121,16 @@ TypeScript com as opções estritas do projeto.
 
 **Ainda não executado:** motor Praat (Parselmouth) e rotas contra MySQL — rodam
 no Docker com os comandos acima.
+
+## Revisão independente (29/10/2026)
+
+Uma revisão feita por outro agente, sem ver o desenvolvimento, apontou 10 pontos; todos foram corrigidos e cobertos por teste:
+sessão concluída durante um envio lento era sobrescrita e perdida (corrida no envio); carência de 7 dias não era usada quando o link já tinha expirado;
+link novo apagava a fila do anterior; sem teto de sessões por link; microfone podia ficar ligado ao sair da tela durante o pedido de permissão
+ou com dois toques (biofeedback, jogos, fonetograma, prática); resposta atrasada de outro paciente podia aparecer no histórico/relatório;
+IntegrityError tratado como "recebida" sem confirmar; iPhone perdia o link no app da tela inicial; datas saíam sem fuso (horário 3 h adiantado na tela);
+downgrade das migrações falharia no MySQL. Os testes do navegador ainda acharam mais dois: a marca de "enviando" ficava presa quando a fila estava vazia
+(nenhum envio acontecia) e um link novo aberto com a página já aberta era ignorado.
 
 ## Pontos a conferir antes do uso clínico
 

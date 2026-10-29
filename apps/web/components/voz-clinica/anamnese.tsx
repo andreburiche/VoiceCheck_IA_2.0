@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,6 +88,10 @@ export function AnamneseVocal({ paciente, aoSalvar }: { paciente: string; aoSalv
   const [carregando, setCarregando] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const pacienteAtual = useRef(paciente);
+  useEffect(() => {
+    pacienteAtual.current = paciente;
+  }, [paciente]);
 
   const campo = <K extends keyof Formulario>(k: K, v: Formulario[K]) => {
     setF((atual) => ({ ...atual, [k]: v }));
@@ -120,10 +124,14 @@ export function AnamneseVocal({ paciente, aoSalvar }: { paciente: string; aoSalv
 
   async function usarUltima() {
     if (!paciente) return setErro("Preencha o nome do paciente para buscar a última anamnese.");
+    const pedidoPara = paciente;
     setCarregando(true);
     setErro(null);
     try {
-      const ultima = (await listarAvaliacoes(paciente)).items
+      const lista = (await listarAvaliacoes(pedidoPara)).items;
+      // o paciente mudou enquanto buscava: não preenche com a anamnese de outra pessoa
+      if (pacienteAtual.current !== pedidoPara) return;
+      const ultima = lista
         .filter((a) => a.tipo === "anamnese")
         .sort((a, b) => b.criado_em.localeCompare(a.criado_em))[0];
       if (!ultima) {

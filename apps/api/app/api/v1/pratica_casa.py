@@ -10,12 +10,11 @@ CSRF a proteger.
 from __future__ import annotations
 
 import logging
-from collections import Counter
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.core.deps import DbSession
@@ -36,31 +35,34 @@ router = APIRouter(prefix="/pratica-casa", tags=["pratica-casa"])
 TIPO = "pratica"
 #: Depois que o link expira, o celular ainda pode enviar o que foi feito offline antes disso.
 GRACA_ENVIO = timedelta(days=7)
+#: Tetos contra inundar o histórico (quem tem o link pode enviar sessões inventadas).
+#: Folgados para o uso real: 6 exercícios feitos 3 vezes ao dia dão 18.
+MAX_SESSOES_DIA = 24
+MAX_SESSOES_PLANO = 400
 
 
 def _agora() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def sessoes_por_plano(db, owner_id: str, paciente: str) -> tuple[Counter, dict[str, datetime]]:
-    """Quantas sessões cada plano recebeu e a data da última (o plano_id fica no resultado)."""
+def sessoes_por_plano(db, owner_id: str, plano_ids: list[str]) -> tuple[dict[str, int], dict[str, datetime]]:
+    """Quantas sessões cada plano recebeu e a data da última (contadas no banco)."""
+    if not plano_ids:
+        return {}, {}
     linhas = db.execute(
-        select(ClinicalEvaluation.result, ClinicalEvaluation.created_at).where(
-            ClinicalEvaluation.owner_id == owner_id,
-            ClinicalEvaluation.patient_name == paciente,
-            ClinicalEvaluation.kind == TIPO,
-        )
+        select(ClinicalEvaluation.practice_plan_id, func.count(ClinicalEvaluation.id), func.max(ClinicalEvaluation.created_at))
+        .where(ClinicalEvaluation.owner_id == owner_id, ClinicalEvaluation.practice_plan_id.in_(plano_ids))
+        .group_by(ClinicalEvaluation.practice_plan_id)
     ).all()
-    total: Counter = Counter()
-    ultima: dict[str, datetime] = {}
-    for resultado, criado in linhas:
-        pid = (resultado or {}).get("plano_id")
-        if not pid:
-            continue
-        total[pid] += 1
-        if pid not in ultima or criado > ultima[pid]:
-            ultima[pid] = criado
-    return total, ultima
+    return {pid: n for pid, n, _ in linhas}, {pid: u for pid, _, u in linhas}
+
+
+def _contar(db, plano_id: str, desde: datetime | None = None, ate: datetime | None = None) -> int:
+    q = select(func.count(ClinicalEvaluation.id)).where(ClinicalEvaluation.practice_plan_id == plano_id)
+    if desde is not None and ate is not None:
+        # gravado sem fuso no MySQL (UTC): compara com datas UTC sem fuso
+        q = q.where(ClinicalEvaluation.created_at >= desde.replace(tzinfo=None), ClinicalEvaluation.created_at < ate.replace(tzinfo=None))
+    return int(db.scalar(q) or 0)
 
 
 def plano_out(p: HomePracticePlan, total: Mapping[str, int], ultima: Mapping[str, datetime]) -> PlanoOut:
@@ -123,6 +125,8 @@ def enviar_sessoes(
     )
     recebidas: list[str] = []
     recusadas: list[SessaoRecusada] = []
+    total_plano = _contar(db, plano.id)
+    por_dia: dict[str, int] = {}
     for s in entrada.sessoes:
         if s.id in ja or s.id in recebidas:
             recebidas.append(s.id)
@@ -134,6 +138,14 @@ def enviar_sessoes(
             feito = conferir_data(s.feito_em, plano.created_at, plano.expires_at, agora)
             reps = [r.model_dump() for r in s.repeticoes]
             resumo = resumir_sessao(ex, reps)
+            if total_plano >= MAX_SESSOES_PLANO:
+                raise ErroSessao(f"limite de {MAX_SESSOES_PLANO} sessões deste link atingido")
+            dia = feito.date().isoformat()
+            if dia not in por_dia:
+                inicio = datetime(feito.year, feito.month, feito.day, tzinfo=timezone.utc)
+                por_dia[dia] = _contar(db, plano.id, inicio, inicio + timedelta(days=1))
+            if por_dia[dia] >= MAX_SESSOES_DIA:
+                raise ErroSessao(f"limite de {MAX_SESSOES_DIA} sessões por dia atingido")
         except ErroSessao as exc:
             recusadas.append(SessaoRecusada(id=s.id, motivo=str(exc)))
             continue
@@ -152,13 +164,25 @@ def enviar_sessoes(
         db.add(
             ClinicalEvaluation(
                 owner_id=plano.owner_id, patient_name=plano.patient_name, kind=TIPO,
-                result=resultado, client_ref=s.id, created_at=feito,
+                result=resultado, client_ref=s.id, practice_plan_id=plano.id, created_at=feito,
             )
         )
         try:
             db.commit()
-        except IntegrityError:  # mesma sessão chegando em duas requisições ao mesmo tempo
+        except IntegrityError:
+            # esperado: a mesma sessão chegou em duas requisições ao mesmo tempo. Só conta como
+            # recebida se estiver mesmo gravada; senão o erro sobe (500) e o celular tenta de novo.
             db.rollback()
+            gravada = db.scalar(
+                select(ClinicalEvaluation.id).where(
+                    ClinicalEvaluation.owner_id == plano.owner_id, ClinicalEvaluation.client_ref == s.id
+                )
+            )
+            if gravada is None:
+                raise
+        else:
+            total_plano += 1
+            por_dia[dia] += 1
         recebidas.append(s.id)
     if recusadas:
         logger.info("pratica: %d sessões recusadas no plano %s", len(recusadas), plano.id)

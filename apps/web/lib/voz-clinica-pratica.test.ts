@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   aplicarEnvio,
+  aplicarEnvioAnterior,
+  descartarAnterior,
+  tokenDoTexto,
+  totalPendente,
   diasSeguidos,
   exercicioDoRascunho,
   rascunhoDe,
@@ -98,6 +102,11 @@ describe("link", () => {
     expect(tokenDoEndereco("#t=curto")).toBe(null);
     expect(tokenDoEndereco("")).toBe(null);
   });
+  it("acha o link colado no meio da mensagem do WhatsApp", () => {
+    const token = "Zx9_".repeat(11);
+    expect(tokenDoTexto(`Olá! Seus exercícios: https://app.ex.com/pratica#t=${token}\nNão compartilhe.`)).toBe(token);
+    expect(tokenDoTexto("https://app.ex.com/pratica")).toBe(null);
+  });
   it("mensagem pede para não compartilhar", () => {
     expect(mensagemWhatsApp("L", "Ana")).toContain("Olá, Ana!");
     expect(mensagemWhatsApp("L", " ")).toContain("Não compartilhe");
@@ -129,10 +138,29 @@ describe("estado no celular", () => {
     expect(e.fila.map((x) => x.id)).toEqual(["c"]);
     expect(e.feitas.map((f) => [f.id, f.enviada])).toEqual([["a", true], ["c", false]]);
   });
-  it("outro link no mesmo celular começa do zero; o mesmo link mantém a fila", () => {
+  it("outro link no mesmo celular: fila nova, e a antiga guardada com o token antigo", () => {
     const e = registrarSessao(estadoParaToken(null, "tok"), s("1"));
     expect(estadoParaToken(e, "tok").fila.length).toBe(1);
-    expect(estadoParaToken(e, "outro").fila.length).toBe(0);
+    const novo = registrarSessao(estadoParaToken(e, "outro"), s("2"));
+    expect(novo.fila.map((x) => x.id)).toEqual(["2"]);
+    expect(novo.anteriores).toEqual([{ token: "tok", fila: e.fila }]);
+    expect(totalPendente(novo)).toBe(2);
+    // voltar ao link antigo recupera a fila dele
+    const volta = estadoParaToken(novo, "tok");
+    expect(volta.fila.map((x) => x.id)).toEqual(["1"]);
+    expect(volta.anteriores.map((g) => g.token)).toEqual(["outro"]);
+  });
+  it("fila antiga enviada ou descartada sai da lista", () => {
+    let e = estadoParaToken(registrarSessao(registrarSessao(estadoParaToken(null, "tok"), s("1")), s("2")), "outro");
+    e = aplicarEnvioAnterior(e, "tok", ["1"], []);
+    expect(e.anteriores[0]!.fila.map((x) => x.id)).toEqual(["2"]);
+    expect(aplicarEnvioAnterior(e, "tok", [], ["2"]).anteriores).toEqual([]);
+    expect(descartarAnterior(e, "tok").anteriores).toEqual([]);
+  });
+  it("estado antigo guardado sem 'anteriores' ainda abre", () => {
+    const a = memoria();
+    a.setItem("vc-pratica-v1", JSON.stringify({ token: "tok", plano: null, fila: [], feitas: [] }));
+    expect(lerEstado(a)?.anteriores).toEqual([]);
   });
   it("progresso de hoje e dias seguidos", () => {
     const agora = new Date(2026, 9, 29, 20);

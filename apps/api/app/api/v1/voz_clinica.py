@@ -217,6 +217,8 @@ def criar_plano(entrada: PlanoEntrada, user: CurrentUser, db: DbSession) -> Plan
         token_hash=hash_token(token),
         exercises=[e.model_dump(exclude_none=True) for e in entrada.exercicios],
         expires_at=agora + timedelta(days=entrada.validade_dias),
+        # explícito em UTC: a conferência das sessões compara com esta data
+        created_at=agora,
     )
     db.add(plano)
     db.commit()
@@ -236,7 +238,7 @@ def listar_planos(user: CurrentUser, db: DbSession, paciente: str) -> PlanoLista
         .order_by(HomePracticePlan.created_at.desc())
         .limit(50)
     ).all()
-    total, ultima = sessoes_por_plano(db, user.id, nome)
+    total, ultima = sessoes_por_plano(db, user.id, [p.id for p in planos])
     return PlanoLista(items=[plano_out(p, total, ultima) for p in planos])
 
 
@@ -250,7 +252,7 @@ def revogar_plano(plano_id: str, user: CurrentUser, db: DbSession) -> PlanoOut:
         plano.revoked_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(plano)
-    total, ultima = sessoes_por_plano(db, user.id, plano.patient_name)
+    total, ultima = sessoes_por_plano(db, user.id, [plano.id])
     return plano_out(plano, total, ultima)
 
 

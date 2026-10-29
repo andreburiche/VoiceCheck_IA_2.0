@@ -103,3 +103,14 @@ def test_esquema_do_plano_e_da_sessao():
     for ruim in ({**ok, "id": "abc"}, {**ok, "repeticoes": []}, {**ok, "exercicio": 6}):
         with pytest.raises(ValidationError):
             SessaoPratica(**ruim)
+
+
+def test_datas_de_saida_sempre_com_fuso():
+    """O MySQL devolve DATETIME sem fuso; a API precisa mandar "+00:00" para o navegador."""
+    from app.schemas.voz_clinica import PlanoPublico
+
+    ingenua = datetime(2026, 10, 29, 23, 30)
+    saida = PlanoPublico(saudacao="", exercicios=[], expira_em=ingenua).model_dump_json()
+    assert '"2026-10-29T23:30:00Z"' in saida
+    sp = datetime(2026, 10, 29, 20, 30, tzinfo=timezone(timedelta(hours=-3)))
+    assert '"2026-10-29T23:30:00Z"' in PlanoPublico(saudacao="", exercicios=[], expira_em=sp).model_dump_json()

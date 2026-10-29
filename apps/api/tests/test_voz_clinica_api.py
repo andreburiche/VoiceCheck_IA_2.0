@@ -314,3 +314,14 @@ def test_pratica_limita_links_ativos(client: httpx.Client) -> None:
     for _ in range(3):
         assert client.post("/api/v1/voz-clinica/pratica", json={**PLANO, "paciente": paciente}).status_code == 201
     assert client.post("/api/v1/voz-clinica/pratica", json={**PLANO, "paciente": paciente}).status_code == 409
+
+
+def test_pratica_teto_diario(client: httpx.Client) -> None:
+    """Quem tem o link não consegue inundar o histórico: no máximo 24 sessões por dia."""
+    criado = client.post("/api/v1/voz-clinica/pratica", json={**PLANO, "paciente": f"Teto {uuid.uuid4().hex[:6]}"}).json()
+    with _celular(criado["token"]) as cel:
+        r = cel.post("/api/v1/pratica-casa/sessoes", json={"sessoes": [_sessao() for _ in range(26)]}).json()
+    assert len(r["recebidas"]) == 24
+    assert len(r["recusadas"]) == 2 and "por dia" in r["recusadas"][0]["motivo"]
+    lista = client.get("/api/v1/voz-clinica/pratica", params={"paciente": criado["paciente"]}).json()["items"]
+    assert lista[0]["sessoes"] == 24 and lista[0]["ultima_sessao"].endswith(("Z", "+00:00"))

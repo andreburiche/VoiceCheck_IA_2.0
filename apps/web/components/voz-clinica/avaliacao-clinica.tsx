@@ -489,12 +489,18 @@ function Historico({ paciente, versao }: { paciente: string; versao: number }) {
   const [excluir, setExcluir] = useState<Avaliacao | null>(null);
   const [excluindo, setExcluindo] = useState(false);
 
+  // só a resposta do pedido mais recente vale: trocar de paciente rápido não mistura prontuários
+  const pedido = useRef(0);
   const carregar = useCallback(async () => {
     if (!paciente) return;
+    const meu = ++pedido.current;
     try {
-      setItens((await listarAvaliacoes(paciente)).items);
+      const lista = (await listarAvaliacoes(paciente)).items;
+      if (meu !== pedido.current) return;
+      setItens(lista);
       setErro(null);
     } catch (e) {
+      if (meu !== pedido.current) return;
       setErro(friendlyError(e, "Não foi possível carregar o histórico."));
     }
   }, [paciente]);

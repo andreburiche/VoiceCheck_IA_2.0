@@ -43,5 +43,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_clinical_evaluations_owner_patient", table_name="clinical_evaluations")
+    # o índice composto serve à chave estrangeira owner_id (MySQL recusa apagá-lo antes): sai com a tabela
     op.drop_table("clinical_evaluations")

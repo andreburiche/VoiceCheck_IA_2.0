@@ -188,3 +188,34 @@ export class GravadorClinico {
     await this.ctx?.close().catch(() => undefined);
   }
 }
+
+export type MicrofoneAoVivo = { ctx: AudioContext; stream: MediaStream; analisador: AnalyserNode };
+
+/**
+ * Abre o microfone sem filtros com um analisador (biofeedback, jogos, fonetograma, prática).
+ * `ainda()` diz se a tela continua aberta: se ela saiu enquanto o navegador pedia
+ * permissão, ou se algo falhar no meio, nada fica ligado e volta `null` (ou o erro sobe).
+ */
+export async function abrirMicrofoneAoVivo(ainda: () => boolean, fftSize = 2048): Promise<MicrofoneAoVivo | null> {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: RESTRICOES_CLINICAS, video: false });
+  let ctx: AudioContext | null = null;
+  try {
+    if (ainda()) {
+      ctx = new AudioContext();
+      if (ctx.state === "suspended") await ctx.resume();
+    }
+    if (!ctx || !ainda()) {
+      stream.getTracks().forEach((t) => t.stop());
+      void ctx?.close().catch(() => undefined);
+      return null;
+    }
+    const analisador = ctx.createAnalyser();
+    analisador.fftSize = fftSize;
+    ctx.createMediaStreamSource(stream).connect(analisador);
+    return { ctx, stream, analisador };
+  } catch (e) {
+    stream.getTracks().forEach((t) => t.stop());
+    void ctx?.close().catch(() => undefined);
+    throw e;
+  }
+}

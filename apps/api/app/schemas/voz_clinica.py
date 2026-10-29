@@ -3,9 +3,18 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from datetime import timezone
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
+
+def _com_fuso(d: datetime) -> datetime:
+    """O MySQL devolve DATETIME sem fuso (gravado em UTC). Sem o "+00:00", o navegador
+    leria como horário local e mostraria a hora errada (3 h a mais no Brasil)."""
+    return d.replace(tzinfo=timezone.utc) if d.tzinfo is None else d.astimezone(timezone.utc)
+
+
+DataUtc = Annotated[datetime, AfterValidator(_com_fuso)]
 
 TipoAvaliacao = Literal[
     "acustica", "idv10", "qvv", "grbasi", "easebr", "anamnese", "biofeedback", "jogo", "fonetograma", "pratica"
@@ -133,7 +142,7 @@ class AvaliacaoOut(BaseModel):
     tipo: TipoAvaliacao
     motor: str | None = None
     resultado: dict[str, Any]
-    criado_em: datetime
+    criado_em: DataUtc
 
 
 class AvaliacaoLista(BaseModel):
@@ -143,7 +152,7 @@ class AvaliacaoLista(BaseModel):
 class PacienteResumo(BaseModel):
     paciente: str
     avaliacoes: int
-    ultima: datetime
+    ultima: DataUtc
 
 
 class PacienteLista(BaseModel):
@@ -273,12 +282,12 @@ class PlanoOut(BaseModel):
     paciente: str
     saudacao: str
     exercicios: list[dict[str, Any]]
-    criado_em: datetime
-    expira_em: datetime
-    revogado_em: datetime | None
+    criado_em: DataUtc
+    expira_em: DataUtc
+    revogado_em: DataUtc | None
     ativo: bool
     sessoes: int
-    ultima_sessao: datetime | None
+    ultima_sessao: DataUtc | None
 
 
 class PlanoCriado(PlanoOut):
@@ -295,7 +304,7 @@ class PlanoPublico(BaseModel):
 
     saudacao: str
     exercicios: list[dict[str, Any]]
-    expira_em: datetime
+    expira_em: DataUtc
 
 
 class RepeticaoPratica(BaseModel):
