@@ -20,6 +20,7 @@ paciente. Biofeedback e jogos (VoxGames, Voice Analyst) ficam para a fase 2.
 | GRBASI | G, R, B, A, S, I de 0 a 3; registro (ex.: G2R1B2A0S1I0) |
 | Histórico | Lista por paciente, mais recente primeiro, com exclusão confirmada |
 | Evolução | Um gráfico por medida (jitter, shimmer, HNR, CPPS, IDV-10, QVV, GRBASI G), até 12 sessões, com linha da nota de corte nos protocolos e valor de cada sessão ao passar o mouse ou focar pelo teclado. Aparece a partir da 2ª avaliação do mesmo tipo |
+| Relatório em PDF | Botão no histórico: análise acústica e protocolos mais recentes, gráficos de evolução, todas as sessões, profissional e observações (opcionais). HTML A4 impresso pelo navegador ("Salvar como PDF"), mesmo mecanismo dos relatórios do VoiceCheck |
 
 Os textos das perguntas não estão no sistema: o profissional lê da versão
 validada impressa (ou inclui depois de obter licença).
@@ -34,6 +35,7 @@ apps/web/lib/voz-clinica-wav.ts                        WAV PCM 16 bits
 apps/web/lib/voz-clinica-api.ts                        cliente + formatação
 apps/web/lib/voz-clinica-evolucao.ts                   séries, escala do eixo, variação
 apps/web/components/voz-clinica/grafico-evolucao.tsx   gráfico de uma medida
+apps/web/lib/voz-clinica-relatorio.ts                  relatório A4 (HTML + SVG estático)
         │  multipart / JSON, cookie de sessão + CSRF
         ▼
 apps/api/app/api/v1/voz_clinica.py                     rotas
@@ -98,6 +100,6 @@ no Docker com os comandos acima.
 ## Próximas fases
 
 1. ~~Gráfico de evolução por paciente~~ (feito).
-2. Relatório PDF da avaliação clínica, no padrão dos relatórios do VoiceCheck.
+2. ~~Relatório PDF da avaliação clínica~~ (feito).
 3. Biofeedback ao vivo (pitch e volume com metas de faixa) e jogos (intensidade,
    frequência, tempo de fonação).

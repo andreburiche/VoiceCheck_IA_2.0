@@ -133,12 +133,18 @@ export function numeroBR(valor: number | null | undefined, casas = 2): string {
   return valor.toLocaleString("pt-BR", { maximumFractionDigits: casas, minimumFractionDigits: 0 });
 }
 
+/** Casas decimais fixas ("3,90", "65,0"): medidas lado a lado sempre com o mesmo formato. */
+export function fixoBR(valor: number | null | undefined, casas = 2): string {
+  if (valor === null || valor === undefined || !Number.isFinite(valor)) return "—";
+  return valor.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
+}
+
 /** Linhas da tabela de resultados acústicos: [medida, valor formatado]. */
 export function linhasAcusticas(r: AnaliseAcustica): [string, string][] {
   if (!r.f0) return [];
   const p = r.perturbacao ?? {};
   const comUnidade = (v: number | null | undefined, casas: number, unidade: string) =>
-    numeroBR(v, casas) === "—" ? "—" : `${numeroBR(v, casas)} ${unidade}`;
+    fixoBR(v, casas) === "—" ? "—" : `${fixoBR(v, casas)} ${unidade}`;
   return [
     ["F0 média", comUnidade(r.f0.media_hz, 1, "Hz")],
     ["Variação da F0 (desvio-padrão)", comUnidade(r.f0.dp_semitons, 2, "semitons")],
@@ -149,11 +155,11 @@ export function linhasAcusticas(r: AnaliseAcustica): [string, string][] {
     [
       "F1 / F2",
       r.formantes?.f1_hz && r.formantes?.f2_hz
-        ? `${numeroBR(r.formantes.f1_hz, 0)} / ${numeroBR(r.formantes.f2_hz, 0)} Hz`
+        ? `${fixoBR(r.formantes.f1_hz, 0)} / ${fixoBR(r.formantes.f2_hz, 0)} Hz`
         : "—",
     ],
     ["Tempo de fonação", comUnidade(r.fonacao?.tmf_s, 1, "s")],
-    ["Quebras de voz", numeroBR(r.fonacao?.quebras_de_voz, 0)],
+    ["Quebras de voz", fixoBR(r.fonacao?.quebras_de_voz, 0)],
   ];
 }
 
@@ -164,7 +170,7 @@ export function resumoProtocolo(r: ResultadoProtocolo): string {
   }
   if (r.protocolo === "QVV") {
     return (
-      `Total ${numeroBR(r.total, 1)} · físico ${numeroBR(r.fisico, 1)} · socioemocional ${numeroBR(r.socioemocional, 1)}` +
+      `Total ${fixoBR(r.total, 1)} · físico ${fixoBR(r.fisico, 1)} · socioemocional ${fixoBR(r.socioemocional, 1)}` +
       ` — ${r.abaixo_do_corte ? "abaixo" : "acima"} da nota de corte (${numeroBR(r.corte_total, 2)})`
     );
   }
@@ -177,10 +183,10 @@ export function resumoAvaliacao(a: Avaliacao): string {
     const r = a.resultado as AnaliseAcustica;
     const p = r.perturbacao ?? {};
     return [
-      `F0 ${numeroBR(r.f0?.media_hz, 1)} Hz`,
-      `jitter ${numeroBR(p.jitter_local_pct, 2)}%`,
-      `shimmer ${numeroBR(p.shimmer_local_pct, 2)}%`,
-      `CPPS ${numeroBR(r.cpps_db, 1)} dB`,
+      `F0 ${fixoBR(r.f0?.media_hz, 1)} Hz`,
+      `jitter ${fixoBR(p.jitter_local_pct, 2)}%`,
+      `shimmer ${fixoBR(p.shimmer_local_pct, 2)}%`,
+      `CPPS ${fixoBR(r.cpps_db, 1)} dB`,
     ].join(" · ");
   }
   return resumoProtocolo(a.resultado as ResultadoProtocolo);

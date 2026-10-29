@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderCircle, Mic, Square, Trash2 } from "lucide-react";
+import { FileText, LoaderCircle, Mic, Square, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { friendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { GraficoEvolucao } from "@/components/voz-clinica/grafico-evolucao";
 import { MAX_PONTOS, seriesEvolucao } from "@/lib/voz-clinica-evolucao";
+import { imprimirRelatorioClinico } from "@/lib/voz-clinica-relatorio";
 import { GravadorClinico, gravadorSuportado, type GravacaoClinica } from "@/lib/voz-clinica-gravador";
 import {
   FAIXAS_F0,
@@ -405,6 +406,61 @@ function Evolucao({ itens }: { itens: Avaliacao[] }) {
   );
 }
 
+function Relatorio({ paciente, itens }: { paciente: string; itens: Avaliacao[] }) {
+  const [aberto, setAberto] = useState(false);
+  const [profissional, setProfissional] = useState("");
+  const [observacoes, setObservacoes] = useState("");
+  const [erro, setErro] = useState<string | null>(null);
+  const id = useId();
+
+  function gerar(e: React.FormEvent) {
+    e.preventDefault();
+    setErro(null);
+    try {
+      imprimirRelatorioClinico(paciente, itens, { profissional, observacoes, geradoEm: new Date() });
+      setAberto(false);
+    } catch (err) {
+      setErro(friendlyError(err, "Não foi possível gerar o relatório."));
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      <Button type="button" variant="secondary" size="sm" onClick={() => setAberto((v) => !v)} aria-expanded={aberto} data-testid="vc2-relatorio-abrir">
+        <FileText className="h-4 w-4" aria-hidden /> Relatório em PDF
+      </Button>
+      {aberto ? (
+        <form onSubmit={gerar} className="mt-3 space-y-3 rounded-xl p-4 ring-1 ring-inset ring-ink/10" data-testid="vc2-relatorio-form">
+          <p className="text-xs text-ink-muted">
+            Reúne a análise acústica e os protocolos mais recentes, os gráficos de evolução e todas as sessões. Campos vazios ficam fora do PDF.
+          </p>
+          <div className="max-w-sm">
+            <Label htmlFor={`${id}-prof`}>Profissional</Label>
+            <Input id={`${id}-prof`} className="mt-1" value={profissional} maxLength={120} onChange={(e) => setProfissional(e.target.value)} placeholder="Nome e registro (opcional)" />
+          </div>
+          <div>
+            <Label htmlFor={`${id}-obs`}>Observações</Label>
+            <textarea
+              id={`${id}-obs`}
+              className="mt-1 min-h-[5rem] w-full rounded-lg border border-line bg-canvas-raised px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+              value={observacoes}
+              maxLength={4000}
+              onChange={(e) => setObservacoes(e.target.value)}
+              placeholder="Conduta, orientações, próximos passos (opcional)"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" size="sm">Gerar PDF</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setAberto(false)}>Cancelar</Button>
+          </div>
+          <p className="text-xs text-ink-faint">Na janela de impressão, escolha “Salvar como PDF”.</p>
+          <Erro texto={erro} />
+        </form>
+      ) : null}
+    </div>
+  );
+}
+
 function Historico({ paciente, versao }: { paciente: string; versao: number }) {
   const [itens, setItens] = useState<Avaliacao[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -459,6 +515,7 @@ function Historico({ paciente, versao }: { paciente: string; versao: number }) {
           Nenhuma avaliação salva ainda. Grave uma vogal ou aplique um protocolo com este nome preenchido.
         </p>
       ) : null}
+      {itens?.length ? <Relatorio paciente={paciente} itens={itens} /> : null}
       {itens?.length ? <Evolucao itens={itens} /> : null}
       {itens?.length ? (
         <ul className="mt-3 divide-y divide-ink/[0.07] overflow-hidden rounded-xl ring-1 ring-inset ring-ink/10" data-testid="vc2-historico">

@@ -39,6 +39,12 @@ describe("linhasAcusticas", () => {
     expect(linhas["Quebras de voz"]).toBe("0");
   });
 
+  it("usa casas decimais fixas (3,90 e não 3,9)", () => {
+    const linhas = Object.fromEntries(linhasAcusticas({ ...ANALISE, perturbacao: { jitter_local_pct: 0.86, shimmer_local_pct: 3.9 }, f0: { ...ANALISE.f0!, media_hz: 205 } }));
+    expect(linhas["Shimmer local"]).toBe("3,90 %");
+    expect(linhas["F0 média"]).toBe("205,0 Hz");
+  });
+
   it("mostra traço quando a medida não pôde ser calculada", () => {
     const linhas = Object.fromEntries(linhasAcusticas({ ...ANALISE, perturbacao: {}, cpps_db: null }));
     expect(linhas["Jitter local"]).toBe("—");
@@ -61,6 +67,12 @@ describe("resumos", () => {
         abaixo_do_corte: true, corte_total: 91.25, itens_com_problema: [],
       }),
     ).toContain("abaixo da nota de corte (91,25)");
+    expect(
+      resumoProtocolo({
+        protocolo: "QVV", total: 65, fisico: 70, socioemocional: 57.5,
+        abaixo_do_corte: true, corte_total: 91.25, itens_com_problema: [],
+      }),
+    ).toContain("Total 65,0 · físico 70,0 · socioemocional 57,5");
   });
 
   it("avaliação acústica salva vira uma linha curta", () => {
