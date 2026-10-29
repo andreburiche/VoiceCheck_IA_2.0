@@ -1,0 +1,7 @@
+# Opcional — inferência real (CPU ou GPU)
+# Preferir build: docker compose build --build-arg INSTALL_DEMUCS=1 worker
+# (Dockerfile instala torch CPU + numpy + demucs)
+torch>=2.1.0
+torchaudio>=2.1.0
+numpy>=1.24,<2.3
+demucs>=4.0.1

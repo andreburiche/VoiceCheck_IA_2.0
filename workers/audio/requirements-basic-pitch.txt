@@ -1,0 +1,4 @@
+# Opcional — aumenta bastante a imagem (TensorFlow).
+# docker compose build --build-arg INSTALL_BASIC_PITCH=1 worker
+basic-pitch>=0.3.3
+# basic-pitch puxa tensorflow; pin frouxo para flexibilidade de CPU

@@ -1,0 +1,30 @@
+# Alertas básicos — importar num Prometheus/Alertmanager real.
+groups:
+  - name: estudio-api
+    rules:
+      - alert: EstudioApiDown
+        expr: up{job="estudio-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API Estúdio Musical sem scrape"
+          description: "Target estudio-api down por mais de 2 minutos."
+
+      - alert: EstudioQuotaRejectionsHigh
+        expr: increase(estudio_separation_jobs_quota_rejected_total[15m]) > 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Muitas rejeições de cota"
+          description: "Mais de 20 rejeições de cota em 15m — revisar planos ou abuso."
+
+      - alert: EstudioLoginFailuresHigh
+        expr: increase(estudio_auth_login_failures_total[10m]) > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Falhas de login elevadas"
+          description: "Possível brute-force ou outage de auth."

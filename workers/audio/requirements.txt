@@ -1,0 +1,13 @@
+celery==5.4.0
+redis==5.2.1
+sqlalchemy==2.0.36
+pymysql==1.1.1
+pydantic-settings==2.7.0
+structlog==24.4.0
+boto3==1.35.86
+httpx==0.28.1
+pytest==8.3.4
+numpy>=1.26,<2.3
+# PyTorch + demucs instalados sob demanda / imagem GPU (ADR-005/006)
+# torch, demucs — ver docs/RUNBOOK.md
+# Basic Pitch (TF) opcional: INSTALL_BASIC_PITCH=1 no build do worker

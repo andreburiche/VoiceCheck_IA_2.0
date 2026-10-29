@@ -1,0 +1,65 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+.env.local
+.env.*.local
+
+# Build
+.next/
+out/
+dist/
+build/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+coverage/
+htmlcov/
+.turbo/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Media / models / temp
+*.wav
+*.mp3
+*.flac
+*.mp4
+!tests/fixtures/**/*.wav
+models/
+weights/
+tmp/
+.tmp/
+uploads/
+data/minio/
+
+# Generated
+packages/contracts/generated/
+*.log
+
+# Docker volumes
+infra/volumes/
+
+# OS
+Desktop.ini
+
+# Dados locais do app (gravações e metadados dos usuários)
+data/
+
+# Cache do TypeScript
+*.tsbuildinfo
+
+# Ferramentas locais de IA (skills instaladas por máquina)
+.agents/
+.cursor/
+.claude/

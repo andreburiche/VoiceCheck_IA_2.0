@@ -1,0 +1,198 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --canvas: #070b14;
+  --canvas-raised: #0b1120;
+  --canvas-overlay: #111827;
+  --canvas-card: #151d2e;
+  --accent: #20d9d2;
+  --accent-hover: #17bdb8;
+  --brand-blue: #268bff;
+  --ink: #f8fafc;
+  --ink-muted: #94a3b8;
+  --ink-faint: #7b8aa0;
+  --line: #263247;
+  /* Usada por sliders (accent-color); antes não existia e caía na cor do navegador. */
+  --violet: #20d9d2;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-canvas text-ink antialiased;
+}
+
+#conteudo-principal {
+  position: relative;
+  z-index: 1;
+}
+
+::selection {
+  background: rgba(32, 217, 210, 0.32);
+  color: #f8fafc;
+}
+
+/* Superfícies do navegador também seguem a paleta */
+input,
+textarea {
+  caret-color: #20d9d2;
+}
+
+html {
+  scrollbar-color: #263247 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #263247;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #3d4b63;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*:focus-visible {
+  outline: 2px solid rgba(32, 217, 210, 0.8);
+  outline-offset: 2px;
+}
+
+@layer utilities {
+  /** Superfície opaca (antigo "vidro"): sem blur, para leitura e desempenho. */
+  .bg-glass {
+    background-color: #0f1626;
+  }
+
+  .ring-tech {
+    box-shadow:
+      0 0 0 1px rgba(148, 163, 184, 0.12),
+      0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  }
+
+  .media-copy-safe {
+    text-shadow: 0 1px 16px rgba(7, 11, 20, 0.7);
+  }
+
+  /* Remove fundo preto do PNG da marca sobre UI escura (sem redesenhar) */
+  .logo-knockout {
+    mix-blend-mode: screen;
+  }
+
+  .section-pad {
+    @apply px-5 py-14 sm:px-6 md:py-16 lg:py-20;
+  }
+
+  /* ---- HUD / painel tecnológico ---------------------------------------- */
+
+  /**
+   * Superfície padrão de painel/cartão: opaca, borda fina e sombra curta com deslocamento.
+   * (O nome ficou por compatibilidade; o blur saiu — vidro só em topbar, menu e sobreposições.)
+   */
+  .panel-glass {
+    background-color: #0e1524;
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.04),
+      0 12px 32px -18px rgba(0, 0, 0, 0.7);
+  }
+
+  /** Leitura numérica de instrumento: mono + algarismos tabulares. */
+  .text-data {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /** Rótulo de campo/medida: sans, legível (mono fica só para números e unidades). */
+  .hud-label {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: #94a3b8;
+  }
+
+  /** Grade técnica de fundo, com fade nas bordas. */
+  .hud-grid {
+    background-image:
+      linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, black 30%, transparent 80%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-safe\:animate-hero-drift,
+  .motion-safe\:animate-soft-glow,
+  .animate-live-ping,
+  .animate-hud-sweep,
+  .animate-scan-x {
+    animation: none !important;
+  }
+  .animate-draw-line {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.focus\:not-sr-only:focus,
+.focus\:not-sr-only:focus-visible {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+html.compact-ui .shadow-panel {
+  box-shadow: none;
+}
+
+
+@layer components {
+  /* Contêiner padrão das páginas internas: ocupa a largura útil (sem "ilha" no meio). */
+  .page-shell {
+    @apply mx-auto w-full max-w-app;
+  }
+}

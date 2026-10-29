@@ -1,0 +1,19 @@
+{
+  "name": "estudio-musical",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SaaS de estúdio musical com separação de fontes por IA",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev:web": "pnpm --filter @estudio/web dev",
+    "build:web": "pnpm --filter @estudio/web build",
+    "lint:web": "pnpm --filter @estudio/web lint",
+    "typecheck:web": "pnpm --filter @estudio/web typecheck",
+    "test:web": "pnpm --filter @estudio/web test",
+    "test:e2e": "pnpm --filter @estudio/web test:e2e",
+    "smoke:api": "node scripts/smoke-load.mjs"
+  },
+  "engines": {
+    "node": ">=24.22.1"
+  }
+}

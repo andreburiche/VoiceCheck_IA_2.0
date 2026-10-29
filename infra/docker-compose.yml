@@ -1,0 +1,155 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: estudio-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change_me_root_dev_only}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-estudio_musical}
+      MYSQL_USER: ${MYSQL_USER:-estudio}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change_me_dev_only}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-change_me_root_dev_only}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+
+  redis:
+    image: redis:7-alpine
+    container_name: estudio-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Perfil opcional: requer imagem S3-compatible acessível no registry.
+  # Uso: docker compose --profile storage up -d
+  # Em ambientes sem pull de MinIO, a Fase 2 pode apontar S3_ENDPOINT_URL para um bucket remoto.
+  minio:
+    profiles: ["storage"]
+    image: ${MINIO_IMAGE:-minio/minio:RELEASE.2024-12-18T13-15-44Z}
+    container_name: estudio-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  api:
+    build:
+      context: ..
+      dockerfile: infra/docker/Dockerfile.api
+    container_name: estudio-api
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-estudio}:${MYSQL_PASSWORD:-change_me_dev_only}@mysql:3306/${MYSQL_DATABASE:-estudio_musical}
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      LOCAL_STORAGE_PATH: /data/audio
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://127.0.0.1:8010}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      # SEPARATION_ADAPTER / ALLOW_CONTRACT_STEMS vêm do env_file (.env)
+    ports:
+      # Host 8010: evita PHP (:8000) e ghost/local uvicorn em 127.0.0.1:8001
+      - "8010:8000"
+    volumes:
+      - ../apps/api:/app
+      - audio_data:/data/audio
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/docker/Dockerfile.worker
+      args:
+        INSTALL_DEMUCS: ${INSTALL_DEMUCS:-1}
+    container_name: estudio-worker
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      PYTHONPATH: /api
+      DATABASE_URL: mysql+pymysql://${MYSQL_USER:-estudio}:${MYSQL_PASSWORD:-change_me_dev_only}@mysql:3306/${MYSQL_DATABASE:-estudio_musical}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-local}
+      LOCAL_STORAGE_PATH: /data/audio
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
+      # SEPARATION_ADAPTER / ALLOW_CONTRACT_STEMS vêm só do env_file (.env)
+      APP_ENV: ${APP_ENV:-development}
+      WORKER_TMP_DIR: /tmp/estudio-worker
+    volumes:
+      - ../workers/audio:/app
+      - ../apps/api:/api:ro
+      - audio_data:/data/audio
+      - worker_tmp:/tmp/estudio-worker
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_started
+    command: celery -A worker.celery_app worker --loglevel=INFO --concurrency=1
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/docker/Dockerfile.web
+    container_name: estudio-web
+    restart: unless-stopped
+    environment:
+      CI: "true"
+      # Docker no Windows não repassa eventos de arquivo para o container.
+      # O Turbopack (padrão do Next 16) não tem modo polling, então o dev
+      # roda com webpack + polling (abaixo, --webpack). Sem isso o Next
+      # continua servindo a versão antiga depois de editar o código.
+      WATCHPACK_POLLING: "true"
+      WATCHPACK_POLLING_INTERVAL: "1000"
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://127.0.0.1:8010}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://127.0.0.1:3000}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../apps/web:/app
+      - web_node_modules:/app/node_modules
+      - web_next:/app/.next
+    depends_on:
+      - api
+    # Volume Linux isolado do node_modules do host (Windows); CI=true evita prompt do pnpm
+    # --ignore-scripts: não baixar browser do Playwright no container
+    command: sh -c "pnpm install --ignore-scripts && rm -rf .next/dev && pnpm exec next dev --webpack --hostname 0.0.0.0 --port 3000"
+
+volumes:
+  mysql_data:
+  minio_data:
+  audio_data:
+  worker_tmp:
+  web_node_modules:
+  web_next:
