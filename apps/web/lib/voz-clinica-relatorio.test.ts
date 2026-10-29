@@ -26,6 +26,15 @@ const idv = (dia: number, total: number): Avaliacao => ({
   resultado: { protocolo: "IDV-10", total, maximo: 40, acima_do_corte: total > 7.5, corte: 7.5 },
 });
 
+const ease = (dia: number, total: number): Avaliacao => ({
+  id: `e${dia}`, paciente: "Ana", tipo: "easebr", motor: null, criado_em: `2026-10-${String(dia).padStart(2, "0")}T15:00:00Z`,
+  resultado: { protocolo: "EASE-BR", total, maximo: 66, itens_positivos: [6, 12, 21], itens_com_queixa: [2, 9] },
+});
+
+const anamnese = (dia: number, resultado: Avaliacao["resultado"]): Avaliacao => ({
+  id: `n${dia}`, paciente: "Ana", tipo: "anamnese", motor: null, criado_em: `2026-10-${String(dia).padStart(2, "0")}T09:00:00Z`, resultado,
+});
+
 describe("montarRelatorioClinico", () => {
   it("traz paciente, profissional, período e a análise mais recente", () => {
     const html = montarRelatorioClinico("Ana Souza", [acustica(3, 1.8), acustica(20, 0.92), idv(20, 12)], {
@@ -73,6 +82,30 @@ describe("montarRelatorioClinico", () => {
 
   it("recusa paciente sem avaliações", () => {
     expect(() => montarRelatorioClinico("Ana", [])).toThrow(Error);
+  });
+});
+
+describe("EASE-BR e anamnese no relatório", () => {
+  it("EASE-BR vira um cartão sem nota de corte", () => {
+    const html = montarRelatorioClinico("Ana", [ease(3, 14)]);
+    expect(html).toContain("EASE-BR · ");
+    expect(html).toContain("Itens com 2 ou 3 pontos: 2, 9.");
+    expect(html).toContain("Sem nota de corte publicada");
+  });
+  it("leva só a anamnese mais recente, escapada, e só os campos preenchidos", () => {
+    const html = montarRelatorioClinico("Ana", [
+      anamnese(1, { queixa: "antiga" }),
+      anamnese(9, { queixa: "Rouca <à tarde>", refluxo: false }),
+    ]);
+    const secao = html.slice(html.indexOf("<h2>Anamnese — "), html.indexOf("</section>", html.indexOf("<h2>Anamnese — ")));
+    expect(secao).toContain("Rouca &lt;à tarde&gt;");
+    expect(secao).toContain("<th>Refluxo ou azia frequente</th><td>Não</td>");
+    expect(secao.includes("antiga")).toBe(false); // a antiga só aparece na tabela de sessões
+    expect(html).toContain("antiga");
+    expect(secao.includes("Medicamentos em uso")).toBe(false);
+  });
+  it("sem anamnese, sem a seção", () => {
+    expect(montarRelatorioClinico("Ana", [ease(3, 14)]).includes("<h2>Anamnese")).toBe(false);
   });
 });
 

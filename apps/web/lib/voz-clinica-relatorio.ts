@@ -12,10 +12,12 @@ import {
   resumoProtocolo,
   type AnaliseAcustica,
   type Avaliacao,
+  type ResultadoEaseBr,
   type ResultadoGrbasi,
   type ResultadoIdv10,
   type ResultadoQvv,
 } from "@/lib/voz-clinica-api";
+import { linhasAnamnese, type Anamnese } from "@/lib/voz-clinica-anamnese";
 import { dataCurta, escalaY, seriesEvolucao, variacaoTexto, type SerieEvolucao } from "@/lib/voz-clinica-evolucao";
 import { BRAND, esc, omitEmpty, printHtmlDocument } from "@/lib/voicecheck-report-shared";
 
@@ -121,6 +123,17 @@ function secaoAcustica(itens: Avaliacao[]): string {
   </section>`;
 }
 
+/** Anamnese mais recente, só com os campos preenchidos. */
+function secaoAnamnese(itens: Avaliacao[]): string {
+  const a = ultimaDoTipo(itens, "anamnese");
+  if (!a) return "";
+  const linhas = linhasAnamnese(a.resultado as Anamnese);
+  if (!linhas.length) return "";
+  const corpo = linhas.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join("");
+  return `<section><h2>Anamnese — ${esc(dataDia(a.criado_em))}</h2>
+    <table class="anamnese"><tbody>${corpo}</tbody></table></section>`;
+}
+
 function secaoProtocolos(itens: Avaliacao[]): string {
   const blocos: string[] = [];
   const idv = ultimaDoTipo(itens, "idv10");
@@ -147,6 +160,14 @@ function secaoProtocolos(itens: Avaliacao[]): string {
     blocos.push(`<div class="card"><div class="lbl">GRBASI · ${esc(dataDia(g.criado_em))}</div>
       <div class="val">${esc(r.registro)}</div>
       <div class="muted">${esc(params)}</div></div>`);
+  }
+  const ease = ultimaDoTipo(itens, "easebr");
+  if (ease) {
+    const r = ease.resultado as ResultadoEaseBr;
+    const queixa = r.itens_com_queixa?.length ? ` Itens com 2 ou 3 pontos: ${r.itens_com_queixa.join(", ")}.` : "";
+    blocos.push(`<div class="card"><div class="lbl">EASE-BR · ${esc(dataDia(ease.criado_em))}</div>
+      <div class="val">${esc(fixo(r.total, 0))} <span class="unid">de ${r.maximo}</span></div>
+      <div class="muted">Facilidade para cantar; quanto maior, mais queixa. Sem nota de corte publicada.${esc(queixa)}</div></div>`);
   }
   if (!blocos.length) return "";
   return `<section><h2>Protocolos e avaliação perceptiva</h2><div class="cards">${blocos.join("")}</div></section>`;
@@ -206,6 +227,8 @@ function css(): string {
     .num { text-align: right; font-family: ui-monospace, Consolas, monospace; white-space: nowrap; }
     .nowrap { white-space: nowrap; }
     table.medidas { width: 70%; }
+    table.anamnese th { width: 32%; text-transform: none; font-size: 8pt; text-align: left; vertical-align: top; }
+    table.anamnese td { white-space: pre-wrap; }
     .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6pt; }
     .card { border: 1pt solid ${BRAND.line}; border-radius: 5pt; padding: 6pt 8pt; page-break-inside: avoid; }
     .card .lbl { font-size: 7.5pt; text-transform: uppercase; color: ${BRAND.muted}; }
@@ -262,6 +285,7 @@ export function montarRelatorioClinico(paciente: string, itens: Avaliacao[], opc
     <div><strong>Avaliações:</strong> ${ordenadas.length}</div>
     <div><strong>Gerado em:</strong> ${esc(geradoEm)}</div>
   </div>
+  ${secaoAnamnese(itens)}
   ${secaoAcustica(itens)}
   ${secaoProtocolos(itens)}
   ${secaoEvolucao(itens)}
@@ -269,7 +293,7 @@ export function montarRelatorioClinico(paciente: string, itens: Avaliacao[], opc
   ${obs ? `<section><h2>Observações do profissional</h2><div class="obs">${esc(obs)}</div></section>` : ""}
   <div class="ftr">
     <p>Medidas acústicas calculadas a partir das gravações enviadas. A intensidade é relativa (dBFS): valores absolutos em dB SPL exigem microfone calibrado.</p>
-    <p>Notas de corte: IDV-10 7,5 e QVV 91,25 (Behlau et al., 2016). Os textos dos itens dos protocolos seguem as versões validadas no Brasil.</p>
+    <p>Notas de corte: IDV-10 7,5 e QVV 91,25 (Behlau et al., 2016). EASE-BR: 22 itens de 0 a 3, itens 6, 12 e 21 invertidos, total de 0 a 66 (Rocha et al., 2014), sem nota de corte publicada. Os textos dos itens dos protocolos seguem as versões validadas no Brasil.</p>
     <p>Este relatório apoia a avaliação do profissional e não é um diagnóstico médico.</p>
   </div>
 </body>

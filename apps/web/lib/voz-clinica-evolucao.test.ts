@@ -46,6 +46,20 @@ describe("seriesEvolucao", () => {
   });
 });
 
+describe("EASE-BR na evolução", () => {
+  it("vira uma série própria de 0 a 66, sem linha de corte", () => {
+    const e = (dia: number, total: number): Avaliacao => ({
+      id: `e${dia}`, paciente: "Ana", tipo: "easebr", motor: null, criado_em: `2026-10-${String(dia).padStart(2, "0")}T12:00:00Z`,
+      resultado: { protocolo: "EASE-BR", total, maximo: 66, itens_positivos: [6, 12, 21], itens_com_queixa: [] },
+    });
+    const [s] = seriesEvolucao([e(9, 12), e(2, 20)]);
+    expect(s!.chave).toBe("easebr");
+    expect(s!.dominio).toEqual([0, 66]);
+    expect(s!.corte).toBe(undefined);
+    expect(s!.pontos.map((p) => p.valor)).toEqual([20, 12]);
+  });
+});
+
 describe("escalaY", () => {
   it("usa o domínio fixo do instrumento", () => {
     const s = seriesEvolucao([idv(1, 20), idv(2, 10)])[0]!;

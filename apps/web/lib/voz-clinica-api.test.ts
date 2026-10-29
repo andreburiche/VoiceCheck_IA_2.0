@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ROTULO_TIPO,
   linhasAcusticas,
   numeroBR,
   resumoAvaliacao,
@@ -80,3 +81,18 @@ describe("resumos", () => {
     expect(resumoAvaliacao(a)).toBe("F0 179,5 Hz · jitter 1,15% · shimmer 4,24% · CPPS 12,5 dB");
   });
 });
+
+describe("EASE-BR e anamnese", () => {
+  it("EASE-BR mostra o total e os itens com queixa, sem nota de corte", () => {
+    const r = (itens: number[]) => ({ protocolo: "EASE-BR" as const, total: 14, maximo: 66, itens_positivos: [6, 12, 21], itens_com_queixa: itens });
+    expect(resumoProtocolo(r([1, 4]))).toBe("14 de 66 pontos — 2 itens com 2 ou 3 pontos");
+    expect(resumoProtocolo(r([7]))).toBe("14 de 66 pontos — 1 item com 2 ou 3 pontos");
+    expect(resumoProtocolo(r([]))).toBe("14 de 66 pontos — nenhum item com 2 ou 3 pontos");
+  });
+  it("anamnese no histórico", () => {
+    const a = { id: "1", paciente: "Ana", tipo: "anamnese" as const, motor: null, criado_em: "2026-10-29T10:00:00Z", resultado: { queixa: "Rouquidão" } };
+    expect(resumoAvaliacao(a)).toBe("Rouquidão");
+    expect(ROTULO_TIPO.anamnese).toBe("Anamnese");
+  });
+});
+

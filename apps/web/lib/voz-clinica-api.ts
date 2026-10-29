@@ -1,12 +1,14 @@
 /** VoiceCheck IA 2.0 — cliente das rotas /api/v1/voz-clinica. */
 import { apiFetch } from "@/lib/api";
+import type { Anamnese } from "@/lib/voz-clinica-anamnese";
+import { resumoAnamnese } from "@/lib/voz-clinica-anamnese";
 import type { ResumoBiofeedback } from "@/lib/voz-clinica-biofeedback";
 import type { PontoCampo, ResumoCampo } from "@/lib/voz-clinica-fonetograma";
 import { JOGOS, type ResultadoJogo } from "@/lib/voz-clinica-jogos";
 
 
-export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "biofeedback" | "jogo" | "fonetograma";
-export type Protocolo = "idv10" | "qvv" | "grbasi";
+export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma";
+export type Protocolo = "idv10" | "qvv" | "grbasi" | "easebr";
 
 /** Resumo de sessão de biofeedback salvo (medido no navegador). */
 export type ResultadoBiofeedback = ResumoBiofeedback & { fonte: "navegador" };
@@ -78,7 +80,15 @@ export type ResultadoGrbasi = {
   parametros: Record<string, { nome: string; nota: number; nivel: string }>;
 };
 
-export type ResultadoProtocolo = ResultadoIdv10 | ResultadoQvv | ResultadoGrbasi;
+export type ResultadoEaseBr = {
+  protocolo: "EASE-BR";
+  total: number;
+  maximo: number;
+  itens_positivos: number[];
+  itens_com_queixa: number[];
+};
+
+export type ResultadoProtocolo = ResultadoIdv10 | ResultadoQvv | ResultadoGrbasi | ResultadoEaseBr;
 
 export type Salvo<T> = { avaliacao_id: string | null; resultado: T };
 
@@ -87,7 +97,7 @@ export type Avaliacao = {
   paciente: string;
   tipo: TipoAvaliacao;
   motor: string | null;
-  resultado: AnaliseAcustica | ResultadoProtocolo | ResultadoBiofeedback | ResultadoJogoSalvo | ResultadoFonetograma;
+  resultado: AnaliseAcustica | ResultadoProtocolo | Anamnese | ResultadoBiofeedback | ResultadoJogoSalvo | ResultadoFonetograma;
   criado_em: string;
 };
 
@@ -123,6 +133,13 @@ export function calcularProtocolo(
   return apiFetch<Salvo<ResultadoProtocolo>>(`${BASE}/protocolos/${nome}`, {
     method: "POST",
     json: { respostas, paciente: paciente || null },
+  });
+}
+
+export function salvarAnamnese(paciente: string, anamnese: Anamnese) {
+  return apiFetch<Salvo<Anamnese>>(`${BASE}/anamnese`, {
+    method: "POST",
+    json: { paciente, ...anamnese },
   });
 }
 
@@ -214,11 +231,16 @@ export function resumoProtocolo(r: ResultadoProtocolo): string {
       ` — ${r.abaixo_do_corte ? "abaixo" : "acima"} da nota de corte (${numeroBR(r.corte_total, 2)})`
     );
   }
+  if (r.protocolo === "EASE-BR") {
+    const n = r.itens_com_queixa?.length ?? 0;
+    return `${r.total} de ${r.maximo} pontos — ${n === 0 ? "nenhum item" : n === 1 ? "1 item" : `${n} itens`} com 2 ou 3 pontos`;
+  }
   return `Registro ${r.registro}`;
 }
 
 /** Resumo de uma avaliação salva (histórico do paciente). */
 export function resumoAvaliacao(a: Avaliacao): string {
+  if (a.tipo === "anamnese") return resumoAnamnese(a.resultado as Anamnese);
   if (a.tipo === "fonetograma") {
     const r = (a.resultado as ResultadoFonetograma).resumo;
     if (!r?.nota_grave) return "Sem notas registradas";
@@ -263,4 +285,6 @@ export const ROTULO_TIPO: Record<TipoAvaliacao, string> = {
   idv10: "IDV-10",
   qvv: "QVV",
   grbasi: "GRBASI",
+  easebr: "EASE-BR",
+  anamnese: "Anamnese",
 };

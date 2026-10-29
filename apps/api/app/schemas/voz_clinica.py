@@ -5,14 +5,16 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-TipoAvaliacao = Literal["acustica", "idv10", "qvv", "grbasi", "biofeedback", "jogo", "fonetograma"]
+TipoAvaliacao = Literal[
+    "acustica", "idv10", "qvv", "grbasi", "easebr", "anamnese", "biofeedback", "jogo", "fonetograma"
+]
 JogoId = Literal["altitude", "trilha", "sopro", "surdo-sonoro"]
 
 
 class ProtocoloEntrada(BaseModel):
-    #: idv10/qvv: lista de 10 inteiros; grbasi: {"G":0-3, ...}
+    #: idv10/qvv: lista de 10 inteiros; easebr: 22 inteiros (opção marcada, 0-3); grbasi: {"G":0-3, ...}
     respostas: list[Any] | dict[str, Any]
     #: Se informado, o resultado é salvo para este paciente (espaços extras são removidos).
     paciente: str | None = Field(default=None, max_length=120)
@@ -151,3 +153,60 @@ class PacienteLista(BaseModel):
 class StatusOut(BaseModel):
     motores: list[str]
     protocolos: list[str]
+
+
+# ---------------------------------------------------------------------------
+# Anamnese vocal
+# ---------------------------------------------------------------------------
+
+Sintoma = Literal[
+    "rouquidao", "cansaco_vocal", "falhas_na_voz", "perda_de_agudos", "voz_fraca",
+    "dor_ao_falar", "pigarro", "tosse", "corpo_estranho", "falta_de_ar_ao_falar",
+]
+SIM_NAO = bool | None
+
+
+class AnamneseEntrada(BaseModel):
+    """Anamnese vocal estruturada. Todos os campos são opcionais, mas ao menos um precisa vir preenchido."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    paciente: str = Field(min_length=1, max_length=120)
+    queixa: str = Field(default="", max_length=1000)
+    inicio: Literal["menos_1_mes", "1_a_6_meses", "6_a_12_meses", "mais_1_ano"] | None = None
+    evolucao: Literal["melhorando", "estavel", "piorando", "flutuante"] | None = None
+    sintomas: list[Sintoma] = Field(default_factory=list, max_length=10)
+    profissao: str = Field(default="", max_length=120)
+    uso_profissional: Literal["nao", "fala", "canto", "fala_e_canto"] | None = None
+    horas_voz_dia: float | None = Field(default=None, ge=0, le=24)
+    canto_estilo: str = Field(default="", max_length=120)
+    aulas_canto: SIM_NAO = None
+    tabagismo: Literal["nunca", "ex", "atual"] | None = None
+    alcool: Literal["nao", "ocasional", "frequente"] | None = None
+    agua_copos_dia: int | None = Field(default=None, ge=0, le=40)
+    refluxo: SIM_NAO = None
+    alergia_respiratoria: SIM_NAO = None
+    perda_auditiva: SIM_NAO = None
+    fono_anterior: SIM_NAO = None
+    cirurgias: str = Field(default="", max_length=500)
+    medicamentos: str = Field(default="", max_length=500)
+    observacoes: str = Field(default="", max_length=4000)
+
+    @field_validator("queixa", "profissao", "canto_estilo", "cirurgias", "medicamentos", "observacoes")
+    @classmethod
+    def _limpar(cls, v: str) -> str:
+        return v.strip()
+
+    @field_validator("sintomas")
+    @classmethod
+    def _sem_repetir(cls, v: list[str]) -> list[str]:
+        if len(set(v)) != len(v):
+            raise ValueError("sintoma repetido")
+        return v
+
+    @model_validator(mode="after")
+    def _algo_preenchido(self) -> "AnamneseEntrada":
+        dados = self.model_dump(exclude={"paciente"})
+        if not any(v not in (None, "", []) for v in dados.values()):
+            raise ValueError("preencha ao menos um campo da anamnese")
+        return self

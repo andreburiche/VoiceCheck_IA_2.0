@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { friendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
+import { AnamneseVocal } from "@/components/voz-clinica/anamnese";
 import { BiofeedbackAoVivo } from "@/components/voz-clinica/biofeedback-ao-vivo";
 import { Espectrograma } from "@/components/voz-clinica/espectrograma";
 import { Fonetograma } from "@/components/voz-clinica/fonetograma";
@@ -279,6 +280,9 @@ type DefProtocolo = {
   nota: string;
   itens: string[];
   opcoes: number[];
+  /** Texto de cada opção (quando não basta o número). */
+  rotulos?: string[];
+  botao: string;
 };
 
 const PROTOCOLOS: DefProtocolo[] = [
@@ -288,6 +292,7 @@ const PROTOCOLOS: DefProtocolo[] = [
     nota: "Leia cada item da versão validada impressa. 0 = nunca … 4 = sempre.",
     itens: Array.from({ length: 10 }, (_, i) => `Item ${i + 1}`),
     opcoes: [0, 1, 2, 3, 4],
+    botao: "Calcular IDV-10",
   },
   {
     nome: "qvv",
@@ -295,6 +300,7 @@ const PROTOCOLOS: DefProtocolo[] = [
     nota: "Leia cada item da versão validada impressa. 1 = não é um problema … 5 = é um problema muito grande.",
     itens: Array.from({ length: 10 }, (_, i) => `Item ${i + 1}`),
     opcoes: [1, 2, 3, 4, 5],
+    botao: "Calcular QVV",
   },
   {
     nome: "grbasi",
@@ -302,6 +308,16 @@ const PROTOCOLOS: DefProtocolo[] = [
     nota: "0 = normal, 1 = leve, 2 = moderado, 3 = intenso.",
     itens: ["G — Grau geral", "R — Rugosidade", "B — Soprosidade", "A — Astenia", "S — Tensão", "I — Instabilidade"],
     opcoes: [0, 1, 2, 3],
+    botao: "Registrar GRBASI",
+  },
+  {
+    nome: "easebr",
+    titulo: "EASE-BR — facilidade para cantar",
+    nota: "Para cantores. Marque a opção escolhida em cada item da versão validada impressa; os itens 6, 12 e 21 são invertidos no cálculo. Total de 0 a 66, sem nota de corte publicada.",
+    itens: Array.from({ length: 22 }, (_, i) => `Item ${i + 1}`),
+    opcoes: [0, 1, 2, 3],
+    rotulos: ["Não", "Um pouco", "Moderadamente", "Muito"],
+    botao: "Calcular EASE-BR",
   },
 ];
 
@@ -342,7 +358,7 @@ function FormProtocolo({ def, paciente, aoSalvar }: { def: DefProtocolo; pacient
         {def.titulo}
       </h3>
       <p className="mt-1 text-xs text-ink-muted">{def.nota}</p>
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className={cn("mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3", def.rotulos ? "lg:grid-cols-3" : "lg:grid-cols-5")}>
         {def.itens.map((rotulo, i) => (
           <div key={rotulo}>
             <Label htmlFor={`${base}-${i}`} className="text-xs">
@@ -361,7 +377,7 @@ function FormProtocolo({ def, paciente, aoSalvar }: { def: DefProtocolo; pacient
               <option value="">—</option>
               {def.opcoes.map((o) => (
                 <option key={o} value={o}>
-                  {o}
+                  {def.rotulos?.[o - def.opcoes[0]!] ?? o}
                 </option>
               ))}
             </select>
@@ -370,7 +386,7 @@ function FormProtocolo({ def, paciente, aoSalvar }: { def: DefProtocolo; pacient
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <Button type="submit" variant="secondary" size="sm" disabled={enviando}>
-          {enviando ? "Calculando…" : def.nome === "grbasi" ? "Registrar GRBASI" : `Calcular ${def.nome === "idv10" ? "IDV-10" : "QVV"}`}
+          {enviando ? "Calculando…" : def.botao}
         </Button>
         {resumo ? (
           <p className="text-sm text-ink" role="status" data-testid={`vc2-resumo-${def.nome}`}>
@@ -565,6 +581,7 @@ function Historico({ paciente, versao }: { paciente: string; versao: number }) {
 
 const ABAS = [
   { id: "avaliacao", rotulo: "Avaliação" },
+  { id: "anamnese", rotulo: "Anamnese" },
   { id: "fonetograma", rotulo: "Fonetograma" },
   { id: "biofeedback", rotulo: "Biofeedback" },
   { id: "jogos", rotulo: "Jogos" },
@@ -636,7 +653,7 @@ export function AvaliacaoClinica() {
       <header>
         <h1 className="font-display text-2xl font-semibold tracking-tight text-ink md:text-[1.75rem]">Avaliação clínica</h1>
         <p className="mt-1 max-w-[70ch] text-sm text-ink-muted">
-          Medidas acústicas da voz falada, protocolos de autoavaliação e escala perceptiva, com o histórico de cada paciente. Não é diagnóstico médico.
+          Anamnese, medidas acústicas, protocolos de autoavaliação e escala perceptiva, com o histórico de cada paciente. Não é diagnóstico médico.
         </p>
       </header>
 
@@ -680,6 +697,10 @@ export function AvaliacaoClinica() {
       </div>
       </div>
 
+      {/* anamnese também fica montada: trocar de aba não apaga o que foi digitado */}
+      <div role="tabpanel" id={`${idPaciente}-painel-anamnese`} aria-labelledby={`${idPaciente}-aba-anamnese`} hidden={aba !== "anamnese"}>
+        <AnamneseVocal paciente={nome} aoSalvar={aoSalvar} />
+      </div>
       {aba === "fonetograma" ? (
         <div role="tabpanel" id={`${idPaciente}-painel-fonetograma`} aria-labelledby={`${idPaciente}-aba-fonetograma`}>
           <Fonetograma paciente={nome} aoSalvar={aoSalvar} />

@@ -124,4 +124,38 @@ def grbasi(notas) -> dict:
     }
 
 
-PROTOCOLOS = {"idv10": idv10, "qvv": qvv, "grbasi": grbasi}
+# --------------------------------------------------------------------------
+# EASE-BR — Evaluation of the Ability to Sing Easily (Phyland et al., 2013;
+# adaptação brasileira: Rocha, Moreti, Amin, Madazio & Behlau, CoDAS 2014)
+# --------------------------------------------------------------------------
+
+#: Itens de redação positiva, somados de forma reversa (Rocha et al., 2014).
+EASEBR_POSITIVOS = (6, 12, 21)
+EASEBR_RESPOSTAS = {0: "não", 1: "um pouco", 2: "moderadamente", 3: "muito"}
+
+
+def easebr(respostas) -> dict:
+    """22 itens. Cada resposta é a opção marcada: 0 não, 1 um pouco, 2 moderadamente, 3 muito.
+
+    Itens negativos valem a própria opção; os positivos (6, 12, 21) valem 3 − opção.
+    Escore total de 0 a 66. A versão brasileira não publicou nota de corte nem
+    subescalas, então nenhuma é aplicada aqui.
+    """
+    r = _validar(respostas, 22, 0, 3, "EASE-BR")
+    pontos = {i: (3 - v if i in EASEBR_POSITIVOS else v) for i, v in enumerate(r, start=1)}
+    return {
+        "protocolo": "EASE-BR",
+        "total": sum(pontos.values()),
+        "maximo": 66,
+        "itens_positivos": list(EASEBR_POSITIVOS),
+        #: itens que somaram 2 ou 3 pontos (já com a inversão dos positivos)
+        "itens_com_queixa": [i for i, v in pontos.items() if v >= 2],
+        "leitura": "quanto maior, mais fadiga e limitação vocal percebidas no canto; sem nota de corte publicada no Brasil",
+        "referencias": [
+            "Phyland et al., 2013 (J Voice 27:454-462)",
+            "Rocha et al., 2014 (CoDAS 26:535-539, adaptação brasileira)",
+        ],
+    }
+
+
+PROTOCOLOS = {"idv10": idv10, "qvv": qvv, "grbasi": grbasi, "easebr": easebr}

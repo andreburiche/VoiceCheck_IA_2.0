@@ -1,7 +1,7 @@
 # VoiceCheck IA 2.0 — Avaliação clínica da voz
 
 **Data:** 2026-10-29
-**Rota no site:** `/voz-clinica` (menu "Avaliação clínica"), com abas Avaliação · Fonetograma · Biofeedback · Jogos; o histórico do paciente fica sempre abaixo
+**Rota no site:** `/voz-clinica` (menu "Avaliação clínica"), com abas Avaliação · Anamnese · Fonetograma · Biofeedback · Jogos; o histórico do paciente fica sempre abaixo
 **API:** `/api/v1/voz-clinica`
 
 A versão 2.0 junta, numa só tela, o que hoje exige vários programas:
@@ -19,8 +19,10 @@ paciente. Biofeedback e jogos (VoxGames, Voice Analyst) ficam para a fase 2.
 | IDV-10 | 10 itens de 0 a 4; total 0–40; nota de corte 7,5 |
 | QVV | 10 itens de 1 a 5; escores 0–100 (total, físico, socioemocional); nota de corte 91,25 |
 | GRBASI | G, R, B, A, S, I de 0 a 3; registro (ex.: G2R1B2A0S1I0) |
+| EASE-BR | Facilidade para cantar (Rocha et al., CoDAS 2014). 22 itens; cada resposta é a opção marcada (não 0, um pouco 1, moderadamente 2, muito 3); itens 6, 12 e 21 (positivos) somam 3 − opção. Total 0–66. **Sem nota de corte nem subescalas**, porque a versão brasileira não publicou nenhuma. Lista os itens que somaram 2 ou 3 pontos |
+| Anamnese | Aba própria. Queixa, tempo e evolução, 10 sintomas marcáveis, profissão, uso profissional da voz, horas de uso por dia, canto, tabagismo, álcool, água, refluxo, alergia respiratória, audição, terapia anterior, cirurgias/intubações, medicamentos e observações. Tudo opcional; só o que foi preenchido é salvo (tipo `anamnese`, uma versão nova a cada salvamento). "Usar a última anamnese" recupera a versão anterior para atualizar. O relatório PDF traz a mais recente |
 | Histórico | Lista por paciente, mais recente primeiro, com exclusão confirmada |
-| Evolução | Um gráfico por medida (jitter, shimmer, HNR, CPPS, IDV-10, QVV, GRBASI G), até 12 sessões, com linha da nota de corte nos protocolos e valor de cada sessão ao passar o mouse ou focar pelo teclado. Aparece a partir da 2ª avaliação do mesmo tipo |
+| Evolução | Um gráfico por medida (jitter, shimmer, HNR, CPPS, IDV-10, QVV, GRBASI G, EASE-BR), até 12 sessões, com linha da nota de corte nos protocolos e valor de cada sessão ao passar o mouse ou focar pelo teclado. Aparece a partir da 2ª avaliação do mesmo tipo |
 | Relatório em PDF | Botão no histórico: análise acústica e protocolos mais recentes, gráficos de evolução, todas as sessões, profissional e observações (opcionais). HTML A4 impresso pelo navegador ("Salvar como PDF"), mesmo mecanismo dos relatórios do VoiceCheck |
 | Biofeedback ao vivo | Pitch (nota e Hz) e volume (dBFS) na tela enquanto o paciente fala ou canta, com faixas-alvo definidas pelo profissional, indicação "abaixo / dentro / acima" escrita (não só cor), curva dos últimos 8 s e % do tempo na faixa. Pitch por YIN a ~60 leituras/s com mediana de 3 contra leituras isoladas. O áudio não sai do aparelho; ao parar, o resumo da sessão pode ser salvo no histórico (tipo `biofeedback`) e entra na evolução |
 | Jogos de terapia | Quatro jogos próprios (não copiam nomes, visual nem mecânica de produtos comerciais): **Altitude** (o volume controla a altura; seguir patamares), **Trilha** (o pitch controla a altura; patamares e deslizes), **Sopro longo** (sustentar a voz até a meta) e **Surdo ou sonoro** (s/z, f/v, ch/j). Faixas, duração, dificuldade e meta definidas pelo profissional. Resultado de cada partida pode ser salvo (tipo `jogo`) e tem curva própria na evolução |
@@ -48,6 +50,8 @@ apps/web/lib/voz-clinica-fonetograma.ts                campo vocal por semitom
 apps/web/components/voz-clinica/fonetograma.tsx        tela do fonetograma (canvas)
 apps/web/lib/voz-clinica-espectrograma.ts              FFT, espectrograma, leitura de WAV, escala de cor
 apps/web/components/voz-clinica/espectrograma.tsx      espectrograma da gravação (canvas)
+apps/web/lib/voz-clinica-anamnese.ts                   opções, rótulos e resumo da anamnese
+apps/web/components/voz-clinica/anamnese.tsx           formulário da anamnese
 apps/api/app/services/voz_clinica/fonetograma.py       resumo do campo no servidor
         │  multipart / JSON, cookie de sessão + CSRF
         ▼
@@ -65,10 +69,11 @@ Todo número é calculado no servidor; o navegador só envia o WAV ou as respost
 | --- | --- | --- |
 | `GET /status` | — | — |
 | `POST /analisar` | multipart: `file` (WAV), `f0_min`, `f0_max`, `motor`, `paciente` | se `paciente` |
-| `POST /protocolos/{idv10\|qvv\|grbasi}` | `{"respostas": ..., "paciente": ...}` | se `paciente` |
+| `POST /protocolos/{idv10\|qvv\|grbasi\|easebr}` | `{"respostas": ..., "paciente": ...}` | se `paciente` |
 | `POST /biofeedback` | resumo da sessão (faixas, % na faixa, pitch p10/mediana/p90, dB mediano) com `paciente` | sim |
 | `POST /jogos` | resultado da partida (`jogo`, pontuação, detalhes numéricos) com `paciente` | sim |
 | `POST /fonetograma` | pontos por semitom (`midi`, `min_db`, `max_db`, `tempo_s`, até 85) com `paciente`; resumo recalculado no servidor | sim |
+| `POST /anamnese` | campos da anamnese (todos opcionais, ao menos um; campos desconhecidos são recusados) com `paciente` | sim |
 | `POST /dsi` | `{"tmf_s", "f0_alta_hz", "i_baixa_db_spl", "jitter_pct"}` | não |
 | `GET /pacientes` | — | — |
 | `GET /avaliacoes?paciente=` | — | — |
@@ -110,7 +115,8 @@ no Docker com os comandos acima.
   socioemocional 4, 5, 8, 10) já confirmados em artigos brasileiros.
 - Notas de corte IDV-10 7,5 e QVV 91,25: Behlau et al. (2016).
 - Intensidade sai em dBFS (relativa). dB SPL exige microfone calibrado.
-- Dados de saúde: o nome do paciente e os resultados são dados sensíveis (LGPD).
+- Dados de saúde: o nome do paciente, os resultados e a **anamnese** (refluxo, medicamentos, cirurgias) são dados sensíveis (LGPD). Antes do uso real: base legal/consentimento, prazo de guarda e quem acessa.
+- EASE-BR: escore conforme Rocha et al. (2014). A validação psicométrica brasileira ainda não tinha nota de corte publicada; não interpretar o total como "normal/alterado".
 - A análise não é diagnóstico médico.
 - **Surdo ou sonoro**: a classificação (pitch, energia abaixo de 400 Hz e cruzamentos por zero) foi validada só com sinais sintéticos. Testar com gravações reais de crianças e adultos antes de usar a pontuação clinicamente; os limiares estão em `voz-clinica-jogos.ts`.
 
@@ -121,4 +127,5 @@ no Docker com os comandos acima.
 3. ~~Biofeedback ao vivo~~ e ~~jogos de terapia~~ (feitos).
 4. ~~Fonetograma~~ (feito; em dBFS — dB SPL exige calibração).
 5. ~~Espectrograma~~ (feito).
-6. Próximos: prática em casa (celular, offline), anamnese e EASE-BR.
+6. ~~Anamnese vocal e EASE-BR~~ (feitos).
+7. Próximo: prática em casa (celular, offline).

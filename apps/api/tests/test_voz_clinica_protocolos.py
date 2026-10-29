@@ -1,4 +1,4 @@
-"""VoiceCheck IA 2.0 — escore dos protocolos IDV-10, QVV e GRBASI."""
+"""VoiceCheck IA 2.0 — escore dos protocolos IDV-10, QVV, GRBASI e EASE-BR."""
 
 import pytest
 
@@ -77,3 +77,48 @@ def test_grbasi_parametro_faltando():
 def test_grbasi_nota_fora_da_escala():
     with pytest.raises(p.ErroProtocolo):
         p.grbasi({"G": 4, "R": 1, "B": 1, "A": 1, "S": 1, "I": 1})
+
+
+# ---------------------------------------------------------------------------
+# EASE-BR (Rocha et al., 2014): 22 itens 0-3; itens 6, 12 e 21 invertidos
+# ---------------------------------------------------------------------------
+
+def test_easebr_sem_queixa_e_zero():
+    # "não" nos negativos e "muito" nos positivos = nenhuma dificuldade
+    r = p.easebr([3 if i in (6, 12, 21) else 0 for i in range(1, 23)])
+    assert r["total"] == 0
+    assert r["maximo"] == 66
+    assert r["itens_com_queixa"] == []
+
+
+def test_easebr_maximo_e_66():
+    r = p.easebr([0 if i in (6, 12, 21) else 3 for i in range(1, 23)])
+    assert r["total"] == 66
+    assert r["itens_com_queixa"] == list(range(1, 23))
+
+
+def test_easebr_inverte_so_os_itens_positivos():
+    # tudo "não" (0): os 19 negativos valem 0 e os 3 positivos valem 3 cada
+    assert p.easebr([0] * 22)["total"] == 9
+    # tudo "muito" (3): 19 × 3 + 3 × 0
+    assert p.easebr([3] * 22)["total"] == 57
+
+
+def test_easebr_itens_com_queixa_usam_o_ponto_ja_invertido():
+    respostas = [0] * 22
+    respostas[0] = 2  # item 1 negativo, "moderadamente" → 2 pontos
+    respostas[5] = 3  # item 6 positivo, "muito" → 0 pontos
+    respostas[11] = 1  # item 12 positivo, "um pouco" → 2 pontos
+    r = p.easebr(respostas)
+    assert r["itens_com_queixa"] == [1, 12, 21]  # 21 marcado "não" → 3 pontos
+
+
+def test_easebr_nao_tem_nota_de_corte():
+    r = p.easebr([1] * 22)
+    assert not any("corte" in chave for chave in r)
+
+
+@pytest.mark.parametrize("ruim", [[0] * 21, [0] * 23, [0] * 21 + [4], [0] * 21 + [-1], [0] * 21 + [True], "x"])
+def test_easebr_rejeita_respostas_invalidas(ruim):
+    with pytest.raises(p.ErroProtocolo):
+        p.easebr(ruim)

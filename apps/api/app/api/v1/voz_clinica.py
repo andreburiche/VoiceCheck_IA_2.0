@@ -1,7 +1,8 @@
 """VoiceCheck IA 2.0 — avaliação clínica da voz.
 
 Análise acústica (F0, jitter, shimmer, HNR, CPPS, formantes, tempo de fonação),
-protocolos de autoavaliação (IDV-10, QVV), escala perceptiva (GRBASI) e DSI.
+protocolos de autoavaliação (IDV-10, QVV, EASE-BR), escala perceptiva (GRBASI),
+anamnese vocal e DSI.
 Todo número é calculado aqui no servidor; quando um paciente é informado, o
 resultado fica salvo para acompanhar a evolução entre sessões.
 """
@@ -21,6 +22,7 @@ from app.core.deps import CurrentUser, DbSession, verify_csrf
 from app.core.rate_limit import enforce_rate_limit
 from app.models import ClinicalEvaluation
 from app.schemas.voz_clinica import (
+    AnamneseEntrada,
     AvaliacaoLista,
     BiofeedbackEntrada,
     FonetogramaEntrada,
@@ -165,6 +167,17 @@ def salvar_fonetograma(entrada: FonetogramaEntrada, user: CurrentUser, db: DbSes
         "fonte": "navegador",
     }
     salvo = _salvar(db, user, nome, "fonetograma", resultado)
+    return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
+
+
+@router.post("/anamnese", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
+def salvar_anamnese(entrada: AnamneseEntrada, user: CurrentUser, db: DbSession) -> ResultadoSalvo:
+    """Guarda a anamnese vocal no histórico do paciente (só os campos preenchidos)."""
+    nome = _paciente(entrada.paciente)
+    if nome is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente para salvar a anamnese")
+    resultado = {k: v for k, v in entrada.model_dump(exclude={"paciente"}).items() if v not in (None, "", [])}
+    salvo = _salvar(db, user, nome, "anamnese", resultado)
     return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
 
 

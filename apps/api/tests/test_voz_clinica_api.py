@@ -209,3 +209,30 @@ def test_fonetograma_resumo_calculado_no_servidor(client: httpx.Client) -> None:
 def test_fonetograma_rejeita_pontos_invalidos(client: httpx.Client, pontos: list) -> None:
     corpo = {"paciente": "X", "duracao_s": 10, "pontos": pontos}
     assert client.post("/api/v1/voz-clinica/fonetograma", json=corpo).status_code == 422
+
+
+def test_easebr_salva_com_inversao_dos_itens_positivos(client: httpx.Client) -> None:
+    paciente = f"Canto {uuid.uuid4().hex[:6]}"
+    r = client.post("/api/v1/voz-clinica/protocolos/easebr", json={"respostas": [0] * 22, "paciente": paciente})
+    assert r.status_code == 200, r.text
+    assert r.json()["resultado"]["total"] == 9  # itens 6, 12 e 21 marcados "não" valem 3
+    itens = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"]
+    assert itens[0]["tipo"] == "easebr"
+    assert client.post("/api/v1/voz-clinica/protocolos/easebr", json={"respostas": [0] * 10}).status_code == 400
+
+
+def test_anamnese_guarda_so_campos_preenchidos(client: httpx.Client) -> None:
+    paciente = f"Anamnese {uuid.uuid4().hex[:6]}"
+    corpo = {"paciente": paciente, "queixa": " rouquidão ", "sintomas": ["rouquidao"], "refluxo": False, "profissao": ""}
+    r = client.post("/api/v1/voz-clinica/anamnese", json=corpo)
+    assert r.status_code == 200, r.text
+    res = r.json()["resultado"]
+    assert res == {"queixa": "rouquidão", "sintomas": ["rouquidao"], "refluxo": False}
+    itens = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"]
+    assert itens[0]["tipo"] == "anamnese"
+
+
+@pytest.mark.parametrize("ruim", [{"paciente": ""}, {"queixa": ""}, {"sintomas": ["x"]}, {"senha": "1"}])
+def test_anamnese_rejeita_entrada_invalida(client: httpx.Client, ruim: dict) -> None:
+    corpo = {"paciente": "X", "queixa": "rouquidão", **ruim}
+    assert client.post("/api/v1/voz-clinica/anamnese", json=corpo).status_code == 422
