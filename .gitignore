@@ -37,6 +37,10 @@ Thumbs.db
 *.mp4
 !tests/fixtures/**/*.wav
 models/
+# exceções: pastas de CÓDIGO chamadas models (a regra acima é para pesos de IA)
+!apps/api/app/models/
+!apps/web/app/(app)/models/
+!apps/web/components/models/
 weights/
 tmp/
 .tmp/
