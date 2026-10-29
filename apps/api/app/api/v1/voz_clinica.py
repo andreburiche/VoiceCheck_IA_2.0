@@ -10,12 +10,14 @@ resultado fica salvo para acompanhar a evolução entre sessões.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
-from sqlalchemy import func, select
+from fastapi.responses import JSONResponse
+from sqlalchemy import delete, func, select
 
 from app.api.v1.voicecheck import _read_limited
 from app.core.config import get_settings
@@ -44,6 +46,7 @@ from app.schemas.voz_clinica import (
 from app.services import voz_clinica
 from app.services.voz_clinica.fonetograma import resumir_campo
 from app.services.voz_clinica.indices import dsi
+from app.services.audit import write_audit
 from app.services.voz_clinica.pratica import hash_token, novo_token
 from app.services.voz_clinica.protocolos import PROTOCOLOS, ErroProtocolo
 
@@ -275,6 +278,77 @@ def listar_pacientes(user: CurrentUser, db: DbSession) -> PacienteLista:
         .limit(1000)
     ).all()
     return PacienteLista(items=[PacienteResumo(paciente=n, avaliacoes=c, ultima=u) for n, c, u in linhas])
+
+
+def _nome_obrigatorio(paciente: str | None) -> str:
+    nome = _paciente(paciente)
+    if nome is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente")
+    return nome
+
+
+def _rastro(user_id: str, nome: str) -> str:
+    """Identifica o paciente no log de auditoria sem gravar o nome (minimização)."""
+    return hashlib.sha256(f"{user_id}:{nome}".encode("utf-8")).hexdigest()[:16]
+
+
+@router.get("/pacientes/exportar")
+def exportar_paciente(request: Request, user: CurrentUser, db: DbSession, paciente: str | None = None) -> JSONResponse:
+    """LGPD art. 18 (acesso e portabilidade): tudo o que está guardado deste paciente, sem limite."""
+    nome = _nome_obrigatorio(paciente)
+    rows = db.scalars(
+        select(ClinicalEvaluation)
+        .where(ClinicalEvaluation.owner_id == user.id, ClinicalEvaluation.patient_name == nome)
+        .order_by(ClinicalEvaluation.created_at)
+    ).all()
+    planos = db.scalars(
+        select(HomePracticePlan)
+        .where(HomePracticePlan.owner_id == user.id, HomePracticePlan.patient_name == nome)
+        .order_by(HomePracticePlan.created_at)
+    ).all()
+    if not rows and not planos:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nada guardado para este paciente")
+    total, ultima = sessoes_por_plano(db, user.id, [p.id for p in planos])
+    agora = datetime.now(timezone.utc)
+    corpo = {
+        "formato": "voicecheck-voz-clinica/1",
+        "paciente": nome,
+        "exportado_em": agora.isoformat(),
+        "avaliacoes": [_saida(r).model_dump(mode="json") for r in rows],
+        # o segredo dos links nunca é exportado (só o hash existe no banco, e ele também fica fora)
+        "planos_pratica": [plano_out(p, total, ultima).model_dump(mode="json") for p in planos],
+    }
+    write_audit(
+        db, action="voz_clinica.paciente_exportado", resource_type="paciente", actor_id=user.id, request=request,
+        meta={"paciente": _rastro(user.id, nome), "avaliacoes": len(rows), "planos": len(planos)}, commit=True,
+    )
+    arquivo = "voicecheck-" + ("".join(c if c.isalnum() else "-" for c in nome.lower()).strip("-")[:40] or "paciente")
+    return JSONResponse(
+        corpo,
+        headers={"Content-Disposition": f'attachment; filename="{arquivo}-{agora:%Y%m%d}.json"', "Cache-Control": "no-store"},
+    )
+
+
+@router.delete("/pacientes", dependencies=[Depends(verify_csrf)])
+def excluir_paciente(request: Request, user: CurrentUser, db: DbSession, paciente: str | None = None) -> dict:
+    """LGPD art. 18 (eliminação): apaga todas as avaliações e links de prática do paciente.
+
+    Os links ativos param na hora (o plano deixa de existir). Irreversível.
+    """
+    nome = _nome_obrigatorio(paciente)
+    filtro_aval = (ClinicalEvaluation.owner_id == user.id, ClinicalEvaluation.patient_name == nome)
+    filtro_plano = (HomePracticePlan.owner_id == user.id, HomePracticePlan.patient_name == nome)
+    n_aval = db.execute(delete(ClinicalEvaluation).where(*filtro_aval)).rowcount or 0
+    n_planos = db.execute(delete(HomePracticePlan).where(*filtro_plano)).rowcount or 0
+    if not n_aval and not n_planos:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nada guardado para este paciente")
+    write_audit(
+        db, action="voz_clinica.paciente_excluido", resource_type="paciente", actor_id=user.id, request=request,
+        meta={"paciente": _rastro(user.id, nome), "avaliacoes": n_aval, "planos": n_planos},
+    )
+    db.commit()
+    return {"avaliacoes_excluidas": n_aval, "planos_excluidos": n_planos}
 
 
 @router.get("/avaliacoes", response_model=AvaliacaoLista)

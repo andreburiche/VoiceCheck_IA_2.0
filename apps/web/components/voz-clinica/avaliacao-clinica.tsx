@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, LoaderCircle, Mic, Square, Trash2 } from "lucide-react";
+import { Download, FileText, LoaderCircle, Mic, Square, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,8 @@ import {
   analisarGravacao,
   calcularProtocolo,
   excluirAvaliacao,
+  excluirPaciente,
+  exportarPaciente,
   linhasAcusticas,
   listarAvaliacoes,
   listarPacientes,
@@ -483,11 +485,82 @@ function Relatorio({ paciente, itens }: { paciente: string; itens: Avaliacao[] }
   );
 }
 
-function Historico({ paciente, versao }: { paciente: string; versao: number }) {
+/** Direitos do titular (LGPD art. 18): exportar e excluir tudo do paciente. */
+function DadosDoPaciente({ paciente, aoExcluir }: { paciente: string; aoExcluir: (resumo: string) => void }) {
+  const [exportando, setExportando] = useState(false);
+  const [confirmar, setConfirmar] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function exportar() {
+    setExportando(true);
+    setErro(null);
+    try {
+      const { arquivo, conteudo } = await exportarPaciente(paciente);
+      const url = URL.createObjectURL(conteudo);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = arquivo;
+      a.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setMsg(`Arquivo ${arquivo} gerado. Ele contém dados de saúde: guarde e envie com cuidado.`);
+    } catch (e) {
+      setErro(friendlyError(e, "Não foi possível exportar os dados."));
+    } finally {
+      setExportando(false);
+    }
+  }
+
+  async function excluir() {
+    setExcluindo(true);
+    setErro(null);
+    try {
+      const r = await excluirPaciente(paciente);
+      setConfirmar(false);
+      // este painel some junto com o histórico: o aviso fica com o histórico
+      aoExcluir(`Dados de ${paciente} excluídos: ${r.avaliacoes_excluidas} ${r.avaliacoes_excluidas === 1 ? "registro" : "registros"} e ${r.planos_excluidos} ${r.planos_excluidos === 1 ? "link de prática" : "links de prática"}.`);
+    } catch (e) {
+      setErro(friendlyError(e, "Não foi possível excluir os dados."));
+    } finally {
+      setExcluindo(false);
+    }
+  }
+
+  return (
+    <div className="mt-5 border-t border-ink/[0.07] pt-4" data-testid="vc2-lgpd">
+      <p className="text-xs font-medium uppercase tracking-wide text-ink-muted">Dados do paciente (LGPD)</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        <Button type="button" variant="secondary" size="sm" onClick={() => void exportar()} disabled={exportando} data-testid="vc2-exportar">
+          <Download className="h-4 w-4" aria-hidden /> {exportando ? "Exportando…" : "Exportar todos os dados"}
+        </Button>
+        <Button type="button" variant="ghost" size="sm" className="text-signal-err hover:text-signal-err" onClick={() => setConfirmar(true)} data-testid="vc2-excluir-paciente">
+          <Trash2 className="h-4 w-4" aria-hidden /> Excluir todos os dados
+        </Button>
+      </div>
+      {msg ? <p className="mt-2 text-xs text-ink-muted" role="status" data-testid="vc2-exportar-msg">{msg}</p> : null}
+      <Erro texto={erro} />
+      <ConfirmDialog
+        open={confirmar}
+        title={`Excluir todos os dados de ${paciente}?`}
+        description="Apaga para sempre todas as avaliações, protocolos, anamneses, sessões e links de prática deste paciente; os links param de funcionar na hora. Antes, confira se a guarda do prontuário exigida pelo seu conselho profissional permite a exclusão e, se preciso, exporte os dados."
+        confirmLabel="Excluir tudo"
+        danger
+        busy={excluindo}
+        onConfirm={() => void excluir()}
+        onCancel={() => setConfirmar(false)}
+      />
+    </div>
+  );
+}
+
+function Historico({ paciente, versao, aoExcluirPaciente }: { paciente: string; versao: number; aoExcluirPaciente: () => void }) {
   const [itens, setItens] = useState<Avaliacao[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [excluir, setExcluir] = useState<Avaliacao | null>(null);
   const [excluindo, setExcluindo] = useState(false);
+  const [avisoExclusao, setAvisoExclusao] = useState<string | null>(null);
+  useEffect(() => setAvisoExclusao(null), [paciente]);
 
   // só a resposta do pedido mais recente vale: trocar de paciente rápido não mistura prontuários
   const pedido = useRef(0);
@@ -537,6 +610,7 @@ function Historico({ paciente, versao }: { paciente: string; versao: number }) {
         Histórico de {paciente}
       </h2>
       <Erro texto={erro} />
+      {avisoExclusao ? <p className="mt-3 text-sm text-ink" role="status" data-testid="vc2-lgpd-msg">{avisoExclusao}</p> : null}
       {itens === null && !erro ? <p className={cn(NOTA, "mt-3")}>Carregando…</p> : null}
       {itens?.length === 0 ? (
         <p className="mt-3 rounded-xl border border-dashed border-ink/15 px-4 py-4 text-sm text-ink-muted">
@@ -578,6 +652,9 @@ function Historico({ paciente, versao }: { paciente: string; versao: number }) {
         onConfirm={() => void confirmarExclusao()}
         onCancel={() => setExcluir(null)}
       />
+      {itens?.length ? (
+        <DadosDoPaciente paciente={paciente} aoExcluir={(resumo) => { setAvisoExclusao(resumo); aoExcluirPaciente(); void carregar(); }} />
+      ) : null}
     </section>
   );
 }
@@ -730,7 +807,7 @@ export function AvaliacaoClinica() {
         <PraticaCasa paciente={nome} ativo={aba === "pratica"} aoMudar={aoSalvar} />
       </div>
 
-      <Historico paciente={nome} versao={versao} />
+      <Historico paciente={nome} versao={versao} aoExcluirPaciente={aoSalvar} />
     </div>
   );
 }

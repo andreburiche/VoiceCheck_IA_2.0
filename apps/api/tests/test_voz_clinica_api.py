@@ -325,3 +325,36 @@ def test_pratica_teto_diario(client: httpx.Client) -> None:
     assert len(r["recusadas"]) == 2 and "por dia" in r["recusadas"][0]["motivo"]
     lista = client.get("/api/v1/voz-clinica/pratica", params={"paciente": criado["paciente"]}).json()["items"]
     assert lista[0]["sessoes"] == 24 and lista[0]["ultima_sessao"].endswith(("Z", "+00:00"))
+
+
+# ---------------------------------------------------------------------------
+# LGPD: exportar e excluir todos os dados de um paciente
+# ---------------------------------------------------------------------------
+
+def test_exportar_e_excluir_paciente(client: httpx.Client) -> None:
+    paciente = f"Lgpd {uuid.uuid4().hex[:6]}"
+    assert client.post("/api/v1/voz-clinica/protocolos/idv10", json={"respostas": [1] * 10, "paciente": paciente}).status_code == 200
+    assert client.post("/api/v1/voz-clinica/anamnese", json={"paciente": paciente, "queixa": "rouquidão"}).status_code == 200
+    criado = client.post("/api/v1/voz-clinica/pratica", json={**PLANO, "paciente": paciente}).json()
+
+    r = client.get("/api/v1/voz-clinica/pacientes/exportar", params={"paciente": paciente})
+    assert r.status_code == 200
+    assert "attachment" in r.headers["content-disposition"]
+    dados = r.json()
+    assert dados["paciente"] == paciente and len(dados["avaliacoes"]) == 2 and len(dados["planos_pratica"]) == 1
+    assert criado["token"] not in r.text and "token" not in dados["planos_pratica"][0]
+
+    # outro profissional não exporta nem exclui
+    outro = _cliente("vozclin3")
+    assert outro.get("/api/v1/voz-clinica/pacientes/exportar", params={"paciente": paciente}).status_code == 404
+    assert outro.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente}).status_code == 404
+
+    # sem CSRF não exclui
+    sem_csrf = httpx.Client(base_url=BASE, cookies=client.cookies)
+    assert sem_csrf.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente}).status_code == 403
+
+    r = client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
+    assert r.json() == {"avaliacoes_excluidas": 2, "planos_excluidos": 1}
+    assert client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"] == []
+    with _celular(criado["token"]) as cel:  # o link do paciente parou junto
+        assert cel.get("/api/v1/pratica-casa/plano").status_code == 404

@@ -90,6 +90,8 @@ Todo número é calculado no servidor; o navegador só envia o WAV ou as respost
 | `POST /api/v1/pratica-casa/sessoes` | cabeçalho `X-Pratica-Token`; até 50 sessões com `id` (UUID), `exercicio`, `feito_em`, `repeticoes` | sim (idempotente) |
 | `POST /dsi` | `{"tmf_s", "f0_alta_hz", "i_baixa_db_spl", "jitter_pct"}` | não |
 | `GET /pacientes` | — | — |
+| `GET /pacientes/exportar?paciente=` | — (JSON com todas as avaliações e links de prática, sem limite; nunca o segredo dos links) | registra auditoria |
+| `DELETE /pacientes?paciente=` | — (apaga avaliações e links de prática do paciente; irreversível) | registra auditoria |
 | `GET /avaliacoes?paciente=` | — | — |
 | `DELETE /avaliacoes/{id}` | — | — |
 
@@ -134,12 +136,13 @@ downgrade das migrações falharia no MySQL. Os testes do navegador ainda achara
 
 ## Pontos a conferir antes do uso clínico
 
-- Fórmula de padronização do QVV (`100 − (bruto − mínimo)/(máximo − mínimo) × 100`):
-  conferir com Gasparini & Behlau (2009). Domínios (físico 1, 2, 3, 6, 7, 9;
-  socioemocional 4, 5, 8, 10) já confirmados em artigos brasileiros.
+- QVV **conferido** com o algoritmo original do V-RQOL (Hogikyan et al., J Voice 2000, Apêndice B): escore padrão
+  `100 − (bruto − n)/(4n) × 100` — denominadores 40 (total), 24 (físico: itens 1, 2, 3, 6, 7, 9) e 16
+  (socioemocional: 4, 5, 8, 10); o exemplo do artigo (bruto 30 → 50) bate. Notas de corte por domínio (89,60 e 90,65)
+  aparecem só em fonte secundária e **não** são aplicadas; a do total (91,25) está no artigo de Behlau et al. (2016).
 - Notas de corte IDV-10 7,5 e QVV 91,25: Behlau et al. (2016).
 - Intensidade sai em dBFS (relativa). dB SPL exige microfone calibrado.
-- Dados de saúde: o nome do paciente, os resultados e a **anamnese** (refluxo, medicamentos, cirurgias) são dados sensíveis (LGPD). Antes do uso real: base legal/consentimento, prazo de guarda e quem acessa.
+- Dados de saúde (LGPD): o nome do paciente, os resultados e a **anamnese** são dados sensíveis. A base legal provável é o art. 11, II, "f" (tutela da saúde em procedimento por profissional de saúde), que dispensa consentimento — confirmar com assessoria jurídica. Direitos do titular (art. 18) atendidos no histórico: **Exportar todos os dados** (acesso/portabilidade, JSON) e **Excluir todos os dados** (eliminação; para os links na hora). Ambos ficam em `audit_logs` com um hash do nome, nunca o nome. Antes de excluir, conferir a regra de guarda de prontuário do conselho profissional.
 - **Prática em casa:** o microfone do celular só abre em **https://** — publicar o site com certificado antes de enviar links (em rede local por http não funciona). O volume do celular não é calibrado: combinar a faixa em dBFS testando no aparelho do próprio paciente. Quem tem o link envia resultados para aquele paciente: orientar a não repassar o link, e revogar se vazar.
 - EASE-BR: escore conforme Rocha et al. (2014). A validação psicométrica brasileira ainda não tinha nota de corte publicada; não interpretar o total como "normal/alterado".
 - A análise não é diagnóstico médico.

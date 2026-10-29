@@ -194,6 +194,22 @@ export function listarPacientes() {
   return apiFetch<{ items: PacienteResumo[] }>(`${BASE}/pacientes`);
 }
 
+/** LGPD (acesso e portabilidade): tudo o que está guardado do paciente, num arquivo JSON. */
+export async function exportarPaciente(paciente: string): Promise<{ arquivo: string; conteudo: Blob }> {
+  const dados = await apiFetch<unknown>(`${BASE}/pacientes/exportar?paciente=${encodeURIComponent(paciente)}`, { timeoutMs: 60_000 });
+  const base = paciente.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "paciente";
+  const dia = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  return { arquivo: `voicecheck-${base}-${dia}.json`, conteudo: new Blob([JSON.stringify(dados, null, 2)], { type: "application/json" }) };
+}
+
+/** LGPD (eliminação): apaga avaliações e links de prática do paciente. Irreversível. */
+export function excluirPaciente(paciente: string) {
+  return apiFetch<{ avaliacoes_excluidas: number; planos_excluidos: number }>(
+    `${BASE}/pacientes?paciente=${encodeURIComponent(paciente)}`,
+    { method: "DELETE" },
+  );
+}
+
 export function listarAvaliacoes(paciente: string) {
   return apiFetch<{ items: Avaliacao[] }>(`${BASE}/avaliacoes?paciente=${encodeURIComponent(paciente)}`);
 }
