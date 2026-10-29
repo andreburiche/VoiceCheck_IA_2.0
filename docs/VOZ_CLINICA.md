@@ -19,6 +19,7 @@ paciente. Biofeedback e jogos (VoxGames, Voice Analyst) ficam para a fase 2.
 | QVV | 10 itens de 1 a 5; escores 0–100 (total, físico, socioemocional); nota de corte 91,25 |
 | GRBASI | G, R, B, A, S, I de 0 a 3; registro (ex.: G2R1B2A0S1I0) |
 | Histórico | Lista por paciente, mais recente primeiro, com exclusão confirmada |
+| Evolução | Um gráfico por medida (jitter, shimmer, HNR, CPPS, IDV-10, QVV, GRBASI G), até 12 sessões, com linha da nota de corte nos protocolos e valor de cada sessão ao passar o mouse ou focar pelo teclado. Aparece a partir da 2ª avaliação do mesmo tipo |
 
 Os textos das perguntas não estão no sistema: o profissional lê da versão
 validada impressa (ou inclui depois de obter licença).
@@ -31,6 +32,8 @@ apps/web/components/voz-clinica/avaliacao-clinica.tsx   tela
 apps/web/lib/voz-clinica-gravador.ts                   gravação sem filtros (AudioWorklet)
 apps/web/lib/voz-clinica-wav.ts                        WAV PCM 16 bits
 apps/web/lib/voz-clinica-api.ts                        cliente + formatação
+apps/web/lib/voz-clinica-evolucao.ts                   séries, escala do eixo, variação
+apps/web/components/voz-clinica/grafico-evolucao.tsx   gráfico de uma medida
         │  multipart / JSON, cookie de sessão + CSRF
         ▼
 apps/api/app/api/v1/voz_clinica.py                     rotas
@@ -94,7 +97,7 @@ no Docker com os comandos acima.
 
 ## Próximas fases
 
-1. Gráfico de evolução por paciente (jitter, CPPS, IDV-10 ao longo das sessões).
+1. ~~Gráfico de evolução por paciente~~ (feito).
 2. Relatório PDF da avaliação clínica, no padrão dos relatórios do VoiceCheck.
 3. Biofeedback ao vivo (pitch e volume com metas de faixa) e jogos (intensidade,
    frequência, tempo de fonação).

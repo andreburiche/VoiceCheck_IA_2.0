@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { friendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
+import { GraficoEvolucao } from "@/components/voz-clinica/grafico-evolucao";
+import { MAX_PONTOS, seriesEvolucao } from "@/lib/voz-clinica-evolucao";
 import { GravadorClinico, gravadorSuportado, type GravacaoClinica } from "@/lib/voz-clinica-gravador";
 import {
   FAIXAS_F0,
@@ -379,6 +381,30 @@ function FormProtocolo({ def, paciente, aoSalvar }: { def: DefProtocolo; pacient
 // Histórico do paciente
 // ---------------------------------------------------------------------------
 
+function Evolucao({ itens }: { itens: Avaliacao[] }) {
+  const series = useMemo(() => seriesEvolucao(itens), [itens]);
+  if (!series.length) {
+    return (
+      <p className="mt-3 text-xs text-ink-faint">
+        A curva de evolução aparece a partir da segunda avaliação do mesmo tipo.
+      </p>
+    );
+  }
+  return (
+    <div className="mt-4" data-testid="vc2-evolucao">
+      <h3 className="font-display text-base font-semibold text-ink">Evolução</h3>
+      <p className="mt-0.5 text-xs text-ink-muted">
+        Uma medida por gráfico, da sessão mais antiga para a mais recente (até {MAX_PONTOS} sessões). Os valores de cada sessão estão na lista abaixo.
+      </p>
+      <div className="mt-3 grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+        {series.map((s) => (
+          <GraficoEvolucao key={s.chave} serie={s} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Historico({ paciente, versao }: { paciente: string; versao: number }) {
   const [itens, setItens] = useState<Avaliacao[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -433,6 +459,7 @@ function Historico({ paciente, versao }: { paciente: string; versao: number }) {
           Nenhuma avaliação salva ainda. Grave uma vogal ou aplique um protocolo com este nome preenchido.
         </p>
       ) : null}
+      {itens?.length ? <Evolucao itens={itens} /> : null}
       {itens?.length ? (
         <ul className="mt-3 divide-y divide-ink/[0.07] overflow-hidden rounded-xl ring-1 ring-inset ring-ink/10" data-testid="vc2-historico">
           {itens.map((a) => (
