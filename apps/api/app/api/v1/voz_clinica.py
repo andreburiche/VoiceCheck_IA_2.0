@@ -23,6 +23,7 @@ from app.models import ClinicalEvaluation
 from app.schemas.voz_clinica import (
     AvaliacaoLista,
     BiofeedbackEntrada,
+    FonetogramaEntrada,
     JogoEntrada,
     AvaliacaoOut,
     DsiEntrada,
@@ -33,6 +34,7 @@ from app.schemas.voz_clinica import (
     StatusOut,
 )
 from app.services import voz_clinica
+from app.services.voz_clinica.fonetograma import resumir_campo
 from app.services.voz_clinica.indices import dsi
 from app.services.voz_clinica.protocolos import PROTOCOLOS, ErroProtocolo
 
@@ -145,6 +147,24 @@ def salvar_jogo(entrada: JogoEntrada, user: CurrentUser, db: DbSession) -> Resul
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente para salvar a partida")
     resultado = {**entrada.model_dump(exclude={"paciente"}), "fonte": "navegador"}
     salvo = _salvar(db, user, nome, "jogo", resultado)
+    return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
+
+
+@router.post("/fonetograma", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
+def salvar_fonetograma(entrada: FonetogramaEntrada, user: CurrentUser, db: DbSession) -> ResultadoSalvo:
+    """Guarda o campo vocal; o resumo é recalculado aqui a partir dos pontos."""
+    nome = _paciente(entrada.paciente)
+    if nome is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente para salvar o fonetograma")
+    pontos = sorted((p.model_dump() for p in entrada.pontos), key=lambda p: p["midi"])
+    resultado = {
+        "duracao_s": entrada.duracao_s,
+        "pontos": pontos,
+        "resumo": resumir_campo(pontos),
+        "unidade_intensidade": "dBFS",
+        "fonte": "navegador",
+    }
+    salvo = _salvar(db, user, nome, "fonetograma", resultado)
     return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
 
 

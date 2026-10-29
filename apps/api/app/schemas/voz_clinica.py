@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-TipoAvaliacao = Literal["acustica", "idv10", "qvv", "grbasi", "biofeedback", "jogo"]
+TipoAvaliacao = Literal["acustica", "idv10", "qvv", "grbasi", "biofeedback", "jogo", "fonetograma"]
 JogoId = Literal["altitude", "trilha", "sopro", "surdo-sonoro"]
 
 
@@ -87,6 +87,34 @@ class JogoEntrada(BaseModel):
                 raise ValueError(f"chave inválida em detalhes: {chave!r}")
             if valor != valor or abs(valor) > 1e6:  # NaN ou absurdo
                 raise ValueError(f"valor inválido em detalhes: {chave}")
+        return self
+
+
+class PontoCampo(BaseModel):
+    midi: int = Field(ge=24, le=108)
+    min_db: float = Field(ge=-120, le=0)
+    max_db: float = Field(ge=-120, le=0)
+    tempo_s: float = Field(ge=0, le=3600)
+
+    @model_validator(mode="after")
+    def _ordem(self) -> "PontoCampo":
+        if self.min_db > self.max_db:
+            raise ValueError("min_db maior que max_db")
+        return self
+
+
+class FonetogramaEntrada(BaseModel):
+    """Pontos do campo vocal medidos no navegador; o resumo é recalculado no servidor."""
+
+    paciente: str = Field(min_length=1, max_length=120)
+    duracao_s: float = Field(ge=0, le=3600)
+    pontos: list[PontoCampo] = Field(min_length=1, max_length=85)
+
+    @model_validator(mode="after")
+    def _unicos(self) -> "FonetogramaEntrada":
+        midis = [p.midi for p in self.pontos]
+        if len(set(midis)) != len(midis):
+            raise ValueError("semitom repetido nos pontos")
         return self
 
 

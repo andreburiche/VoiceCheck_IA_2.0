@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { friendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { BiofeedbackAoVivo } from "@/components/voz-clinica/biofeedback-ao-vivo";
+import { Fonetograma } from "@/components/voz-clinica/fonetograma";
 import { JogosTerapia } from "@/components/voz-clinica/jogos-terapia";
 import { GraficoEvolucao } from "@/components/voz-clinica/grafico-evolucao";
 import { MAX_PONTOS, seriesEvolucao } from "@/lib/voz-clinica-evolucao";
@@ -562,6 +563,7 @@ function Historico({ paciente, versao }: { paciente: string; versao: number }) {
 
 const ABAS = [
   { id: "avaliacao", rotulo: "Avaliação" },
+  { id: "fonetograma", rotulo: "Fonetograma" },
   { id: "biofeedback", rotulo: "Biofeedback" },
   { id: "jogos", rotulo: "Jogos" },
 ] as const;
@@ -676,6 +678,11 @@ export function AvaliacaoClinica() {
       </div>
       </div>
 
+      {aba === "fonetograma" ? (
+        <div role="tabpanel" id={`${idPaciente}-painel-fonetograma`} aria-labelledby={`${idPaciente}-aba-fonetograma`}>
+          <Fonetograma paciente={nome} aoSalvar={aoSalvar} />
+        </div>
+      ) : null}
       {aba === "biofeedback" ? (
         <div role="tabpanel" id={`${idPaciente}-painel-biofeedback`} aria-labelledby={`${idPaciente}-aba-biofeedback`}>
           <BiofeedbackAoVivo paciente={nome} aoSalvar={aoSalvar} />

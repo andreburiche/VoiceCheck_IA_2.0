@@ -1,10 +1,11 @@
 /** VoiceCheck IA 2.0 — cliente das rotas /api/v1/voz-clinica. */
 import { apiFetch } from "@/lib/api";
 import type { ResumoBiofeedback } from "@/lib/voz-clinica-biofeedback";
+import type { PontoCampo, ResumoCampo } from "@/lib/voz-clinica-fonetograma";
 import { JOGOS, type ResultadoJogo } from "@/lib/voz-clinica-jogos";
 
 
-export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "biofeedback" | "jogo";
+export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "biofeedback" | "jogo" | "fonetograma";
 export type Protocolo = "idv10" | "qvv" | "grbasi";
 
 /** Resumo de sessão de biofeedback salvo (medido no navegador). */
@@ -12,6 +13,15 @@ export type ResultadoBiofeedback = ResumoBiofeedback & { fonte: "navegador" };
 
 /** Resultado de partida salvo (medido no navegador). */
 export type ResultadoJogoSalvo = ResultadoJogo & { fonte: "navegador" };
+
+/** Fonetograma salvo: pontos do navegador, resumo recalculado no servidor. */
+export type ResultadoFonetograma = {
+  duracao_s: number;
+  pontos: Pick<PontoCampo, "midi" | "min_db" | "max_db" | "tempo_s">[];
+  resumo: ResumoCampo;
+  unidade_intensidade: "dBFS";
+  fonte: "navegador";
+};
 
 export type AnaliseAcustica = {
   motor: "praat" | "interno";
@@ -77,7 +87,7 @@ export type Avaliacao = {
   paciente: string;
   tipo: TipoAvaliacao;
   motor: string | null;
-  resultado: AnaliseAcustica | ResultadoProtocolo | ResultadoBiofeedback | ResultadoJogoSalvo;
+  resultado: AnaliseAcustica | ResultadoProtocolo | ResultadoBiofeedback | ResultadoJogoSalvo | ResultadoFonetograma;
   criado_em: string;
 };
 
@@ -127,6 +137,13 @@ export function salvarJogo(paciente: string, resultado: ResultadoJogo) {
   return apiFetch<Salvo<ResultadoJogoSalvo>>(`${BASE}/jogos`, {
     method: "POST",
     json: { paciente, ...resultado },
+  });
+}
+
+export function salvarFonetograma(paciente: string, duracao_s: number, pontos: PontoCampo[]) {
+  return apiFetch<Salvo<ResultadoFonetograma>>(`${BASE}/fonetograma`, {
+    method: "POST",
+    json: { paciente, duracao_s, pontos: pontos.map(({ midi, min_db, max_db, tempo_s }) => ({ midi, min_db, max_db, tempo_s })) },
   });
 }
 
@@ -202,6 +219,11 @@ export function resumoProtocolo(r: ResultadoProtocolo): string {
 
 /** Resumo de uma avaliação salva (histórico do paciente). */
 export function resumoAvaliacao(a: Avaliacao): string {
+  if (a.tipo === "fonetograma") {
+    const r = (a.resultado as ResultadoFonetograma).resumo;
+    if (!r?.nota_grave) return "Sem notas registradas";
+    return `${r.nota_grave}–${r.nota_aguda} (${fixoBR(r.hz_grave, 0)}–${fixoBR(r.hz_agudo, 0)} Hz) · ${r.extensao_st} semitons · faixa dinâmica média ${fixoBR(r.faixa_dinamica_media_db, 1)} dB`;
+  }
   if (a.tipo === "jogo") {
     const r = a.resultado as ResultadoJogoSalvo;
     const d = r.detalhes ?? {};
@@ -237,6 +259,7 @@ export const ROTULO_TIPO: Record<TipoAvaliacao, string> = {
   acustica: "Análise acústica",
   biofeedback: "Biofeedback",
   jogo: "Jogo",
+  fonetograma: "Fonetograma",
   idv10: "IDV-10",
   qvv: "QVV",
   grbasi: "GRBASI",

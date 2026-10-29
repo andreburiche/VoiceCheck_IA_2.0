@@ -1,0 +1,250 @@
+"use client";
+
+import { Mic, Pause, RotateCcw } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { friendlyError } from "@/lib/errors";
+import { hzToMidiFloat, midiToNoteName } from "@/lib/pitch-math";
+import { fixoBR, salvarFonetograma } from "@/lib/voz-clinica-api";
+import { medianaDe3, nivelDbfs, pitchYin } from "@/lib/voz-clinica-biofeedback";
+import { pontosDoCampo, registrar, resumirCampo, type MapaCampo, type PontoCampo } from "@/lib/voz-clinica-fonetograma";
+import { RESTRICOES_CLINICAS, gravadorSuportado } from "@/lib/voz-clinica-gravador";
+
+const DB_MIN = -60;
+const DB_MAX = 0;
+const COR = { campo: "rgba(32,217,210,0.22)", contorno: "#20D9D2", grade: "rgba(148,163,184,0.12)", texto: "#94A3B8", atual: "#F8FAFC" };
+
+function desenharCampo(c: HTMLCanvasElement, pontos: PontoCampo[], atual: { midi: number; db: number } | null) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = c.clientWidth;
+  const h = c.clientHeight;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) {
+    c.width = Math.round(w * dpr);
+    c.height = Math.round(h * dpr);
+  }
+  const g = c.getContext("2d");
+  if (!g) return;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+
+  // eixo das notas: C2–C6, ampliado se o paciente passar disso
+  const midis = pontos.map((p) => p.midi).concat(atual ? [Math.round(atual.midi)] : []);
+  const mMin = Math.min(36, ...midis) - 1;
+  const mMax = Math.max(84, ...midis) + 1;
+  const PE = 40, PD = 10, PT = 10, PB = 24;
+  const x = (m: number) => PE + ((m - mMin) / (mMax - mMin)) * (w - PE - PD);
+  const y = (db: number) => PT + ((DB_MAX - Math.max(DB_MIN, Math.min(DB_MAX, db))) / (DB_MAX - DB_MIN)) * (h - PT - PB);
+  const larg = (w - PE - PD) / (mMax - mMin);
+
+  g.font = "11px ui-monospace, Consolas, monospace";
+  g.lineWidth = 1;
+  for (let db = DB_MIN; db <= DB_MAX; db += 10) {
+    g.strokeStyle = COR.grade;
+    g.beginPath(); g.moveTo(PE, y(db)); g.lineTo(w - PD, y(db)); g.stroke();
+    g.fillStyle = COR.texto; g.textAlign = "right"; g.textBaseline = "middle";
+    g.fillText(String(db), PE - 6, y(db));
+  }
+  g.textAlign = "center"; g.textBaseline = "alphabetic";
+  for (let m = Math.ceil(mMin / 12) * 12; m <= mMax; m += 12) {
+    g.strokeStyle = COR.grade;
+    g.beginPath(); g.moveTo(x(m), PT); g.lineTo(x(m), h - PB); g.stroke();
+    g.fillStyle = COR.texto;
+    g.fillText(midiToNoteName(m), x(m), h - 6);
+  }
+
+  // campo: barra do mínimo ao máximo em cada semitom
+  g.fillStyle = COR.campo;
+  for (const p of pontos) g.fillRect(x(p.midi) - larg / 2, y(p.max_db), larg, Math.max(2, y(p.min_db) - y(p.max_db)));
+  // contornos (interrompidos onde falta semitom)
+  for (const chave of ["max_db", "min_db"] as const) {
+    g.strokeStyle = COR.contorno; g.lineWidth = 2; g.beginPath();
+    let anterior: number | null = null;
+    for (const p of pontos) {
+      if (anterior !== null && p.midi === anterior + 1) g.lineTo(x(p.midi), y(p[chave]));
+      else g.moveTo(x(p.midi), y(p[chave]));
+      anterior = p.midi;
+    }
+    g.stroke();
+  }
+  if (atual) {
+    g.fillStyle = COR.atual;
+    g.beginPath(); g.arc(x(atual.midi), y(atual.db), 6, 0, Math.PI * 2); g.fill();
+  }
+}
+
+export function Fonetograma({ paciente, aoSalvar }: { paciente: string; aoSalvar: () => void }) {
+  const id = useId();
+  const [gravando, setGravando] = useState(false);
+  const [pontos, setPontos] = useState<PontoCampo[]>([]);
+  const [leitura, setLeitura] = useState<{ midi: number; db: number } | null>(null);
+  const [duracao, setDuracao] = useState(0);
+  const [erro, setErro] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [salvo, setSalvo] = useState(false);
+  const [suportado, setSuportado] = useState(true);
+
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const mapa = useRef<MapaCampo>(new Map());
+  const duracaoRef = useRef(0);
+  const audio = useRef<{ ctx: AudioContext; stream: MediaStream; analisador: AnalyserNode } | null>(null);
+  const quadro = useRef<number | null>(null);
+
+  useEffect(() => setSuportado(gravadorSuportado()), []);
+  useEffect(() => {
+    if (canvas.current) desenharCampo(canvas.current, pontos, gravando ? leitura : null);
+  }, [pontos, leitura, gravando]);
+
+  const pausar = useCallback(() => {
+    if (quadro.current !== null) cancelAnimationFrame(quadro.current);
+    quadro.current = null;
+    const a = audio.current;
+    audio.current = null;
+    a?.stream.getTracks().forEach((t) => t.stop());
+    void a?.ctx.close().catch(() => undefined);
+    setGravando(false);
+    setLeitura(null);
+    setPontos(pontosDoCampo(mapa.current));
+  }, []);
+  useEffect(() => pausar, [pausar]);
+
+  async function gravar() {
+    setErro(null);
+    setSalvo(false);
+    try {
+      if (!window.isSecureContext) throw new Error("O microfone só funciona em https:// ou em http://localhost.");
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: RESTRICOES_CLINICAS, video: false });
+      const ctx = new AudioContext();
+      if (ctx.state === "suspended") await ctx.resume();
+      const analisador = ctx.createAnalyser();
+      analisador.fftSize = 2048;
+      ctx.createMediaStreamSource(stream).connect(analisador);
+      audio.current = { ctx, stream, analisador };
+    } catch (e) {
+      setErro(e instanceof DOMException && e.name === "NotAllowedError" ? "Permita o uso do microfone no navegador." : friendlyError(e, "Não foi possível abrir o microfone."));
+      return;
+    }
+    setGravando(true);
+    const buffer = new Float32Array(2048);
+    const brutos: (number | null)[] = [];
+    let anterior: number | null = null;
+    let ultimaTela = 0;
+    const passo = () => {
+      const a = audio.current;
+      if (!a) return;
+      a.analisador.getFloatTimeDomainData(buffer);
+      const t = a.ctx.currentTime;
+      const dt = anterior === null ? 0 : Math.min(0.1, t - anterior);
+      anterior = t;
+      duracaoRef.current += dt;
+      const r = pitchYin(buffer, a.ctx.sampleRate, 50, 1500);
+      brutos.push(r?.hz ?? null);
+      if (brutos.length > 3) brutos.shift();
+      const hz = medianaDe3(brutos);
+      const db = nivelDbfs(buffer);
+      if (hz !== null) registrar(mapa.current, hz, db, dt);
+      if (t - ultimaTela > 0.12) {
+        ultimaTela = t;
+        setPontos(pontosDoCampo(mapa.current));
+        setLeitura(hz !== null ? { midi: hzToMidiFloat(hz), db } : null);
+        setDuracao(duracaoRef.current);
+      }
+      quadro.current = requestAnimationFrame(passo);
+    };
+    quadro.current = requestAnimationFrame(passo);
+  }
+
+  function limpar() {
+    mapa.current = new Map();
+    duracaoRef.current = 0;
+    setPontos([]);
+    setDuracao(0);
+    setSalvo(false);
+  }
+
+  async function salvar() {
+    if (!paciente || !pontos.length) return;
+    setSalvando(true);
+    setErro(null);
+    try {
+      await salvarFonetograma(paciente, Math.round(duracao * 10) / 10, pontos);
+      setSalvo(true);
+      aoSalvar();
+    } catch (e) {
+      setErro(friendlyError(e, "Não foi possível salvar o fonetograma."));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  const r = resumirCampo(pontos);
+  return (
+    <section className="panel-glass rounded-2xl p-4 md:p-5" aria-labelledby={`${id}-t`} data-testid="vc2-campo">
+      <h2 id={`${id}-t`} className="font-display text-lg font-semibold text-ink">Fonetograma (campo vocal)</h2>
+      <p className="mt-1 max-w-[70ch] text-sm text-ink-muted">
+        Registra, para cada nota alcançada, a voz mais fraca e a mais forte. Pode pausar e retomar: as passadas se somam no mesmo campo.
+      </p>
+      <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-ink">
+        <li>Em voz <strong>fraca</strong>, deslize do mais grave ao mais agudo confortável e volte.</li>
+        <li>Repita em voz <strong>forte</strong>, sem gritar.</li>
+        <li>Sustente por um instante as notas extremas (as passagens rápidas não contam).</li>
+      </ol>
+      <p className="mt-2 text-xs text-signal-warn">
+        Intensidade relativa (dBFS): compare sessões feitas com o mesmo microfone e a mesma distância. Para dB SPL é preciso microfone calibrado.
+      </p>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {gravando ? (
+          <Button type="button" variant="danger" onClick={pausar} data-testid="vc2-campo-pausar"><Pause className="h-4 w-4" aria-hidden /> Pausar</Button>
+        ) : (
+          <Button type="button" onClick={() => void gravar()} disabled={!suportado} data-testid="vc2-campo-gravar">
+            <Mic className="h-4 w-4" aria-hidden /> {pontos.length ? "Continuar gravando" : "Começar"}
+          </Button>
+        )}
+        <Button type="button" variant="ghost" onClick={limpar} disabled={gravando || !pontos.length}><RotateCcw className="h-4 w-4" aria-hidden /> Recomeçar</Button>
+        <span className="text-data text-xs text-ink-muted">{fixoBR(duracao, 0)} s gravados</span>
+      </div>
+
+      <canvas ref={canvas} className="mt-4 block h-72 w-full rounded-xl bg-canvas-raised/60 ring-1 ring-inset ring-ink/10" role="img"
+        aria-label={r.nota_grave ? `Campo vocal de ${r.nota_grave} a ${r.nota_aguda}, ${r.extensao_st} semitons` : "Campo vocal vazio"} />
+
+      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4" data-testid="vc2-campo-resumo">
+        {([
+          ["Nota mais grave", r.nota_grave ? `${r.nota_grave} · ${fixoBR(r.hz_grave, 0)} Hz` : "—"],
+          ["Nota mais aguda", r.nota_aguda ? `${r.nota_aguda} · ${fixoBR(r.hz_agudo, 0)} Hz` : "—"],
+          ["Extensão", r.semitons_alcancados ? `${r.extensao_st} semitons` : "—"],
+          ["Faixa dinâmica média", r.faixa_dinamica_media_db !== null ? `${fixoBR(r.faixa_dinamica_media_db, 1)} dB` : "—"],
+        ] as const).map(([rotulo, valor]) => (
+          <div key={rotulo}><dt className="text-xs text-ink-muted">{rotulo}</dt><dd className="text-data text-ink">{valor}</dd></div>
+        ))}
+      </dl>
+
+      {pontos.length ? (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-xs text-ink-muted">Ver valores por nota ({pontos.length})</summary>
+          <table className="mt-2 w-full max-w-md text-xs">
+            <thead><tr className="text-left text-ink-faint"><th className="py-1">Nota</th><th className="text-right">Hz</th><th className="text-right">Mín. (dBFS)</th><th className="text-right">Máx. (dBFS)</th></tr></thead>
+            <tbody>
+              {pontos.map((p) => (
+                <tr key={p.midi} className="border-t border-ink/[0.06] text-ink">
+                  <td className="py-1">{p.nota}</td>
+                  <td className="text-data text-right">{fixoBR(p.hz, 0)}</td>
+                  <td className="text-data text-right">{fixoBR(p.min_db, 1)}</td>
+                  <td className="text-data text-right">{fixoBR(p.max_db, 1)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      ) : null}
+
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Button type="button" size="sm" variant="secondary" onClick={() => void salvar()} disabled={gravando || !paciente || !pontos.length || salvando || salvo} data-testid="vc2-campo-salvar">
+          {salvo ? "Salvo no histórico" : salvando ? "Salvando…" : "Salvar no histórico"}
+        </Button>
+        {!paciente ? <span className="text-xs text-ink-faint">Preencha o paciente no topo para salvar.</span> : null}
+      </div>
+      {erro ? <p className="mt-3 text-sm text-signal-err" role="alert">{erro}</p> : null}
+    </section>
+  );
+}

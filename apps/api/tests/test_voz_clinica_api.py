@@ -187,3 +187,25 @@ def test_jogo_salva_no_historico(client: httpx.Client) -> None:
 def test_jogo_rejeita_resultado_invalido(client: httpx.Client, ruim: dict) -> None:
     corpo = {"paciente": "X", "jogo": "sopro", "duracao_s": 10, "pontuacao_pct": 50, "detalhes": {}, **ruim}
     assert client.post("/api/v1/voz-clinica/jogos", json=corpo).status_code == 422
+
+
+def test_fonetograma_resumo_calculado_no_servidor(client: httpx.Client) -> None:
+    paciente = f"Campo {uuid.uuid4().hex[:6]}"
+    pontos = [{"midi": m, "min_db": -40.0, "max_db": -12.0, "tempo_s": 0.4} for m in range(67, 47, -1)]  # fora de ordem
+    r = client.post("/api/v1/voz-clinica/fonetograma", json={"paciente": paciente, "duracao_s": 20, "pontos": pontos})
+    assert r.status_code == 200, r.text
+    res = r.json()["resultado"]
+    assert res["resumo"]["extensao_st"] == 19
+    assert res["pontos"][0]["midi"] == 48  # guardado em ordem
+    assert res["unidade_intensidade"] == "dBFS"
+
+
+@pytest.mark.parametrize("pontos", [
+    [],
+    [{"midi": 60, "min_db": -10, "max_db": -20, "tempo_s": 1}],
+    [{"midi": 60, "min_db": -30, "max_db": -20, "tempo_s": 1}] * 2,
+    [{"midi": 200, "min_db": -30, "max_db": -20, "tempo_s": 1}],
+])
+def test_fonetograma_rejeita_pontos_invalidos(client: httpx.Client, pontos: list) -> None:
+    corpo = {"paciente": "X", "duracao_s": 10, "pontos": pontos}
+    assert client.post("/api/v1/voz-clinica/fonetograma", json=corpo).status_code == 422

@@ -3,7 +3,7 @@
  * Uma série por medida; cada uma vira um gráfico próprio (escalas diferentes
  * nunca dividem o mesmo eixo).
  */
-import type { AnaliseAcustica, Avaliacao, ResultadoBiofeedback, ResultadoGrbasi, ResultadoIdv10, ResultadoJogoSalvo, ResultadoQvv } from "@/lib/voz-clinica-api";
+import type { AnaliseAcustica, Avaliacao, ResultadoBiofeedback, ResultadoGrbasi, ResultadoIdv10, ResultadoFonetograma, ResultadoJogoSalvo, ResultadoQvv } from "@/lib/voz-clinica-api";
 import { JOGOS, type JogoId } from "@/lib/voz-clinica-jogos";
 
 export type PontoEvolucao = { data: string; valor: number };
@@ -80,6 +80,16 @@ const EXTRATORES: Extrator[] = [
     chave: "bio_pitch", titulo: "Biofeedback — pitch na faixa", unidade: "%", casas: 1, tipo: "biofeedback", dominio: [0, 100],
     leitura: "Parte do tempo com voz dentro da faixa de pitch definida em cada sessão (as faixas podem mudar entre sessões).",
     valor: (a) => (a.resultado as ResultadoBiofeedback).dentro_pitch_pct,
+  },
+  {
+    chave: "campo_extensao", titulo: "Fonetograma — extensão", unidade: "st", casas: 0, tipo: "fonetograma", dominio: null,
+    leitura: "Semitons entre a nota mais grave e a mais aguda sustentadas.",
+    valor: (a) => (a.resultado as ResultadoFonetograma).resumo?.extensao_st,
+  },
+  {
+    chave: "campo_dinamica", titulo: "Fonetograma — faixa dinâmica média", unidade: "dB", casas: 1, tipo: "fonetograma", dominio: null,
+    leitura: "Diferença média entre a voz mais forte e a mais fraca por nota (relativa: mesmo microfone e distância entre sessões).",
+    valor: (a) => (a.resultado as ResultadoFonetograma).resumo?.faixa_dinamica_media_db,
   },
   ...(Object.keys(JOGOS) as JogoId[]).map((jogo): Extrator => ({
     chave: `jogo_${jogo}`,

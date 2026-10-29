@@ -1,7 +1,7 @@
 # VoiceCheck IA 2.0 — Avaliação clínica da voz
 
 **Data:** 2026-10-29
-**Rota no site:** `/voz-clinica` (menu "Avaliação clínica"), com abas Avaliação · Biofeedback · Jogos; o histórico do paciente fica sempre abaixo
+**Rota no site:** `/voz-clinica` (menu "Avaliação clínica"), com abas Avaliação · Fonetograma · Biofeedback · Jogos; o histórico do paciente fica sempre abaixo
 **API:** `/api/v1/voz-clinica`
 
 A versão 2.0 junta, numa só tela, o que hoje exige vários programas:
@@ -23,6 +23,7 @@ paciente. Biofeedback e jogos (VoxGames, Voice Analyst) ficam para a fase 2.
 | Relatório em PDF | Botão no histórico: análise acústica e protocolos mais recentes, gráficos de evolução, todas as sessões, profissional e observações (opcionais). HTML A4 impresso pelo navegador ("Salvar como PDF"), mesmo mecanismo dos relatórios do VoiceCheck |
 | Biofeedback ao vivo | Pitch (nota e Hz) e volume (dBFS) na tela enquanto o paciente fala ou canta, com faixas-alvo definidas pelo profissional, indicação "abaixo / dentro / acima" escrita (não só cor), curva dos últimos 8 s e % do tempo na faixa. Pitch por YIN a ~60 leituras/s com mediana de 3 contra leituras isoladas. O áudio não sai do aparelho; ao parar, o resumo da sessão pode ser salvo no histórico (tipo `biofeedback`) e entra na evolução |
 | Jogos de terapia | Quatro jogos próprios (não copiam nomes, visual nem mecânica de produtos comerciais): **Altitude** (o volume controla a altura; seguir patamares), **Trilha** (o pitch controla a altura; patamares e deslizes), **Sopro longo** (sustentar a voz até a meta) e **Surdo ou sonoro** (s/z, f/v, ch/j). Faixas, duração, dificuldade e meta definidas pelo profissional. Resultado de cada partida pode ser salvo (tipo `jogo`) e tem curva própria na evolução |
+| Fonetograma | Campo vocal: para cada semitom alcançado (≥ 0,15 s), a menor e a maior intensidade, ignorando os primeiros 50 ms de cada nota (ataque). Glissandos em voz fraca e forte, com pausa e retomada somando ao mesmo campo. Nota mais grave e mais aguda, extensão em semitons, faixa dinâmica média e área. Intensidade **relativa (dBFS)**. Ao salvar, o servidor recalcula o resumo a partir dos pontos (tipo `fonetograma`); extensão e faixa dinâmica entram na evolução |
 
 Os textos das perguntas não estão no sistema: o profissional lê da versão
 validada impressa (ou inclui depois de obter licença).
@@ -42,6 +43,9 @@ apps/web/lib/voz-clinica-biofeedback.ts                YIN ao vivo, dBFS, resumo
 apps/web/components/voz-clinica/biofeedback-ao-vivo.tsx tela do biofeedback (canvas)
 apps/web/lib/voz-clinica-jogos.ts                      lógica dos jogos e classificação surdo/sonoro
 apps/web/components/voz-clinica/jogos-terapia.tsx      tela dos jogos
+apps/web/lib/voz-clinica-fonetograma.ts                campo vocal por semitom
+apps/web/components/voz-clinica/fonetograma.tsx        tela do fonetograma (canvas)
+apps/api/app/services/voz_clinica/fonetograma.py       resumo do campo no servidor
         │  multipart / JSON, cookie de sessão + CSRF
         ▼
 apps/api/app/api/v1/voz_clinica.py                     rotas
@@ -61,6 +65,7 @@ Todo número é calculado no servidor; o navegador só envia o WAV ou as respost
 | `POST /protocolos/{idv10\|qvv\|grbasi}` | `{"respostas": ..., "paciente": ...}` | se `paciente` |
 | `POST /biofeedback` | resumo da sessão (faixas, % na faixa, pitch p10/mediana/p90, dB mediano) com `paciente` | sim |
 | `POST /jogos` | resultado da partida (`jogo`, pontuação, detalhes numéricos) com `paciente` | sim |
+| `POST /fonetograma` | pontos por semitom (`midi`, `min_db`, `max_db`, `tempo_s`, até 85) com `paciente`; resumo recalculado no servidor | sim |
 | `POST /dsi` | `{"tmf_s", "f0_alta_hz", "i_baixa_db_spl", "jitter_pct"}` | não |
 | `GET /pacientes` | — | — |
 | `GET /avaliacoes?paciente=` | — | — |
@@ -111,4 +116,5 @@ no Docker com os comandos acima.
 1. ~~Gráfico de evolução por paciente~~ (feito).
 2. ~~Relatório PDF da avaliação clínica~~ (feito).
 3. ~~Biofeedback ao vivo~~ e ~~jogos de terapia~~ (feitos).
-4. Próximos: prática em casa (celular, offline), fonetograma, anamnese e EASE-BR, espectrograma.
+4. ~~Fonetograma~~ (feito; em dBFS — dB SPL exige calibração).
+5. Próximos: prática em casa (celular, offline), anamnese e EASE-BR, espectrograma.
