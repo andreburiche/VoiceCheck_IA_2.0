@@ -1,13 +1,17 @@
 /** VoiceCheck IA 2.0 — cliente das rotas /api/v1/voz-clinica. */
 import { apiFetch } from "@/lib/api";
 import type { ResumoBiofeedback } from "@/lib/voz-clinica-biofeedback";
+import { JOGOS, type ResultadoJogo } from "@/lib/voz-clinica-jogos";
 
 
-export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "biofeedback";
+export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "biofeedback" | "jogo";
 export type Protocolo = "idv10" | "qvv" | "grbasi";
 
 /** Resumo de sessão de biofeedback salvo (medido no navegador). */
 export type ResultadoBiofeedback = ResumoBiofeedback & { fonte: "navegador" };
+
+/** Resultado de partida salvo (medido no navegador). */
+export type ResultadoJogoSalvo = ResultadoJogo & { fonte: "navegador" };
 
 export type AnaliseAcustica = {
   motor: "praat" | "interno";
@@ -73,7 +77,7 @@ export type Avaliacao = {
   paciente: string;
   tipo: TipoAvaliacao;
   motor: string | null;
-  resultado: AnaliseAcustica | ResultadoProtocolo | ResultadoBiofeedback;
+  resultado: AnaliseAcustica | ResultadoProtocolo | ResultadoBiofeedback | ResultadoJogoSalvo;
   criado_em: string;
 };
 
@@ -116,6 +120,13 @@ export function salvarBiofeedback(paciente: string, resumo: ResumoBiofeedback) {
   return apiFetch<Salvo<ResultadoBiofeedback>>(`${BASE}/biofeedback`, {
     method: "POST",
     json: { paciente, ...resumo },
+  });
+}
+
+export function salvarJogo(paciente: string, resultado: ResultadoJogo) {
+  return apiFetch<Salvo<ResultadoJogoSalvo>>(`${BASE}/jogos`, {
+    method: "POST",
+    json: { paciente, ...resultado },
   });
 }
 
@@ -191,6 +202,15 @@ export function resumoProtocolo(r: ResultadoProtocolo): string {
 
 /** Resumo de uma avaliação salva (histórico do paciente). */
 export function resumoAvaliacao(a: Avaliacao): string {
+  if (a.tipo === "jogo") {
+    const r = a.resultado as ResultadoJogoSalvo;
+    const d = r.detalhes ?? {};
+    const extra =
+      r.jogo === "sopro" ? ` · melhor ${fixoBR(d.melhor_s, 1)} s de ${fixoBR(d.meta_s, 0)} s`
+      : r.jogo === "surdo-sonoro" ? ` · ${fixoBR(d.acertos, 0)} de ${fixoBR(d.desafios, 0)} acertos`
+      : " no alvo";
+    return `${JOGOS[r.jogo]?.titulo ?? r.jogo}: ${fixoBR(r.pontuacao_pct, 1)}%${extra}`;
+  }
   if (a.tipo === "biofeedback") {
     const r = a.resultado as ResultadoBiofeedback;
     return [
@@ -216,6 +236,7 @@ export function resumoAvaliacao(a: Avaliacao): string {
 export const ROTULO_TIPO: Record<TipoAvaliacao, string> = {
   acustica: "Análise acústica",
   biofeedback: "Biofeedback",
+  jogo: "Jogo",
   idv10: "IDV-10",
   qvv: "QVV",
   grbasi: "GRBASI",

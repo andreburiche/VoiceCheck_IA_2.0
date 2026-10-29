@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { friendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { BiofeedbackAoVivo } from "@/components/voz-clinica/biofeedback-ao-vivo";
+import { JogosTerapia } from "@/components/voz-clinica/jogos-terapia";
 import { GraficoEvolucao } from "@/components/voz-clinica/grafico-evolucao";
 import { MAX_PONTOS, seriesEvolucao } from "@/lib/voz-clinica-evolucao";
 import { imprimirRelatorioClinico } from "@/lib/voz-clinica-relatorio";
@@ -559,10 +560,58 @@ function Historico({ paciente, versao }: { paciente: string; versao: number }) {
 // Página
 // ---------------------------------------------------------------------------
 
+const ABAS = [
+  { id: "avaliacao", rotulo: "Avaliação" },
+  { id: "biofeedback", rotulo: "Biofeedback" },
+  { id: "jogos", rotulo: "Jogos" },
+] as const;
+type Aba = (typeof ABAS)[number]["id"];
+
+/** Abas com teclado (setas, Home, End), no padrão WAI-ARIA. */
+function Abas({ ativa, onChange, base }: { ativa: Aba; onChange: (a: Aba) => void; base: string }) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  function teclar(e: React.KeyboardEvent, i: number) {
+    const ultimo = ABAS.length - 1;
+    const destino = e.key === "ArrowRight" ? (i === ultimo ? 0 : i + 1)
+      : e.key === "ArrowLeft" ? (i === 0 ? ultimo : i - 1)
+      : e.key === "Home" ? 0 : e.key === "End" ? ultimo : null;
+    if (destino === null) return;
+    e.preventDefault();
+    onChange(ABAS[destino]!.id);
+    refs.current[destino]?.focus();
+  }
+  return (
+    <div role="tablist" aria-label="Módulos" className="flex gap-1 overflow-x-auto rounded-xl bg-canvas-raised/60 p-1 ring-1 ring-inset ring-ink/10">
+      {ABAS.map((a, i) => (
+        <button
+          key={a.id}
+          ref={(el) => { refs.current[i] = el; }}
+          type="button"
+          role="tab"
+          id={`${base}-aba-${a.id}`}
+          aria-selected={ativa === a.id}
+          aria-controls={`${base}-painel-${a.id}`}
+          tabIndex={ativa === a.id ? 0 : -1}
+          onClick={() => onChange(a.id)}
+          onKeyDown={(e) => teclar(e, i)}
+          className={cn(
+            "min-h-[40px] flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+            ativa === a.id ? "bg-canvas-card text-ink shadow-sm" : "text-ink-muted hover:text-ink",
+          )}
+          data-testid={`vc2-aba-${a.id}`}
+        >
+          {a.rotulo}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function AvaliacaoClinica() {
   const [paciente, setPaciente] = useState("");
   const [pacientes, setPacientes] = useState<PacienteResumo[]>([]);
   const [versao, setVersao] = useState(0);
+  const [aba, setAba] = useState<Aba>("avaliacao");
   const idPaciente = useId();
   const nome = useMemo(() => paciente.split(/\s+/).filter(Boolean).join(" "), [paciente]);
 
@@ -610,6 +659,10 @@ export function AvaliacaoClinica() {
         </div>
       </section>
 
+      <Abas ativa={aba} onChange={setAba} base={idPaciente} />
+
+      {/* Avaliação fica montada (preserva respostas já marcadas); biofeedback e jogos só quando abertos (liberam o microfone) */}
+      <div role="tabpanel" id={`${idPaciente}-painel-avaliacao`} aria-labelledby={`${idPaciente}-aba-avaliacao`} hidden={aba !== "avaliacao"}>
       <div className="grid gap-5 xl:grid-cols-2">
         <PainelAcustico paciente={nome} aoSalvar={aoSalvar} />
         <section className={cn(PAINEL, "space-y-6")} aria-labelledby="vc2-protocolos">
@@ -621,8 +674,18 @@ export function AvaliacaoClinica() {
           ))}
         </section>
       </div>
+      </div>
 
-      <BiofeedbackAoVivo paciente={nome} aoSalvar={aoSalvar} />
+      {aba === "biofeedback" ? (
+        <div role="tabpanel" id={`${idPaciente}-painel-biofeedback`} aria-labelledby={`${idPaciente}-aba-biofeedback`}>
+          <BiofeedbackAoVivo paciente={nome} aoSalvar={aoSalvar} />
+        </div>
+      ) : null}
+      {aba === "jogos" ? (
+        <div role="tabpanel" id={`${idPaciente}-painel-jogos`} aria-labelledby={`${idPaciente}-aba-jogos`}>
+          <JogosTerapia paciente={nome} aoSalvar={aoSalvar} />
+        </div>
+      ) : null}
 
       <Historico paciente={nome} versao={versao} />
     </div>

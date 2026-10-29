@@ -165,3 +165,25 @@ def test_biofeedback_salva_no_historico(client: httpx.Client) -> None:
 ])
 def test_biofeedback_rejeita_resumo_invalido(client: httpx.Client, ruim: dict) -> None:
     assert client.post("/api/v1/voz-clinica/biofeedback", json=_sessao(**ruim)).status_code == 422
+
+
+def test_jogo_salva_no_historico(client: httpx.Client) -> None:
+    paciente = f"Jogo {uuid.uuid4().hex[:6]}"
+    corpo = {"paciente": paciente, "jogo": "sopro", "duracao_s": 25.0, "pontuacao_pct": 80.0,
+             "detalhes": {"meta_s": 10.0, "melhor_s": 8.0}}
+    r = client.post("/api/v1/voz-clinica/jogos", json=corpo)
+    assert r.status_code == 200, r.text
+    itens = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"]
+    assert itens[0]["tipo"] == "jogo"
+    assert itens[0]["resultado"]["detalhes"]["melhor_s"] == 8.0
+
+
+@pytest.mark.parametrize("ruim", [
+    {"jogo": "xadrez"},
+    {"pontuacao_pct": 101},
+    {"detalhes": {"meta s": 1}},
+    {"detalhes": {f"k{i}": 1 for i in range(13)}},
+])
+def test_jogo_rejeita_resultado_invalido(client: httpx.Client, ruim: dict) -> None:
+    corpo = {"paciente": "X", "jogo": "sopro", "duracao_s": 10, "pontuacao_pct": 50, "detalhes": {}, **ruim}
+    assert client.post("/api/v1/voz-clinica/jogos", json=corpo).status_code == 422

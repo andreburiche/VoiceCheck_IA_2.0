@@ -1,7 +1,7 @@
 # VoiceCheck IA 2.0 — Avaliação clínica da voz
 
 **Data:** 2026-10-29
-**Rota no site:** `/voz-clinica` (menu "Avaliação clínica")
+**Rota no site:** `/voz-clinica` (menu "Avaliação clínica"), com abas Avaliação · Biofeedback · Jogos; o histórico do paciente fica sempre abaixo
 **API:** `/api/v1/voz-clinica`
 
 A versão 2.0 junta, numa só tela, o que hoje exige vários programas:
@@ -22,6 +22,7 @@ paciente. Biofeedback e jogos (VoxGames, Voice Analyst) ficam para a fase 2.
 | Evolução | Um gráfico por medida (jitter, shimmer, HNR, CPPS, IDV-10, QVV, GRBASI G), até 12 sessões, com linha da nota de corte nos protocolos e valor de cada sessão ao passar o mouse ou focar pelo teclado. Aparece a partir da 2ª avaliação do mesmo tipo |
 | Relatório em PDF | Botão no histórico: análise acústica e protocolos mais recentes, gráficos de evolução, todas as sessões, profissional e observações (opcionais). HTML A4 impresso pelo navegador ("Salvar como PDF"), mesmo mecanismo dos relatórios do VoiceCheck |
 | Biofeedback ao vivo | Pitch (nota e Hz) e volume (dBFS) na tela enquanto o paciente fala ou canta, com faixas-alvo definidas pelo profissional, indicação "abaixo / dentro / acima" escrita (não só cor), curva dos últimos 8 s e % do tempo na faixa. Pitch por YIN a ~60 leituras/s com mediana de 3 contra leituras isoladas. O áudio não sai do aparelho; ao parar, o resumo da sessão pode ser salvo no histórico (tipo `biofeedback`) e entra na evolução |
+| Jogos de terapia | Quatro jogos próprios (não copiam nomes, visual nem mecânica de produtos comerciais): **Altitude** (o volume controla a altura; seguir patamares), **Trilha** (o pitch controla a altura; patamares e deslizes), **Sopro longo** (sustentar a voz até a meta) e **Surdo ou sonoro** (s/z, f/v, ch/j). Faixas, duração, dificuldade e meta definidas pelo profissional. Resultado de cada partida pode ser salvo (tipo `jogo`) e tem curva própria na evolução |
 
 Os textos das perguntas não estão no sistema: o profissional lê da versão
 validada impressa (ou inclui depois de obter licença).
@@ -39,6 +40,8 @@ apps/web/components/voz-clinica/grafico-evolucao.tsx   gráfico de uma medida
 apps/web/lib/voz-clinica-relatorio.ts                  relatório A4 (HTML + SVG estático)
 apps/web/lib/voz-clinica-biofeedback.ts                YIN ao vivo, dBFS, resumo da sessão
 apps/web/components/voz-clinica/biofeedback-ao-vivo.tsx tela do biofeedback (canvas)
+apps/web/lib/voz-clinica-jogos.ts                      lógica dos jogos e classificação surdo/sonoro
+apps/web/components/voz-clinica/jogos-terapia.tsx      tela dos jogos
         │  multipart / JSON, cookie de sessão + CSRF
         ▼
 apps/api/app/api/v1/voz_clinica.py                     rotas
@@ -57,6 +60,7 @@ Todo número é calculado no servidor; o navegador só envia o WAV ou as respost
 | `POST /analisar` | multipart: `file` (WAV), `f0_min`, `f0_max`, `motor`, `paciente` | se `paciente` |
 | `POST /protocolos/{idv10\|qvv\|grbasi}` | `{"respostas": ..., "paciente": ...}` | se `paciente` |
 | `POST /biofeedback` | resumo da sessão (faixas, % na faixa, pitch p10/mediana/p90, dB mediano) com `paciente` | sim |
+| `POST /jogos` | resultado da partida (`jogo`, pontuação, detalhes numéricos) com `paciente` | sim |
 | `POST /dsi` | `{"tmf_s", "f0_alta_hz", "i_baixa_db_spl", "jitter_pct"}` | não |
 | `GET /pacientes` | — | — |
 | `GET /avaliacoes?paciente=` | — | — |
@@ -100,10 +104,11 @@ no Docker com os comandos acima.
 - Intensidade sai em dBFS (relativa). dB SPL exige microfone calibrado.
 - Dados de saúde: o nome do paciente e os resultados são dados sensíveis (LGPD).
 - A análise não é diagnóstico médico.
+- **Surdo ou sonoro**: a classificação (pitch, energia abaixo de 400 Hz e cruzamentos por zero) foi validada só com sinais sintéticos. Testar com gravações reais de crianças e adultos antes de usar a pontuação clinicamente; os limiares estão em `voz-clinica-jogos.ts`.
 
 ## Próximas fases
 
 1. ~~Gráfico de evolução por paciente~~ (feito).
 2. ~~Relatório PDF da avaliação clínica~~ (feito).
-3. ~~Biofeedback ao vivo~~ (feito). Próximo: jogos (intensidade, frequência,
-   tempo de fonação, surdo/sonoro) usando o mesmo motor ao vivo.
+3. ~~Biofeedback ao vivo~~ e ~~jogos de terapia~~ (feitos).
+4. Próximos: prática em casa (celular, offline), fonetograma, anamnese e EASE-BR, espectrograma.

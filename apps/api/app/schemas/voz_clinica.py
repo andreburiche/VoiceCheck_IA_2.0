@@ -7,7 +7,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-TipoAvaliacao = Literal["acustica", "idv10", "qvv", "grbasi", "biofeedback"]
+TipoAvaliacao = Literal["acustica", "idv10", "qvv", "grbasi", "biofeedback", "jogo"]
+JogoId = Literal["altitude", "trilha", "sopro", "surdo-sonoro"]
 
 
 class ProtocoloEntrada(BaseModel):
@@ -64,6 +65,28 @@ class BiofeedbackEntrada(BaseModel):
     def _coerente(self) -> "BiofeedbackEntrada":
         if self.fonacao_s > self.duracao_s + 0.5:
             raise ValueError("tempo com voz maior que a duração da sessão")
+        return self
+
+
+class JogoEntrada(BaseModel):
+    """Resultado de uma partida de jogo de terapia (medido no navegador)."""
+
+    paciente: str = Field(min_length=1, max_length=120)
+    jogo: JogoId
+    duracao_s: float = Field(ge=0, le=3600)
+    pontuacao_pct: float = Field(ge=0, le=100)
+    #: Números do jogo (meta, melhor tempo, acertos…): até 12 chaves curtas.
+    detalhes: dict[str, float] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _detalhes(self) -> "JogoEntrada":
+        if len(self.detalhes) > 12:
+            raise ValueError("detalhes demais")
+        for chave, valor in self.detalhes.items():
+            if not (1 <= len(chave) <= 32) or not chave.replace("_", "").isalnum():
+                raise ValueError(f"chave inválida em detalhes: {chave!r}")
+            if valor != valor or abs(valor) > 1e6:  # NaN ou absurdo
+                raise ValueError(f"valor inválido em detalhes: {chave}")
         return self
 
 

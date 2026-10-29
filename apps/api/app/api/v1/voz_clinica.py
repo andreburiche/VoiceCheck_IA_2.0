@@ -23,6 +23,7 @@ from app.models import ClinicalEvaluation
 from app.schemas.voz_clinica import (
     AvaliacaoLista,
     BiofeedbackEntrada,
+    JogoEntrada,
     AvaliacaoOut,
     DsiEntrada,
     PacienteLista,
@@ -133,6 +134,17 @@ def salvar_biofeedback(entrada: BiofeedbackEntrada, user: CurrentUser, db: DbSes
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente para salvar a sessão")
     resultado = {**entrada.model_dump(exclude={"paciente"}), "fonte": "navegador"}
     salvo = _salvar(db, user, nome, "biofeedback", resultado)
+    return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
+
+
+@router.post("/jogos", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
+def salvar_jogo(entrada: JogoEntrada, user: CurrentUser, db: DbSession) -> ResultadoSalvo:
+    """Guarda o resultado de uma partida no histórico do paciente."""
+    nome = _paciente(entrada.paciente)
+    if nome is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente para salvar a partida")
+    resultado = {**entrada.model_dump(exclude={"paciente"}), "fonte": "navegador"}
+    salvo = _salvar(db, user, nome, "jogo", resultado)
     return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
 
 

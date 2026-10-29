@@ -3,7 +3,8 @@
  * Uma série por medida; cada uma vira um gráfico próprio (escalas diferentes
  * nunca dividem o mesmo eixo).
  */
-import type { AnaliseAcustica, Avaliacao, ResultadoBiofeedback, ResultadoGrbasi, ResultadoIdv10, ResultadoQvv } from "@/lib/voz-clinica-api";
+import type { AnaliseAcustica, Avaliacao, ResultadoBiofeedback, ResultadoGrbasi, ResultadoIdv10, ResultadoJogoSalvo, ResultadoQvv } from "@/lib/voz-clinica-api";
+import { JOGOS, type JogoId } from "@/lib/voz-clinica-jogos";
 
 export type PontoEvolucao = { data: string; valor: number };
 
@@ -30,6 +31,8 @@ type Extrator = {
   dominio: [number, number] | null;
   corte?: { valor: number; rotulo: string };
   tipo: Avaliacao["tipo"];
+  /** Filtro extra dentro do tipo (ex.: um jogo específico). */
+  filtro?: (a: Avaliacao) => boolean;
   valor: (a: Avaliacao) => number | null | undefined;
 };
 
@@ -78,6 +81,17 @@ const EXTRATORES: Extrator[] = [
     leitura: "Parte do tempo com voz dentro da faixa de pitch definida em cada sessão (as faixas podem mudar entre sessões).",
     valor: (a) => (a.resultado as ResultadoBiofeedback).dentro_pitch_pct,
   },
+  ...(Object.keys(JOGOS) as JogoId[]).map((jogo): Extrator => ({
+    chave: `jogo_${jogo}`,
+    titulo: `Jogo — ${JOGOS[jogo].titulo}`,
+    unidade: "%",
+    casas: 1,
+    tipo: "jogo",
+    dominio: [0, 100],
+    leitura: `Pontuação por partida (${JOGOS[jogo].treina.toLowerCase()}); a dificuldade pode mudar entre partidas.`,
+    filtro: (a) => (a.resultado as ResultadoJogoSalvo).jogo === jogo,
+    valor: (a) => (a.resultado as ResultadoJogoSalvo).pontuacao_pct,
+  })),
 ];
 
 /** Máximo de pontos por gráfico (as sessões mais recentes). */
@@ -87,9 +101,9 @@ export const MAX_PONTOS = 12;
 export function seriesEvolucao(avaliacoes: Avaliacao[]): SerieEvolucao[] {
   const ordenadas = [...avaliacoes].sort((a, b) => a.criado_em.localeCompare(b.criado_em));
   const saida: SerieEvolucao[] = [];
-  for (const { tipo, valor, ...meta } of EXTRATORES) {
+  for (const { tipo, valor, filtro, ...meta } of EXTRATORES) {
     const pontos = ordenadas
-      .filter((a) => a.tipo === tipo)
+      .filter((a) => a.tipo === tipo && (!filtro || filtro(a)))
       .map((a) => ({ data: a.criado_em, valor: valor(a) }))
       .filter((p): p is PontoEvolucao => typeof p.valor === "number" && Number.isFinite(p.valor))
       .slice(-MAX_PONTOS);
