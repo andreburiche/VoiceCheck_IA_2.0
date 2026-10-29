@@ -3,7 +3,7 @@
  * Uma série por medida; cada uma vira um gráfico próprio (escalas diferentes
  * nunca dividem o mesmo eixo).
  */
-import type { AnaliseAcustica, Avaliacao, ResultadoGrbasi, ResultadoIdv10, ResultadoQvv } from "@/lib/voz-clinica-api";
+import type { AnaliseAcustica, Avaliacao, ResultadoBiofeedback, ResultadoGrbasi, ResultadoIdv10, ResultadoQvv } from "@/lib/voz-clinica-api";
 
 export type PontoEvolucao = { data: string; valor: number };
 
@@ -72,6 +72,11 @@ const EXTRATORES: Extrator[] = [
     chave: "grbasi_g", titulo: "GRBASI — grau geral (G)", unidade: "", casas: 0, tipo: "grbasi", dominio: [0, 3],
     leitura: "0 normal, 1 leve, 2 moderado, 3 intenso.",
     valor: (a) => (a.resultado as ResultadoGrbasi).parametros?.G?.nota,
+  },
+  {
+    chave: "bio_pitch", titulo: "Biofeedback — pitch na faixa", unidade: "%", casas: 1, tipo: "biofeedback", dominio: [0, 100],
+    leitura: "Parte do tempo com voz dentro da faixa de pitch definida em cada sessão (as faixas podem mudar entre sessões).",
+    valor: (a) => (a.resultado as ResultadoBiofeedback).dentro_pitch_pct,
   },
 ];
 

@@ -21,6 +21,7 @@ paciente. Biofeedback e jogos (VoxGames, Voice Analyst) ficam para a fase 2.
 | Histórico | Lista por paciente, mais recente primeiro, com exclusão confirmada |
 | Evolução | Um gráfico por medida (jitter, shimmer, HNR, CPPS, IDV-10, QVV, GRBASI G), até 12 sessões, com linha da nota de corte nos protocolos e valor de cada sessão ao passar o mouse ou focar pelo teclado. Aparece a partir da 2ª avaliação do mesmo tipo |
 | Relatório em PDF | Botão no histórico: análise acústica e protocolos mais recentes, gráficos de evolução, todas as sessões, profissional e observações (opcionais). HTML A4 impresso pelo navegador ("Salvar como PDF"), mesmo mecanismo dos relatórios do VoiceCheck |
+| Biofeedback ao vivo | Pitch (nota e Hz) e volume (dBFS) na tela enquanto o paciente fala ou canta, com faixas-alvo definidas pelo profissional, indicação "abaixo / dentro / acima" escrita (não só cor), curva dos últimos 8 s e % do tempo na faixa. Pitch por YIN a ~60 leituras/s com mediana de 3 contra leituras isoladas. O áudio não sai do aparelho; ao parar, o resumo da sessão pode ser salvo no histórico (tipo `biofeedback`) e entra na evolução |
 
 Os textos das perguntas não estão no sistema: o profissional lê da versão
 validada impressa (ou inclui depois de obter licença).
@@ -36,6 +37,8 @@ apps/web/lib/voz-clinica-api.ts                        cliente + formatação
 apps/web/lib/voz-clinica-evolucao.ts                   séries, escala do eixo, variação
 apps/web/components/voz-clinica/grafico-evolucao.tsx   gráfico de uma medida
 apps/web/lib/voz-clinica-relatorio.ts                  relatório A4 (HTML + SVG estático)
+apps/web/lib/voz-clinica-biofeedback.ts                YIN ao vivo, dBFS, resumo da sessão
+apps/web/components/voz-clinica/biofeedback-ao-vivo.tsx tela do biofeedback (canvas)
         │  multipart / JSON, cookie de sessão + CSRF
         ▼
 apps/api/app/api/v1/voz_clinica.py                     rotas
@@ -44,7 +47,7 @@ apps/api/app/models/entities.py → ClinicalEvaluation   tabela clinical_evaluat
 apps/api/alembic/versions/20261029_0009_*.py           migração
 ```
 
-Todo número é calculado no servidor; o navegador só envia o WAV ou as respostas.
+Todo número é calculado no servidor; o navegador só envia o WAV ou as respostas. A exceção é o biofeedback: o áudio ao vivo não sai do aparelho, então o resumo é medido no navegador, validado no servidor (limites e coerência) e salvo com `fonte: "navegador"`.
 
 ### Rotas
 
@@ -53,6 +56,7 @@ Todo número é calculado no servidor; o navegador só envia o WAV ou as respost
 | `GET /status` | — | — |
 | `POST /analisar` | multipart: `file` (WAV), `f0_min`, `f0_max`, `motor`, `paciente` | se `paciente` |
 | `POST /protocolos/{idv10\|qvv\|grbasi}` | `{"respostas": ..., "paciente": ...}` | se `paciente` |
+| `POST /biofeedback` | resumo da sessão (faixas, % na faixa, pitch p10/mediana/p90, dB mediano) com `paciente` | sim |
 | `POST /dsi` | `{"tmf_s", "f0_alta_hz", "i_baixa_db_spl", "jitter_pct"}` | não |
 | `GET /pacientes` | — | — |
 | `GET /avaliacoes?paciente=` | — | — |
@@ -101,5 +105,5 @@ no Docker com os comandos acima.
 
 1. ~~Gráfico de evolução por paciente~~ (feito).
 2. ~~Relatório PDF da avaliação clínica~~ (feito).
-3. Biofeedback ao vivo (pitch e volume com metas de faixa) e jogos (intensidade,
-   frequência, tempo de fonação).
+3. ~~Biofeedback ao vivo~~ (feito). Próximo: jogos (intensidade, frequência,
+   tempo de fonação, surdo/sonoro) usando o mesmo motor ao vivo.

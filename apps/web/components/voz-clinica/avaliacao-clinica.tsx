@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { friendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
+import { BiofeedbackAoVivo } from "@/components/voz-clinica/biofeedback-ao-vivo";
 import { GraficoEvolucao } from "@/components/voz-clinica/grafico-evolucao";
 import { MAX_PONTOS, seriesEvolucao } from "@/lib/voz-clinica-evolucao";
 import { imprimirRelatorioClinico } from "@/lib/voz-clinica-relatorio";
@@ -620,6 +621,8 @@ export function AvaliacaoClinica() {
           ))}
         </section>
       </div>
+
+      <BiofeedbackAoVivo paciente={nome} aoSalvar={aoSalvar} />
 
       <Historico paciente={nome} versao={versao} />
     </div>

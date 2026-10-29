@@ -8,6 +8,7 @@ import {
   fixoBR,
   linhasAcusticas,
   numeroBR,
+  resumoAvaliacao,
   resumoProtocolo,
   type AnaliseAcustica,
   type Avaliacao,
@@ -176,7 +177,7 @@ function secaoSessoes(itens: Avaliacao[]): string {
         const p = r.perturbacao ?? {};
         resumo = `F0 ${fixo(r.f0?.media_hz, 1)} Hz · jitter ${fixo(p.jitter_local_pct, 2)} % · shimmer ${fixo(p.shimmer_local_pct, 2)} % · HNR ${fixo(r.ruido?.hnr_db, 1)} dB · CPPS ${fixo(r.cpps_db, 1)} dB`;
       } else {
-        resumo = resumoProtocolo(a.resultado as Parameters<typeof resumoProtocolo>[0]);
+        resumo = resumoAvaliacao(a);
       }
       return `<tr><td class="nowrap">${esc(dataHora(a.criado_em))}</td><td>${esc(ROTULO_TIPO[a.tipo])}</td><td>${esc(resumo)}</td></tr>`;
     })

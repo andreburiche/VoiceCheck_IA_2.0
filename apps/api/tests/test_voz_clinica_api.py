@@ -135,3 +135,33 @@ def test_dsi(client: httpx.Client) -> None:
     )
     assert r.status_code == 200, r.text
     assert r.json()["dsi"] == pytest.approx(4.59, abs=0.01)
+
+
+def _sessao(**extra) -> dict:
+    return {
+        "paciente": f"Bio {uuid.uuid4().hex[:6]}", "duracao_s": 30, "fonacao_s": 22.5,
+        "alvo_pitch_hz": {"min": 180, "max": 220}, "alvo_volume_dbfs": {"min": -30, "max": -12},
+        "dentro_pitch_pct": 71.2, "dentro_volume_pct": 88.0, "f0_p10_hz": 176.4, "f0_mediana_hz": 201.3,
+        "f0_p90_hz": 228.0, "db_mediano": -21.0, **extra,
+    }
+
+
+def test_biofeedback_salva_no_historico(client: httpx.Client) -> None:
+    corpo = _sessao()
+    r = client.post("/api/v1/voz-clinica/biofeedback", json=corpo)
+    assert r.status_code == 200, r.text
+    assert r.json()["avaliacao_id"]
+    assert r.json()["resultado"]["fonte"] == "navegador"
+    itens = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": corpo["paciente"]}).json()["items"]
+    assert [i["tipo"] for i in itens] == ["biofeedback"]
+    assert itens[0]["resultado"]["dentro_pitch_pct"] == 71.2
+
+
+@pytest.mark.parametrize("ruim", [
+    {"alvo_pitch_hz": {"min": 220, "max": 180}},
+    {"dentro_pitch_pct": 140},
+    {"fonacao_s": 90},
+    {"paciente": ""},
+])
+def test_biofeedback_rejeita_resumo_invalido(client: httpx.Client, ruim: dict) -> None:
+    assert client.post("/api/v1/voz-clinica/biofeedback", json=_sessao(**ruim)).status_code == 422

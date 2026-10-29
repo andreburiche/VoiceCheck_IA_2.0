@@ -1,8 +1,13 @@
 /** VoiceCheck IA 2.0 — cliente das rotas /api/v1/voz-clinica. */
 import { apiFetch } from "@/lib/api";
+import type { ResumoBiofeedback } from "@/lib/voz-clinica-biofeedback";
 
-export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi";
-export type Protocolo = Exclude<TipoAvaliacao, "acustica">;
+
+export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "biofeedback";
+export type Protocolo = "idv10" | "qvv" | "grbasi";
+
+/** Resumo de sessão de biofeedback salvo (medido no navegador). */
+export type ResultadoBiofeedback = ResumoBiofeedback & { fonte: "navegador" };
 
 export type AnaliseAcustica = {
   motor: "praat" | "interno";
@@ -68,7 +73,7 @@ export type Avaliacao = {
   paciente: string;
   tipo: TipoAvaliacao;
   motor: string | null;
-  resultado: AnaliseAcustica | ResultadoProtocolo;
+  resultado: AnaliseAcustica | ResultadoProtocolo | ResultadoBiofeedback;
   criado_em: string;
 };
 
@@ -104,6 +109,13 @@ export function calcularProtocolo(
   return apiFetch<Salvo<ResultadoProtocolo>>(`${BASE}/protocolos/${nome}`, {
     method: "POST",
     json: { respostas, paciente: paciente || null },
+  });
+}
+
+export function salvarBiofeedback(paciente: string, resumo: ResumoBiofeedback) {
+  return apiFetch<Salvo<ResultadoBiofeedback>>(`${BASE}/biofeedback`, {
+    method: "POST",
+    json: { paciente, ...resumo },
   });
 }
 
@@ -179,6 +191,15 @@ export function resumoProtocolo(r: ResultadoProtocolo): string {
 
 /** Resumo de uma avaliação salva (histórico do paciente). */
 export function resumoAvaliacao(a: Avaliacao): string {
+  if (a.tipo === "biofeedback") {
+    const r = a.resultado as ResultadoBiofeedback;
+    return [
+      `${fixoBR(r.fonacao_s, 1)} s com voz`,
+      `pitch na faixa ${fixoBR(r.dentro_pitch_pct, 1)}%`,
+      `volume na faixa ${fixoBR(r.dentro_volume_pct, 1)}%`,
+      `alvo ${fixoBR(r.alvo_pitch_hz.min, 0)}–${fixoBR(r.alvo_pitch_hz.max, 0)} Hz`,
+    ].join(" · ");
+  }
   if (a.tipo === "acustica") {
     const r = a.resultado as AnaliseAcustica;
     const p = r.perturbacao ?? {};
@@ -194,6 +215,7 @@ export function resumoAvaliacao(a: Avaliacao): string {
 
 export const ROTULO_TIPO: Record<TipoAvaliacao, string> = {
   acustica: "Análise acústica",
+  biofeedback: "Biofeedback",
   idv10: "IDV-10",
   qvv: "QVV",
   grbasi: "GRBASI",

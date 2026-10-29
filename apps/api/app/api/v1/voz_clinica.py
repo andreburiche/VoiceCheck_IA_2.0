@@ -22,6 +22,7 @@ from app.core.rate_limit import enforce_rate_limit
 from app.models import ClinicalEvaluation
 from app.schemas.voz_clinica import (
     AvaliacaoLista,
+    BiofeedbackEntrada,
     AvaliacaoOut,
     DsiEntrada,
     PacienteLista,
@@ -121,6 +122,17 @@ def calcular_protocolo(nome: str, entrada: ProtocoloEntrada, user: CurrentUser, 
     except ErroProtocolo as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     salvo = _salvar(db, user, _paciente(entrada.paciente), nome.lower(), resultado)
+    return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
+
+
+@router.post("/biofeedback", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
+def salvar_biofeedback(entrada: BiofeedbackEntrada, user: CurrentUser, db: DbSession) -> ResultadoSalvo:
+    """Guarda o resumo de uma sessão de biofeedback no histórico do paciente."""
+    nome = _paciente(entrada.paciente)
+    if nome is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente para salvar a sessão")
+    resultado = {**entrada.model_dump(exclude={"paciente"}), "fonte": "navegador"}
+    salvo = _salvar(db, user, nome, "biofeedback", resultado)
     return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
 
 
