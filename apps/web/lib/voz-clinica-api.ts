@@ -525,8 +525,10 @@ export function excluirPaciente(paciente: string) {
   );
 }
 
-export function listarAvaliacoes(paciente: string) {
-  return apiFetch<{ items: Avaliacao[] }>(`${BASE}/avaliacoes?paciente=${encodeURIComponent(paciente)}`);
+/** As 500 mais recentes do paciente; `tipo` traz só as daquele tipo (p. ex. todos os fonetogramas). */
+export function listarAvaliacoes(paciente: string, tipo?: TipoAvaliacao) {
+  const filtro = tipo ? `&tipo=${encodeURIComponent(tipo)}` : "";
+  return apiFetch<{ items: Avaliacao[] }>(`${BASE}/avaliacoes?paciente=${encodeURIComponent(paciente)}${filtro}`);
 }
 
 export function enviarMidia(paciente: string, arquivo: File, descricao?: string) {

@@ -38,6 +38,7 @@ from app.schemas.voz_clinica import (
     CargaEntrada,
     EggEntrada,
     NasalanciaEntrada,
+    TipoAvaliacao,
     SessaoEntrada,
     FonetogramaEntrada,
     JogoEntrada,
@@ -938,11 +939,15 @@ def excluir_paciente(request: Request, user: CurrentUser, db: DbSession, pacient
 
 
 @router.get("/avaliacoes", response_model=AvaliacaoLista)
-def listar_avaliacoes(user: CurrentUser, db: DbSession, paciente: str | None = None) -> AvaliacaoLista:
+def listar_avaliacoes(user: CurrentUser, db: DbSession, paciente: str | None = None,
+                      tipo: TipoAvaliacao | None = None) -> AvaliacaoLista:
+    """As 500 mais recentes; `tipo` filtra (p. ex. todos os fonetogramas, mesmo num histórico longo)."""
     stmt = select(ClinicalEvaluation).where(ClinicalEvaluation.owner_id == user.id)
     nome = _paciente(paciente)
     if nome is not None:
         stmt = stmt.where(ClinicalEvaluation.patient_name == nome)
+    if tipo is not None:
+        stmt = stmt.where(ClinicalEvaluation.kind == tipo)
     rows = db.scalars(stmt.order_by(ClinicalEvaluation.created_at.desc()).limit(500)).all()
     return AvaliacaoLista(items=[_saida(r) for r in rows])
 

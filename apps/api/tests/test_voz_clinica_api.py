@@ -282,7 +282,17 @@ def test_fonetograma_com_calibracao_sai_em_db_spl(client: httpx.Client) -> None:
     assert res["resumo_spl"] == {"db_min": 64.8, "db_max": 92.8, "deslocamento_db": 104.8}
     assert res["resumo"]["db_min"] == -40.0 and res["unidade_intensidade"] == "dBFS"  # pontos continuam em dBFS
     assert res["calibracao"]["ponderacao"] == "C" and res["calibracao"]["microfone"] == "USB Mic"
-    for ruim in ({"deslocamento_db": 500}, {"ponderacao": "B"}, {"distancia_cm": 0}, {"data": "2099-01-01T00:00:00Z"}):
+    # data sem fuso é gravada como UTC; filtro por tipo traz só os fonetogramas
+    r2 = client.post("/api/v1/voz-clinica/fonetograma", json={"paciente": paciente, "duracao_s": 20, "pontos": pontos,
+                                                               "calibracao": {**cal, "data": "2026-10-30T10:00:00"}})
+    assert r2.json()["resultado"]["calibracao"]["data"].startswith("2026-10-30T10:00:00") and r2.json()["resultado"]["calibracao"]["data"].endswith("Z")
+    client.post("/api/v1/voz-clinica/protocolos/idv10", json={"respostas": [1] * 10, "paciente": paciente})
+    so = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente, "tipo": "fonetograma"}).json()["items"]
+    assert len(so) == 2 and {i["tipo"] for i in so} == {"fonetograma"}
+    assert client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente, "tipo": "x"}).status_code == 422
+    # incoerente: 130 dB SPL com deslocamento 40 implicaria +90 dBFS no microfone
+    for ruim in ({"deslocamento_db": 500}, {"ponderacao": "B"}, {"distancia_cm": 0}, {"data": "2099-01-01T00:00:00Z"},
+                 {"deslocamento_db": 40, "referencia_db_spl": 130}, {"deslocamento_db": 150, "referencia_db_spl": 75}):
         corpo = {"paciente": paciente, "duracao_s": 20, "pontos": pontos, "calibracao": {**cal, **ruim}}
         assert client.post("/api/v1/voz-clinica/fonetograma", json=corpo).status_code == 422
     client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})

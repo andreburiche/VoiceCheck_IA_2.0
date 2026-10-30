@@ -68,14 +68,17 @@ class CalibracaoSpl(BaseModel):
     ponderacao: Literal["A", "C", "Z"]
     distancia_cm: float = Field(ge=5, le=100)
     microfone: str = Field(default="", max_length=120)
-    data: datetime
+    #: sem fuso = UTC (gravada sempre com fuso, para o relatório não mudar de dia)
+    data: DataUtc
 
     @model_validator(mode="after")
-    def _data(self) -> "CalibracaoSpl":
-        agora = datetime.now(timezone.utc)
-        quando = self.data if self.data.tzinfo else self.data.replace(tzinfo=timezone.utc)
-        if quando > agora + timedelta(days=1) or quando.year < 2000:
+    def _coerente(self) -> "CalibracaoSpl":
+        if self.data > datetime.now(timezone.utc) + timedelta(days=1) or self.data.year < 2000:
             raise ValueError("Data da calibração inválida")
+        # o dBFS medido na calibração (referência − deslocamento) tem de ser um sinal real, sem saturar
+        medido = self.referencia_db_spl - self.deslocamento_db
+        if not (-60 <= medido <= 0):
+            raise ValueError("Calibração incoerente: o nível medido no microfone ficaria fora de −60 a 0 dBFS")
         return self
 
 

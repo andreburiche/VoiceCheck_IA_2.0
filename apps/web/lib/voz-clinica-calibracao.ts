@@ -10,7 +10,17 @@
  * fica guardada neste navegador (é do equipamento, não do paciente).
  */
 
+import { SILENCIO_DBFS } from "@/lib/voz-clinica-biofeedback";
+
 export type Ponderacao = "A" | "C" | "Z";
+
+/**
+ * A intensidade só é registrada quando há voz detectada (acima de SILENCIO_DBFS). Uma "voz mais
+ * fraca" a menos de 2 dB desse piso pode ser, na verdade, ainda mais fraca: não serve de medida.
+ */
+export function noPisoDeDeteccao(dbfs: number | null | undefined): boolean {
+  return typeof dbfs === "number" && dbfs <= SILENCIO_DBFS + 2;
+}
 
 export type Calibracao = {
   /** dB SPL = dBFS + deslocamento. */
@@ -60,8 +70,12 @@ function percentil(ordenados: number[], p: number): number {
  * (ataque) e exige estabilidade: sem ela o número do decibelímetro não
  * corresponde ao que a tela mediu.
  */
-export function medirReferencia(leituras: number[], dt: number): ResultadoMedicao {
+export function medirReferencia(leituras: number[], dt: number, picos: number[] = []): ResultadoMedicao {
   const inicio = Math.ceil(0.5 / dt);
+  // saturação vista no PICO da forma de onda (o RMS de uma vogal ceifada fica bem abaixo de 0 dBFS)
+  if (picos.slice(inicio).some((p) => p >= 0.99)) {
+    return { ok: false, erro: "O sinal saturou (chegou ao máximo da escala). Baixe o ganho da interface ou afaste-se e repita." };
+  }
   const sons = leituras.slice(inicio).filter((v) => Number.isFinite(v) && v > -60);
   const duracao = sons.length * dt;
   if (duracao < MEDICAO_MINIMA_S) {

@@ -2,6 +2,7 @@
  * VoiceCheck IA 2.0 — protocolo de voz (puro, testável): resumo das medidas mais recentes
  * de cada parte da avaliação e sugestões de valores para o DSI.
  */
+import { noPisoDeDeteccao } from "@/lib/voz-clinica-calibracao";
 import {
   ROTULO_DDK,
   fixoBR,
@@ -48,8 +49,9 @@ function mesmoDia(a: string, b: string): boolean {
  *   três tentativas da vogal sustentada o máximo possível);
  * - F0-alta: nota mais aguda do fonetograma mais recente;
  * - jitter: análise acústica mais recente.
- * - I-baixa: menor intensidade do fonetograma mais recente feito com calibração (dB SPL);
- *   sem calibração não há sugestão (dBFS não serve para o DSI).
+ * - I-baixa: menor intensidade do fonetograma mais recente calibrado A 30 cm (como pede o DSI)
+ *   e acima do piso de detecção (perto do piso, a voz real pode ser mais fraca que o registrado);
+ *   sem isso não há sugestão (dBFS não serve para o DSI).
  */
 export function sugestoesDsi(itens: Avaliacao[]): SugestoesDsi {
   const s: SugestoesDsi = {};
@@ -70,7 +72,10 @@ export function sugestoesDsi(itens: Avaliacao[]): SugestoesDsi {
     const r = (campo.resultado as ResultadoFonetograma).resumo;
     s.f0_alta_hz = { valor: Math.round(r.hz_agudo as number), origem: `fonetograma de ${dia(campo.criado_em)} (${r.nota_aguda})` };
   }
-  const calibrado = maisRecente(itens, "fonetograma", (a) => (a.resultado as ResultadoFonetograma).resumo_spl?.db_min != null);
+  const calibrado = maisRecente(itens, "fonetograma", (a) => {
+    const f = a.resultado as ResultadoFonetograma;
+    return f.resumo_spl?.db_min != null && f.calibracao?.distancia_cm === 30 && !noPisoDeDeteccao(f.resumo?.db_min);
+  });
   if (calibrado) {
     const f = calibrado.resultado as ResultadoFonetograma;
     const cal = f.calibracao;

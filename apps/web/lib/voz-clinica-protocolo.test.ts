@@ -49,6 +49,20 @@ describe("sugestoesDsi", () => {
     expect(s.f0_alta_hz?.origem).toContain("25/10/2026");
   });
 
+  it("I-baixa: só calibrado a 30 cm (como pede o DSI) e fora do piso de detecção", () => {
+    const calibrado = (quando: string, distancia: number, dbfsMin: number) => av("fonetograma", quando, {
+      resumo: { nota_grave: "A2", nota_aguda: "E5", hz_grave: 110, hz_agudo: 659.3, extensao_st: 31, db_min: dbfsMin },
+      calibracao: { deslocamento_db: 105, referencia_db_spl: 75, ponderacao: "C", distancia_cm: distancia, microfone: "", data: "2026-10-20T12:00:00Z" },
+      resumo_spl: { db_min: dbfsMin + 105, db_max: 95, deslocamento_db: 105 },
+    });
+    expect(sugestoesDsi([calibrado("2026-10-20T13:00:00Z", 10, -50)]).i_baixa_db_spl).toBeUndefined(); // 10 cm: uns 9,5 dB a mais
+    expect(sugestoesDsi([calibrado("2026-10-20T13:00:00Z", 30, -54.5)]).i_baixa_db_spl).toBeUndefined(); // no piso de −55 dBFS
+    // o mais recente não serve (10 cm); vale o anterior, a 30 cm
+    const s = sugestoesDsi([calibrado("2026-10-25T13:00:00Z", 10, -50), calibrado("2026-10-20T13:00:00Z", 30, -50)]);
+    expect(s.i_baixa_db_spl?.valor).toBe(55);
+    expect(s.i_baixa_db_spl?.origem).toContain("20/10/2026");
+  });
+
   it("sem histórico não sugere nada", () => {
     expect(sugestoesDsi([])).toEqual({});
   });

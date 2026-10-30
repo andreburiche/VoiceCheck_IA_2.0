@@ -45,6 +45,14 @@ describe("comparação de fonetogramas", () => {
     expect(l["Voz mais forte"]!.depois).toBe("75,0 dB SPL");
   });
 
+  it("os dois calibrados, mas a distâncias diferentes: dB SPL com aviso", () => {
+    const a = campo([60], -40, -20, 100);
+    const b = { ...campo([60], -40, -20, 100), calibracao: { ...CAL(100), distancia_cm: 15 } };
+    const c = compararCampos(a, b);
+    expect(c.unidade).toBe("dB SPL");
+    expect(c.aviso).toMatch(/30 cm, ponderação C × 15 cm, ponderação C/);
+  });
+
   it("só um calibrado: volta a dBFS e avisa", () => {
     const c = compararCampos(campo([60], -40, -20, 100), campo([60], -40, -20));
     expect(c.unidade).toBe("dBFS");

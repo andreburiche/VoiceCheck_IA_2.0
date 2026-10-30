@@ -225,6 +225,17 @@ Um revisor separado leu mídias, lote, manipulação, sessões, nasalância, EGG
 - **Microfone aceso na nasalância:** falha ao montar a captura, clique duplo ou tela fechada durante o pedido de permissão agora param o microfone e fecham o AudioContext; o botão fica desativado enquanto abre.
 - Menores: perceptiva com valor que não é texto → 400 (era 500); `/manipular` confere a faixa de F0 (30 a 1200 Hz); AudioContext fechado quando o arquivo está corrompido (nasalância e EGG); URL do download da mídia revogada se o cartão sai da tela; o servidor recusa resumos impossíveis de nasalância e EGG (desvio-padrão acima de 50 %, mais quadros ou ciclos do que cabem na duração).
 
+## Quarta revisão independente (30/10/2026) — calibração em dB SPL e comparação de campos
+
+Corrigido:
+
+- **I-baixa do DSI (alta):** só é sugerida de fonetograma calibrado **a 30 cm** (como pede o DSI de Wuyts) e com a voz mais fraca acima do piso de detecção; antes, uma calibração a 10 cm subestimava o DSI em ~2,5 pontos.
+- **Saturação na calibração:** conferida pelo pico da forma de onda (o RMS de uma vogal ceifada fica abaixo de −1 dBFS e passava).
+- **Comparação de campos:** com calibrações a distâncias ou ponderações diferentes, a tela e os relatórios avisam que parte da diferença vem disso.
+- **Piso de detecção:** o fonetograma avisa quando a voz mais fraca ficou no limite (−55 dBFS + deslocamento): a real pode ser menor.
+- **Servidor:** calibração incoerente recusada (o nível medido, referência − deslocamento, tem de ficar entre −60 e 0 dBFS); data sem fuso gravada como UTC.
+- Menores: o fonetograma usa a calibração do início do campo (e avisa se ela mudou depois); "Começar" fica desativado enquanto a calibração mede; a medição usa o relógio da página (não trava com o AudioContext suspenso); o relatório busca à parte todos os fonetogramas quando o histórico passa de 500 registros (`GET /avaliacoes?tipo=`).
+
 ## Rodar a v2 isolada no computador
 
 `infra/docker-compose.v2-local.yml` sobe site (http://localhost:3100), API (http://localhost:8110), MySQL e Redis

@@ -79,11 +79,13 @@ export function UnidadeIntensidade({ calibracao, usarSpl, aoMudar, desativado, t
  * Calibração do microfone com decibelímetro: o profissional sustenta uma vogal,
  * a tela mede o dBFS por 4 s e ele digita o nível que o aparelho mostrou.
  */
-export function CalibracaoSpl({ calibracao, microfoneAtual, ocupado, aoMudar }: {
+export function CalibracaoSpl({ calibracao, microfoneAtual, ocupado, aoMudar, aoMedir }: {
   calibracao: Calibracao | null;
   microfoneAtual: string | null;
   ocupado: boolean;
   aoMudar: (c: Calibracao | null) => void;
+  /** Avisa quem contém a calibração que o microfone está aberto para medir (não grave ao mesmo tempo). */
+  aoMedir?: (medindo: boolean) => void;
 }) {
   const id = useId();
   const [medindo, setMedindo] = useState(false);
@@ -112,6 +114,11 @@ export function CalibracaoSpl({ calibracao, microfoneAtual, ocupado, aoMudar }: 
     return () => { montado.current = false; fechar(); };
   }, []);
 
+  const avisarMedindo = useRef(aoMedir);
+  avisarMedindo.current = aoMedir;
+  useEffect(() => { avisarMedindo.current?.(medindo); }, [medindo]);
+  useEffect(() => () => avisarMedindo.current?.(false), []);
+
   async function medir() {
     if (abrindo.current || mic.current) return;
     abrindo.current = true;
@@ -131,17 +138,22 @@ export function CalibracaoSpl({ calibracao, microfoneAtual, ocupado, aoMudar }: 
     const nome = m.stream.getAudioTracks()[0]?.label ?? "";
     const buffer = new Float32Array(m.analisador.fftSize);
     const leituras: number[] = [];
-    const inicio = m.ctx.currentTime;
+    const picos: number[] = [];
+    // relógio da página: com o AudioContext suspenso, currentTime pararia e a medição nunca terminaria
+    const inicio = performance.now();
     const passo = () => {
       if (mic.current !== m) return;
       m.analisador.getFloatTimeDomainData(buffer);
       leituras.push(nivelDbfs(buffer));
-      const t = m.ctx.currentTime - inicio;
+      let pico = 0;
+      for (let i = 0; i < buffer.length; i++) pico = Math.max(pico, Math.abs(buffer[i]!));
+      picos.push(pico);
+      const t = (performance.now() - inicio) / 1000;
       setProgresso(Math.min(1, t / DURACAO_MEDICAO_S));
       if (t < DURACAO_MEDICAO_S) { quadro.current = requestAnimationFrame(passo); return; }
       fechar();
       setMedindo(false);
-      const r = medirReferencia(leituras, t / Math.max(1, leituras.length));
+      const r = medirReferencia(leituras, t / Math.max(1, leituras.length), picos);
       if (!r.ok) { setErro(r.erro); return; }
       setMedicao({ dbfs: r.dbfs, variacao_db: r.variacao_db, microfone: nome });
     };

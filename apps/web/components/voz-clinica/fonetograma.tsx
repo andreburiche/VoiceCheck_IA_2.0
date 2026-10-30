@@ -4,6 +4,7 @@ import { Mic, Pause, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { CalibracaoSpl, useCalibracao } from "@/components/voz-clinica/calibracao-spl";
+import { noPisoDeDeteccao, type Calibracao } from "@/lib/voz-clinica-calibracao";
 import { Button } from "@/components/ui/button";
 import { friendlyError } from "@/lib/errors";
 import { hzToMidiFloat, midiToNoteName } from "@/lib/pitch-math";
@@ -87,8 +88,15 @@ export function Fonetograma({ paciente, aoSalvar }: { paciente: string; aoSalvar
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
   const [suportado, setSuportado] = useState(true);
-  const { calibracao, setCalibracao, usarSpl, setUsarSpl, desloc, unidade } = useCalibracao();
+  const { calibracao: calibracaoAtual, setCalibracao, usarSpl, setUsarSpl } = useCalibracao();
   const [microfone, setMicrofone] = useState<string | null>(null);
+  const [medindoCalibracao, setMedindoCalibracao] = useState(false);
+  // a calibração que vale é a do INÍCIO do campo: os pontos já gravados foram medidos com aquele ganho
+  const [calibracaoDoCampo, setCalibracaoDoCampo] = useState<Calibracao | null | undefined>(undefined);
+  const calibracao = calibracaoDoCampo === undefined ? calibracaoAtual : calibracaoDoCampo;
+  const calibracaoMudou = calibracaoDoCampo !== undefined && (calibracaoDoCampo?.data ?? null) !== (calibracaoAtual?.data ?? null);
+  const desloc = calibracao && usarSpl ? calibracao.deslocamento_db : 0;
+  const unidade = desloc ? "dB SPL" : "dBFS";
   const emUnidade = (dbfs: number) => Math.round((dbfs + desloc) * 10) / 10;
 
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -126,8 +134,9 @@ export function Fonetograma({ paciente, aoSalvar }: { paciente: string; aoSalvar
   async function gravar() {
     setErro(null);
     setSalvo(false);
-    if (abrindo.current || audio.current) return; // dois toques não abrem dois microfones
+    if (abrindo.current || audio.current || medindoCalibracao) return; // dois toques não abrem dois microfones
     abrindo.current = true;
+    if (mapa.current.size === 0) setCalibracaoDoCampo(calibracaoAtual);
     try {
       if (!window.isSecureContext) throw new Error("O microfone só funciona em https:// ou em http://localhost.");
       const mic = await abrirMicrofoneAoVivo(() => montado.current);
@@ -172,6 +181,7 @@ export function Fonetograma({ paciente, aoSalvar }: { paciente: string; aoSalvar
 
   function limpar() {
     mapa.current = new Map();
+    setCalibracaoDoCampo(undefined);
     duracaoRef.current = 0;
     setPontos([]);
     setDuracao(0);
@@ -220,13 +230,23 @@ export function Fonetograma({ paciente, aoSalvar }: { paciente: string; aoSalvar
           Mostrar e salvar em dB SPL (calibrado)
         </label>
       ) : null}
-      <CalibracaoSpl calibracao={calibracao} microfoneAtual={microfone} ocupado={gravando} aoMudar={setCalibracao} />
+      <CalibracaoSpl calibracao={calibracaoAtual} microfoneAtual={microfone} ocupado={gravando} aoMudar={setCalibracao} aoMedir={setMedindoCalibracao} />
+      {calibracaoMudou ? (
+        <p className="mt-2 text-xs text-signal-warn" data-testid="vc2-campo-calibracao-mudou">
+          A calibração mudou depois do início deste campo. Os pontos já gravados seguem com a calibração anterior; para usar a nova, toque em Recomeçar.
+        </p>
+      ) : null}
+      {desloc && r.db_min !== null && noPisoDeDeteccao(r.db_min) ? (
+        <p className="mt-2 text-xs text-signal-warn" data-testid="vc2-campo-piso">
+          A voz mais fraca ficou no limite de detecção ({fixoBR(emUnidade(r.db_min), 0)} dB SPL): a real pode ser ainda mais fraca. Aumente o ganho da interface e recalibre para medir vozes mais fracas.
+        </p>
+      ) : null}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {gravando ? (
           <Button type="button" variant="danger" onClick={pausar} data-testid="vc2-campo-pausar"><Pause className="h-4 w-4" aria-hidden /> Pausar</Button>
         ) : (
-          <Button type="button" onClick={() => void gravar()} disabled={!suportado} data-testid="vc2-campo-gravar">
+          <Button type="button" onClick={() => void gravar()} disabled={!suportado || medindoCalibracao} data-testid="vc2-campo-gravar">
             <Mic className="h-4 w-4" aria-hidden /> {pontos.length ? "Continuar gravando" : "Começar"}
           </Button>
         )}

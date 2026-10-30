@@ -23,7 +23,13 @@ export type UnidadeComparacao = { unidade: "dB SPL" | "dBFS"; aviso: string | nu
 export function unidadeDaComparacao(a: ResultadoFonetograma, b: ResultadoFonetograma): UnidadeComparacao {
   const ca = a.resumo_spl != null && a.calibracao != null;
   const cb = b.resumo_spl != null && b.calibracao != null;
-  if (ca && cb) return { unidade: "dB SPL", aviso: null };
+  if (ca && cb) {
+    const da = a.calibracao!, db = b.calibracao!;
+    if (da.distancia_cm !== db.distancia_cm || da.ponderacao !== db.ponderacao) {
+      return { unidade: "dB SPL", aviso: `As calibrações foram feitas em condições diferentes (${da.distancia_cm} cm, ponderação ${da.ponderacao} × ${db.distancia_cm} cm, ponderação ${db.ponderacao}): parte da diferença de intensidade pode vir só disso (dobrar a distância tira cerca de 6 dB). A extensão em semitons vale sempre.` };
+    }
+    return { unidade: "dB SPL", aviso: null };
+  }
   if (ca || cb) {
     return { unidade: "dBFS", aviso: "Só um dos fonetogramas foi feito com o microfone calibrado: a intensidade é comparada em dBFS, o que só vale com o mesmo microfone, ganho e distância." };
   }

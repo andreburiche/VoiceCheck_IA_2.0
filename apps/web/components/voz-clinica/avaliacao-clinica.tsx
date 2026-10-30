@@ -579,8 +579,25 @@ function Evolucao({ itens }: { itens: Avaliacao[] }) {
   );
 }
 
-function Relatorio({ paciente, itens }: { paciente: string; itens: Avaliacao[] }) {
+/** O histórico vem limitado às 500 avaliações mais recentes. */
+const LIMITE_HISTORICO = 500;
+
+function Relatorio({ paciente, itens: recentes }: { paciente: string; itens: Avaliacao[] }) {
   const [aberto, setAberto] = useState(false);
+  // histórico longo: os fonetogramas antigos (o "primeiro" do campo vocal) podem ter ficado fora
+  // da lista; buscados à parte ao abrir (a impressão precisa sair do clique, sem espera)
+  const [fonetogramas, setFonetogramas] = useState<Avaliacao[]>([]);
+  useEffect(() => {
+    if (!aberto || recentes.length < LIMITE_HISTORICO) return;
+    let vivo = true;
+    listarAvaliacoes(paciente, "fonetograma").then((r) => vivo && setFonetogramas(r.items)).catch(() => undefined);
+    return () => { vivo = false; };
+  }, [aberto, paciente, recentes.length]);
+  const itens = useMemo(() => {
+    if (!fonetogramas.length) return recentes;
+    const ids = new Set(recentes.map((a) => a.id));
+    return [...recentes, ...fonetogramas.filter((a) => !ids.has(a.id))];
+  }, [recentes, fonetogramas]);
   const [profissional, setProfissional] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [erro, setErro] = useState<string | null>(null);

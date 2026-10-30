@@ -8,6 +8,7 @@ import {
   criarCalibracao,
   guardarCalibracao,
   medirReferencia,
+  noPisoDeDeteccao,
   notaIntensidade,
   paraSpl,
 } from "@/lib/voz-clinica-calibracao";
@@ -44,6 +45,13 @@ describe("calibração dBFS → dB SPL", () => {
     expect(!instavel.ok && instavel.erro).toMatch(/instável/);
     const saturado = medirReferencia(vogal(-0.5, 3), DT);
     expect(!saturado.ok && saturado.erro).toMatch(/saturou/);
+    // vogal ceifada: o RMS fica abaixo de −1 dBFS, mas o pico bate no máximo da escala
+    const ceifada = vogal(-3, 3);
+    expect(medirReferencia(ceifada, DT).ok).toBe(true);
+    const r = medirReferencia(ceifada, DT, ceifada.map((_, i) => (i % 7 === 0 ? 1 : 0.7)));
+    expect(!r.ok && r.erro).toMatch(/saturou/);
+    expect(medirReferencia(ceifada, DT, ceifada.map(() => 0.9)).ok).toBe(true);
+    expect([noPisoDeDeteccao(-54), noPisoDeDeteccao(-52.9), noPisoDeDeteccao(null)]).toEqual([true, false, false]);
     // silêncio não conta como som
     expect(medirReferencia(vogal(-80, 5), DT).ok).toBe(false);
   });
