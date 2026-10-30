@@ -156,6 +156,18 @@ Praat 6.1.38 —, protocolos, fonetograma, anamnese, prática em casa e as 33 ro
 MySQL mostra: o `DATETIME` guarda só segundos, e duas avaliações salvas no mesmo segundo saíam em ordem aleatória no histórico e
 no relatório. `clinical_evaluations.created_at` agora é `DATETIME(6)` com padrão `CURRENT_TIMESTAMP(6)`.
 
+## Rodar a v2 isolada no computador
+
+`infra/docker-compose.v2-local.yml` sobe site (http://localhost:3100), API (http://localhost:8110), MySQL e Redis
+com nomes, portas e volumes próprios (`vc2l-*`), sem tocar nos contêineres nem no banco do projeto original:
+
+```bash
+docker compose -f infra/docker-compose.v2-local.yml up -d --build   # subir (a 1ª vez demora: pnpm install no contêiner)
+docker compose -f infra/docker-compose.v2-local.yml down            # parar (os dados ficam guardados)
+```
+
+Em desenvolvimento, a tela de login tem "Acesso rápido" com as contas de teste do projeto.
+
 ## Pontos a conferir antes do uso clínico
 
 - QVV **conferido** com o algoritmo original do V-RQOL (Hogikyan et al., J Voice 2000, Apêndice B): escore padrão
