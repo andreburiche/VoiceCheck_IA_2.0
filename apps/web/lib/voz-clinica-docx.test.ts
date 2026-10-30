@@ -10,6 +10,11 @@ const ITENS = [
     resultado: { numero: 1, data: "2026-10-27", objetivos: "Reduzir <tensão> & ruído", exercicios: "a", exercicios_lista: ["Canudo"], resposta: null, orientacoes: null, observacoes: null } },
 ] as unknown as Avaliacao[];
 
+const CAMPO = (id: string, quando: string, midis: number[], mn: number, mx: number) => ({ id, paciente: "Ana", tipo: "fonetograma", motor: null, criado_em: quando,
+  resultado: { duracao_s: 20, pontos: midis.map((midi) => ({ midi, min_db: mn, max_db: mx, tempo_s: 0.5 })), unidade_intensidade: "dBFS", fonte: "navegador",
+    resumo: { nota_grave: "C3", nota_aguda: "G4", hz_grave: 131, hz_agudo: 392, extensao_st: midis.length - 1, semitons_alcancados: midis.length, db_min: mn, db_max: mx, faixa_dinamica_media_db: mx - mn, area_st_db: 0 } } }) as unknown as Avaliacao;
+const faixaMidi = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+
 describe("relatório em Word (.docx)", () => {
   it("CRC-32 padrão e ZIP com assinaturas e diretório central", () => {
     expect(crc32(new TextEncoder().encode("123456789"))).toBe(0xcbf43926);
@@ -31,6 +36,13 @@ describe("relatório em Word (.docx)", () => {
     expect(c.includes("12 de 40 pontos")).toBe(true);
     expect(c.includes("Profissional: ")).toBe(true);
     expect(() => corpoDocx("Ana", [])).toThrow();
+  });
+
+  it("campo vocal: tabela do primeiro contra o mais recente", () => {
+    const c = corpoDocx("Ana", [...ITENS, CAMPO("f1", "2026-09-01T10:00:00Z", faixaMidi(48, 60), -40, -15), CAMPO("f2", "2026-10-01T10:00:00Z", faixaMidi(50, 67), -45, -12)]);
+    expect(c.includes("Campo vocal (fonetograma)")).toBe(true);
+    expect(c.includes("Notas novas: C#4–G4")).toBe(true);
+    expect(c.includes("+5 st")).toBe(true);
   });
 
   it("pacote com as partes do Word e nome de arquivo sem acento", () => {

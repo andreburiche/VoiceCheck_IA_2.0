@@ -18,6 +18,7 @@ import {
 } from "@/lib/voz-clinica-api";
 import { linhasAnamnese, type Anamnese } from "@/lib/voz-clinica-anamnese";
 import { notaIntensidade } from "@/lib/voz-clinica-calibracao";
+import { campoParaRelatorio } from "@/lib/voz-clinica-comparacao-campo";
 import type { OpcoesRelatorio } from "@/lib/voz-clinica-relatorio";
 
 // ---------------------------------------------------------------------------
@@ -220,6 +221,20 @@ export function corpoDocx(paciente: string, itens: Avaliacao[], opcoes: OpcoesRe
     })));
   }
 
+  const campo = campoParaRelatorio(itens);
+  if (campo) {
+    b.push(par("Campo vocal (fonetograma)", "Heading1"));
+    if (campo.comparacao && campo.primeiro) {
+      const cmp = campo.comparacao;
+      b.push(par(`Primeiro (${dataDia(campo.primeiro.criado_em)}) e mais recente (${dataDia(campo.ultimo.criado_em)}); intensidade em ${campo.unidade}.`));
+      b.push(tabela(["Medida", dataDia(campo.primeiro.criado_em), dataDia(campo.ultimo.criado_em), "Diferença"], cmp.linhas.map((l) => [l.medida, l.antes, l.depois, l.diferenca])));
+      b.push(par(`Notas novas: ${cmp.nGanhas ? cmp.ganhas : "nenhuma"}. Não alcançadas na mais recente: ${cmp.nPerdidas ? cmp.perdidas : "nenhuma"}.`));
+      if (cmp.aviso) b.push(par(cmp.aviso, "Nota"));
+    } else {
+      b.push(par({ rotulo: dataDia(campo.ultimo.criado_em), valor: resumoAvaliacao(campo.ultimo) }));
+    }
+  }
+
   const sessoes = ordenadas.filter((a) => a.tipo === "sessao").map((a) => a.resultado as ResultadoSessao);
   if (sessoes.length) {
     b.push(par("Sessões de terapia", "Heading1"));
@@ -255,7 +270,7 @@ export function corpoDocx(paciente: string, itens: Avaliacao[], opcoes: OpcoesRe
     b.push(par("Observações do profissional", "Heading1"));
     b.push(par(obs));
   }
-  b.push(par("Os gráficos de evolução estão no relatório em PDF.", "Nota"));
+  b.push(par("Os gráficos de evolução e do campo vocal estão no relatório em PDF.", "Nota"));
   b.push(par(notaIntensidade(itens.map((a) => a.resultado)), "Nota"));
   b.push(par("Notas de corte: IDV-10 7,5 e QVV 91,25 (Behlau et al., 2016). EASE-BR: total de 0 a 66 (Rocha et al., 2014), sem nota de corte publicada.", "Nota"));
   b.push(par("Este relatório apoia a avaliação do profissional e não é um diagnóstico médico.", "Nota"));

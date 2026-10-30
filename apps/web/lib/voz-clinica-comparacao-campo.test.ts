@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Avaliacao, ResultadoFonetograma } from "@/lib/voz-clinica-api";
-import { compararCampos, fonetogramasEmOrdem, pontosNaUnidade, trechosContiguos } from "@/lib/voz-clinica-comparacao-campo";
+import { campoParaRelatorio, compararCampos, fonetogramasEmOrdem, pontosNaUnidade, svgCampos, trechosContiguos } from "@/lib/voz-clinica-comparacao-campo";
 
 const CAL = (desloc: number) => ({ deslocamento_db: desloc, referencia_db_spl: 75, ponderacao: "C" as const, distancia_cm: 30, microfone: "", data: "2026-10-01T12:00:00Z" });
 
@@ -59,5 +59,18 @@ describe("comparação de fonetogramas", () => {
     const lista = fonetogramasEmOrdem([av("b", "2026-10-20T10:00:00Z", campo([60], -40, -20)), av("vazio", "2026-10-01T10:00:00Z", campo([], 0, 0)),
       av("a", "2026-10-10T10:00:00Z", campo([60], -40, -20))]);
     expect(lista.map((a) => a.id)).toEqual(["a", "b"]);
+  });
+
+  it("SVG do relatório: um polígono por trecho; nada com campo vazio", () => {
+    const p = pontosNaUnidade(campo([48, 49, 55], -40, -20), "dBFS");
+    const svg = svgCampos(p, null, "dBFS");
+    expect((svg.match(/<path /g) ?? []).length).toBe(1);
+    expect((svg.match(/Z/g) ?? []).length).toBe(2);
+    expect(svg.includes("NaN")).toBe(false);
+    expect(svgCampos([], null, "dBFS")).toBe("");
+    const av = (id: string, quando: string, r: unknown) => ({ id, paciente: "Ana", tipo: "fonetograma", motor: null, criado_em: quando, resultado: r }) as Avaliacao;
+    expect(campoParaRelatorio([])).toBeNull();
+    const rel = campoParaRelatorio([av("b", "2026-10-20T10:00:00Z", campo([60, 61], -40, -20, 100)), av("a", "2026-10-10T10:00:00Z", campo([60], -40, -20, 100))])!;
+    expect([rel.primeiro?.id, rel.ultimo.id, rel.unidade]).toEqual(["a", "b", "dB SPL"]);
   });
 });

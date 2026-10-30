@@ -20,6 +20,7 @@ import {
 } from "@/lib/voz-clinica-api";
 import { linhasAnamnese, type Anamnese } from "@/lib/voz-clinica-anamnese";
 import { notaIntensidade } from "@/lib/voz-clinica-calibracao";
+import { campoParaRelatorio } from "@/lib/voz-clinica-comparacao-campo";
 import { dataCurta, escalaY, seriesEvolucao, variacaoTexto, type SerieEvolucao } from "@/lib/voz-clinica-evolucao";
 import { BRAND, esc, omitEmpty, printHtmlDocument } from "@/lib/voicecheck-report-shared";
 import { ROTULO_QUADRANTE, pontosDdf, svgDdf } from "@/lib/voz-clinica-ddf";
@@ -210,6 +211,22 @@ function secaoDdf(itens: Avaliacao[]): string {
     <p class="muted">Inspirado no Diagrama de Desvio Fonatório (VoxMetria) e no diagrama de rouquidão (lingWAVES), sem ser o oficial (constantes não publicadas). Cada eixo vale 1 no limite de normalidade do VoxMetria (jitter 0,6 %, shimmer 6,5 %, GNE 0,5); na irregularidade conta a medida mais alterada.</p></div></div></section>`;
 }
 
+/** Campo vocal: o fonetograma mais recente, sobreposto ao primeiro quando há mais de um. */
+function secaoCampo(itens: Avaliacao[]): string {
+  const c = campoParaRelatorio(itens, 460);
+  if (!c) return "";
+  const legenda = c.primeiro
+    ? `Preenchido: ${esc(dataDia(c.ultimo.criado_em))}; tracejado: ${esc(dataDia(c.primeiro.criado_em))}. Intensidade em ${esc(c.unidade)}.`
+    : `Fonetograma de ${esc(dataDia(c.ultimo.criado_em))}. Intensidade em ${esc(c.unidade)}.`;
+  const tabelaComp = c.comparacao
+    ? `<table><thead><tr><th>Medida</th><th>${esc(dataDia(c.primeiro!.criado_em))}</th><th>${esc(dataDia(c.ultimo.criado_em))}</th><th>Diferença</th></tr></thead><tbody>${
+        c.comparacao.linhas.map((l) => `<tr><td>${esc(l.medida)}</td><td>${esc(l.antes)}</td><td>${esc(l.depois)}</td><td>${esc(l.diferenca)}</td></tr>`).join("")}</tbody></table>
+      <p class="muted">Notas novas: ${esc(c.comparacao.nGanhas ? c.comparacao.ganhas : "nenhuma")}. Não alcançadas na mais recente: ${esc(c.comparacao.nPerdidas ? c.comparacao.perdidas : "nenhuma")}.${c.comparacao.aviso ? ` ${esc(c.comparacao.aviso)}` : ""}</p>`
+    : `<p>${esc(resumoAvaliacao(c.ultimo))}</p>`;
+  return `<section class="quebra-ok"><h2>Campo vocal (fonetograma)</h2>
+    <div class="campo">${c.svg}</div><p class="muted">${legenda}</p>${tabelaComp}</section>`;
+}
+
 /** Tabela com todas as sessões (o que os gráficos mostram, em números). */
 function secaoSessoes(itens: Avaliacao[]): string {
   const ordenadas = [...itens].sort((a, b) => a.criado_em.localeCompare(b.criado_em));
@@ -262,6 +279,7 @@ function css(): string {
     .grafico figcaption { display: flex; justify-content: space-between; gap: 6pt; font-size: 8.5pt; margin-bottom: 2pt; }
     .grafico figcaption span { color: ${BRAND.muted}; font-family: ui-monospace, Consolas, monospace; font-size: 8pt; }
     .muted { color: ${BRAND.muted}; font-size: 8pt; }
+    .campo svg { max-width: 100%; height: auto; }
     .ddf { display: grid; grid-template-columns: 300px 1fr; gap: 12pt; page-break-inside: avoid; }
     .ddf-lista { margin: 4pt 0; padding-left: 0; list-style: none; }
     .avisos { margin: 2pt 0 0 14pt; padding: 0; color: ${BRAND.caution}; font-size: 8pt; }
@@ -316,6 +334,7 @@ export function montarRelatorioClinico(paciente: string, itens: Avaliacao[], opc
   ${secaoProtocolos(itens)}
   ${secaoEvolucao(itens)}
   ${secaoDdf(itens)}
+  ${secaoCampo(itens)}
   ${secaoSessoes(itens)}
   ${obs ? `<section><h2>Observações do profissional</h2><div class="obs">${esc(obs)}</div></section>` : ""}
   <div class="ftr">

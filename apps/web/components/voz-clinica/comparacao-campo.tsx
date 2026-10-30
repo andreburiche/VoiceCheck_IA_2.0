@@ -7,10 +7,10 @@ import { midiToNoteName } from "@/lib/pitch-math";
 import { cn } from "@/lib/utils";
 import { listarAvaliacoes, type Avaliacao, type ResultadoFonetograma } from "@/lib/voz-clinica-api";
 import {
+  caminhoCampo,
   compararCampos,
   fonetogramasEmOrdem,
   pontosNaUnidade,
-  trechosContiguos,
   unidadeDaComparacao,
   type PontoDb,
 } from "@/lib/voz-clinica-comparacao-campo";
@@ -28,15 +28,6 @@ function rotulo(a: Avaliacao, n: number): string {
   const r = (a.resultado as ResultadoFonetograma).resumo;
   const cal = (a.resultado as ResultadoFonetograma).calibracao ? " · dB SPL" : "";
   return `Fonetograma ${n} · ${data(a.criado_em)} · ${r?.nota_grave ?? "?"}–${r?.nota_aguda ?? "?"}${cal}`;
-}
-
-/** Área de um campo: um polígono por trecho de notas seguidas (máximos e, de volta, mínimos). */
-function caminho(trechos: PontoDb[][], x: (m: number) => number, y: (db: number) => number, meio: number): string {
-  return trechos.map((t) => {
-    const topo = t.map((p) => `${x(p.midi - meio)},${y(p.max_db)} ${x(p.midi + meio)},${y(p.max_db)}`).join(" ");
-    const base = [...t].reverse().map((p) => `${x(p.midi + meio)},${y(p.min_db)} ${x(p.midi - meio)},${y(p.min_db)}`).join(" ");
-    return `M${topo} L${base} Z`;
-  }).join(" ");
 }
 
 function Sobreposicao({ antes, depois, unidade }: { antes: PontoDb[]; depois: PontoDb[]; unidade: string }) {
@@ -67,8 +58,8 @@ function Sobreposicao({ antes, depois, unidade }: { antes: PontoDb[]; depois: Po
           <text x={x(m)} y={h - 8} textAnchor="middle" fontSize={11} fill="currentColor" className="text-ink-faint">{midiToNoteName(m)}</text>
         </g>
       ))}
-      <path d={caminho(trechosContiguos(depois), x, y, 0.5)} fill="var(--accent)" fillOpacity={0.25} stroke="var(--accent)" strokeWidth={2} data-testid="vc2-campo-depois" />
-      <path d={caminho(trechosContiguos(antes), x, y, 0.5)} fill="none" stroke="currentColor" strokeWidth={2} strokeDasharray="6 4" className="text-ink-muted" data-testid="vc2-campo-antes" />
+      <path d={caminhoCampo(depois, x, y)} fill="var(--accent)" fillOpacity={0.25} stroke="var(--accent)" strokeWidth={2} data-testid="vc2-campo-depois" />
+      <path d={caminhoCampo(antes, x, y)} fill="none" stroke="currentColor" strokeWidth={2} strokeDasharray="6 4" className="text-ink-muted" data-testid="vc2-campo-antes" />
       <text x={pe + 4} y={pt + 12} fontSize={11} fill="currentColor" className="text-ink-faint">{unidade}</text>
     </svg>
   );

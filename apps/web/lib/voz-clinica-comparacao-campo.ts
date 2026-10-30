@@ -123,3 +123,70 @@ export function compararCampos(antes: ResultadoFonetograma, depois: ResultadoFon
     nPerdidas: perdidas.length,
   };
 }
+
+/** Área de um campo para SVG: um polígono por trecho de notas seguidas (máximos e, de volta, mínimos). */
+export function caminhoCampo(pontos: PontoDb[], x: (m: number) => number, y: (db: number) => number, meio = 0.5): string {
+  return trechosContiguos(pontos).map((t) => {
+    const topo = t.map((p) => `${x(p.midi - meio).toFixed(1)},${y(p.max_db).toFixed(1)} ${x(p.midi + meio).toFixed(1)},${y(p.max_db).toFixed(1)}`).join(" ");
+    const base = [...t].reverse().map((p) => `${x(p.midi + meio).toFixed(1)},${y(p.min_db).toFixed(1)} ${x(p.midi - meio).toFixed(1)},${y(p.min_db).toFixed(1)}`).join(" ");
+    return `M${topo} L${base} Z`;
+  }).join(" ");
+}
+
+/**
+ * Campo vocal em SVG (texto) para o relatório impresso: o mais recente preenchido e, se houver,
+ * o anterior em linha tracejada. Só números e rótulos fixos entram no SVG.
+ */
+export function svgCampos(depois: PontoDb[], antes: PontoDb[] | null, unidade: string, largura = 520): string {
+  const todos = [...depois, ...(antes ?? [])].filter((p) => Number.isFinite(p.midi) && Number.isFinite(p.min_db) && Number.isFinite(p.max_db));
+  if (!todos.length) return "";
+  const w = largura, h = Math.round(largura * 0.42);
+  const pe = 40, pd = 8, pt = 8, pb = 22;
+  const mMin = Math.min(...todos.map((p) => p.midi)) - 1;
+  const mMax = Math.max(...todos.map((p) => p.midi)) + 1;
+  const dMin = Math.floor((Math.min(...todos.map((p) => p.min_db)) - 3) / 10) * 10;
+  const dMax = Math.ceil((Math.max(...todos.map((p) => p.max_db)) + 3) / 10) * 10;
+  const x = (m: number) => pe + ((m - mMin) / (mMax - mMin)) * (w - pe - pd);
+  const y = (db: number) => pt + ((dMax - db) / (dMax - dMin || 1)) * (h - pt - pb);
+  const partes: string[] = [];
+  for (let db = dMin; db <= dMax; db += 10) {
+    partes.push(`<line x1="${pe}" x2="${w - pd}" y1="${y(db).toFixed(1)}" y2="${y(db).toFixed(1)}" stroke="#e2e8f0"/>`,
+      `<text x="${pe - 5}" y="${(y(db) + 4).toFixed(1)}" text-anchor="end" font-size="10" fill="#64748b">${db}</text>`);
+  }
+  for (let m = Math.ceil(mMin / 12) * 12; m <= mMax; m += 12) {
+    partes.push(`<line x1="${x(m).toFixed(1)}" x2="${x(m).toFixed(1)}" y1="${pt}" y2="${h - pb}" stroke="#e2e8f0"/>`,
+      `<text x="${x(m).toFixed(1)}" y="${h - 6}" text-anchor="middle" font-size="10" fill="#64748b">${midiToNoteName(m)}</text>`);
+  }
+  partes.push(`<path d="${caminhoCampo(depois, x, y)}" fill="#0d9488" fill-opacity="0.25" stroke="#0d9488" stroke-width="1.5"/>`);
+  if (antes?.length) partes.push(`<path d="${caminhoCampo(antes, x, y)}" fill="none" stroke="#475569" stroke-width="1.5" stroke-dasharray="5 3"/>`);
+  partes.push(`<text x="${pe + 4}" y="${pt + 11}" font-size="10" fill="#64748b">${unidade === "dB SPL" ? "dB SPL" : "dBFS"}</text>`);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="Campo vocal">${partes.join("")}</svg>`;
+}
+
+export type CampoRelatorio = {
+  /** O primeiro fonetograma (null se só há um) e o mais recente. */
+  primeiro: Avaliacao | null;
+  ultimo: Avaliacao;
+  unidade: UnidadeComparacao["unidade"];
+  svg: string;
+  comparacao: ComparacaoCampo | null;
+};
+
+/** Campo vocal para os relatórios: o mais recente e, havendo mais de um, comparado ao primeiro. */
+export function campoParaRelatorio(itens: Avaliacao[], largura = 520): CampoRelatorio | null {
+  const lista = fonetogramasEmOrdem(itens);
+  if (!lista.length) return null;
+  const ultimo = lista.at(-1)!;
+  const ru = ultimo.resultado as ResultadoFonetograma;
+  if (lista.length === 1) {
+    const unidade = ru.calibracao && ru.resumo_spl ? "dB SPL" : "dBFS";
+    return { primeiro: null, ultimo, unidade, svg: svgCampos(pontosNaUnidade(ru, unidade), null, unidade, largura), comparacao: null };
+  }
+  const primeiro = lista[0]!;
+  const rp = primeiro.resultado as ResultadoFonetograma;
+  const comparacao = compararCampos(rp, ru);
+  return {
+    primeiro, ultimo, unidade: comparacao.unidade, comparacao,
+    svg: svgCampos(pontosNaUnidade(ru, comparacao.unidade), pontosNaUnidade(rp, comparacao.unidade), comparacao.unidade, largura),
+  };
+}

@@ -35,6 +35,11 @@ const anamnese = (dia: number, resultado: Avaliacao["resultado"]): Avaliacao => 
   id: `n${dia}`, paciente: "Ana", tipo: "anamnese", motor: null, criado_em: `2026-10-${String(dia).padStart(2, "0")}T09:00:00Z`, resultado,
 });
 
+const CAMPO = (id: string, quando: string, midis: number[], mn: number, mx: number) => ({ id, paciente: "Ana", tipo: "fonetograma", motor: null, criado_em: quando,
+  resultado: { duracao_s: 20, pontos: midis.map((midi) => ({ midi, min_db: mn, max_db: mx, tempo_s: 0.5 })), unidade_intensidade: "dBFS", fonte: "navegador",
+    resumo: { nota_grave: "C3", nota_aguda: "G4", hz_grave: 131, hz_agudo: 392, extensao_st: midis.length - 1, semitons_alcancados: midis.length, db_min: mn, db_max: mx, faixa_dinamica_media_db: mx - mn, area_st_db: 0 } } }) as unknown as Avaliacao;
+const faixaMidi = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+
 describe("montarRelatorioClinico", () => {
   it("traz paciente, profissional, período e a análise mais recente", () => {
     const html = montarRelatorioClinico("Ana Souza", [acustica(3, 1.8), acustica(20, 0.92), idv(20, 12)], {
@@ -111,6 +116,24 @@ describe("EASE-BR e anamnese no relatório", () => {
   });
   it("sem anamnese, sem a seção", () => {
     expect(montarRelatorioClinico("Ana", [ease(3, 14)]).includes("<h2>Anamnese")).toBe(false);
+  });
+});
+
+describe("campo vocal no relatório", () => {
+  it("um fonetograma: gráfico e resumo; dois: sobreposição e tabela com notas novas", () => {
+    const um = montarRelatorioClinico("Ana", [CAMPO("f1", "2026-09-01T10:00:00Z", faixaMidi(48, 60), -40, -15)]);
+    expect(um).toContain("Campo vocal (fonetograma)");
+    expect(um).toContain("Intensidade em dBFS");
+    expect((um.match(/<path /g) ?? []).length).toBe(1);
+    const dois = montarRelatorioClinico("Ana", [CAMPO("f1", "2026-09-01T10:00:00Z", faixaMidi(48, 60), -40, -15), CAMPO("f2", "2026-10-01T10:00:00Z", faixaMidi(50, 67), -45, -12)]);
+    expect(dois).toContain("Preenchido: 01/10/2026; tracejado: 01/09/2026");
+    expect(dois).toContain("Notas novas: C#4–G4");
+    expect(dois).toContain("+5 st");
+    expect(dois).toContain('stroke-dasharray="5 3"');
+  });
+
+  it("sem fonetograma, sem a seção", () => {
+    expect(montarRelatorioClinico("Ana", [acustica(3, 1.8)]).includes("Campo vocal")).toBe(false);
   });
 });
 
