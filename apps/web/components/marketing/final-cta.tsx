@@ -6,18 +6,17 @@ export function FinalCta() {
   return (
     <section aria-labelledby="cta-title" className="px-5 py-24 sm:px-8 lg:py-32">
       <div className="panel-glass relative mx-auto max-w-content overflow-hidden rounded-3xl px-6 py-14 sm:px-12 lg:py-20">
-        <div className="absolute -left-20 -top-20 h-72 w-72 rounded-full bg-accent/15 blur-3xl" aria-hidden />
         <div className="relative flex flex-col items-start gap-10 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2
               id="cta-title"
               className="text-balance font-display text-4xl font-bold leading-[1.05] tracking-[-0.03em] text-ink sm:text-5xl lg:text-6xl"
             >
-              Comece pela próxima música
+              Comece pela próxima voz
             </h2>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink/90">
-              Crie a conta, envie a faixa que você está ensaiando e veja a primeira análise em poucos
-              minutos.
+              Crie a conta e faça a primeira avaliação clínica — ou envie a música que você está
+              ensaiando. A primeira análise sai em poucos minutos.
             </p>
           </div>
           <Link

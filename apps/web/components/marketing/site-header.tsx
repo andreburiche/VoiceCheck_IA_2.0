@@ -9,9 +9,10 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const NAV = [
-  { href: "#separacao", label: "Separação" },
-  { href: "#estudio", label: "Estúdio" },
-  { href: "#voicecheck", label: "VoiceCheck" },
+  { href: "#avaliacao-clinica", label: "Avaliação clínica" },
+  { href: "#precisao", label: "Precisão" },
+  { href: "#para-quem", label: "Para quem" },
+  { href: "#separacao", label: "Canto" },
   { href: "#privacidade", label: "Privacidade" },
 ] as const;
 

@@ -10,6 +10,10 @@ const POINTS = [
     text: "Nada é compartilhado sem você exportar, e cada projeto pertence só à sua conta.",
   },
   {
+    title: "LGPD no prontuário",
+    text: "Exporte tudo de um paciente (JSON ou ZIP com as gravações) ou exclua tudo de uma vez. O nome do paciente não aparece em endereços nem em registros de acesso.",
+  },
+  {
     title: "Modelo aberto",
     text: "A separação usa o Demucs, de código aberto (licença MIT).",
   },
