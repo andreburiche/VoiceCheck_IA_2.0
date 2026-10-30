@@ -101,7 +101,7 @@ def _preparar(monkeypatch, log, cota_cheia=False):
 
     monkeypatch.setattr(rotas, "assert_can_upload", cota)
     monkeypatch.setattr(rotas, "get_storage", lambda: _StorageFalso(log))
-    monkeypatch.setattr(rotas, "_apagar_audios", lambda chaves: log.append("apagou"))
+    monkeypatch.setattr(rotas, "_apagar_audios", lambda db, chaves: log.append("apagou"))
     return rotas
 
 

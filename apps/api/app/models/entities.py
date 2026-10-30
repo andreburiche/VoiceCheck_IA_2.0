@@ -608,3 +608,17 @@ class HomePracticePlan(Base, TimestampMixin):
     exercises: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class StoragePendingDelete(Base, TimestampMixin):
+    """Arquivo que o storage não conseguiu apagar (rede, S3 fora do ar...): nova tentativa depois.
+
+    Guarda só a chave do arquivo (ids, sem nome de paciente). Sai da tabela quando o arquivo é apagado.
+    """
+
+    __tablename__ = "storage_pending_deletes"
+
+    id: Mapped[str] = mapped_column(CHAR(36), primary_key=True, default=_uuid)
+    storage_key: Mapped[str] = mapped_column(String(512), nullable=False, unique=True)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    last_error: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

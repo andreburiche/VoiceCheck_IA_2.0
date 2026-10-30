@@ -200,7 +200,9 @@ Depois da revisão (30/10/2026, segunda rodada):
 - **Exportação LGPD em ZIP:** `GET /api/v1/voz-clinica/pacientes/exportar-zip` devolve `dados.json`, `LEIAME.txt` e `gravacoes/*.wav` (cada avaliação aponta seu arquivo em `arquivo_audio`). Botão "Com as gravações (ZIP)" no Histórico. Limite de 10 exportações em 10 minutos.
 - **Editor de áudio:** copiar a seleção e colar no ponto clicado (ou no lugar da seleção), com emendas de 5 ms e o limite de 60 s da análise.
 
-Ainda fica para depois: nova tentativa de apagar arquivos que falharem; se houver nginx/proxy na frente, desligar nele também o log de query string.
+- **Nova tentativa de apagar gravações:** se o storage falhar ao apagar (rede, S3 fora do ar), a chave do arquivo fica em `storage_pending_deletes` (migração 0015; só ids, sem nome de paciente) e é apagada numa nova tentativa — a cada nova exclusão e quando a API inicia.
+
+Ainda fica para depois: se houver nginx/proxy na frente, desligar nele também o log de query string.
 
 ## Concordância entre os motores (30/10/2026)
 

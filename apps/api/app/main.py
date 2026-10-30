@@ -183,6 +183,19 @@ async def lifespan(_: FastAPI):
         logger.info("seed_ok", at=datetime.now(UTC).isoformat())
     except Exception as exc:  # noqa: BLE001 — bootstrap: DB pode ainda não estar pronto no reload
         logger.warning("seed_skipped", error=str(exc))
+    # gravações que o storage não apagou antes (rede, S3 fora do ar): nova tentativa ao iniciar
+    try:
+        from app.services.voz_clinica.exclusao import tentar_pendentes
+
+        db = SessionLocal()
+        try:
+            apagadas, restantes = tentar_pendentes(db, limite=500)
+            if apagadas or restantes:
+                logger.info("exclusoes_pendentes", apagadas=apagadas, restantes=restantes)
+        finally:
+            db.close()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("exclusoes_pendentes_skipped", error=str(exc))
     yield
 
 

@@ -4,6 +4,7 @@ from app.models.entities import (
     ClinicalEvaluation,
     ExportJob,
     HomePracticePlan,
+    StoragePendingDelete,
     VoicePatient,
     LoopRegion,
     Marker,
@@ -49,5 +50,6 @@ __all__ = [
     "PasswordResetToken",
     "ClinicalEvaluation",
     "HomePracticePlan",
+    "StoragePendingDelete",
     "VoicePatient",
 ]

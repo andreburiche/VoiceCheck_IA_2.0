@@ -53,6 +53,7 @@ from app.services import voz_clinica
 from app.services.voz_clinica.audio import limitar_duracao
 from app.services.voz_clinica.cepstral import analisar_cepstral
 from app.services.voz_clinica.ddk import analisar_ddk
+from app.services.voz_clinica.exclusao import apagar_ou_agendar, tentar_pendentes
 from app.services.voz_clinica.fala import analisar_fala
 from app.services.voz_clinica.fonetograma import resumir_campo
 from app.services.voz_clinica.indices import dsi
@@ -98,17 +99,13 @@ def _saida(row: ClinicalEvaluation) -> AvaliacaoOut:
     )
 
 
-def _apagar_audios(chaves: list[str]) -> None:
-    """Depois do commit: um arquivo que sobrar no storage não é grave; um registro
-    apontando para arquivo apagado seria (por isso o banco vem primeiro)."""
-    if not chaves:
-        return
-    storage = get_storage()
-    for chave in chaves:
-        try:
-            storage.delete(chave)
-        except Exception:  # noqa: BLE001
-            logger.warning("Voz clínica: gravação não apagada do storage: %s", chave)
+def _apagar_audios(db: DbSession, chaves: list[str]) -> None:
+    """Depois do commit: apaga as gravações no storage; as que falharem ficam agendadas para nova
+    tentativa (services/voz_clinica/exclusao.py), que também aproveita para apagar pendências antigas."""
+    chaves = [c for c in chaves if c]
+    if chaves:
+        apagar_ou_agendar(db, chaves)
+    tentar_pendentes(db, limite=20)
 
 
 @router.get("/status", response_model=StatusOut)
@@ -211,7 +208,7 @@ async def _guardar_audio(db: DbSession, user_id: str, row_id: str, dados: bytes)
         db.rollback()
         logger.exception("Voz clínica: falha ao guardar a gravação")
         if chave:
-            _apagar_audios([chave])  # arquivo enviado sem registro no banco não pode ficar sem dono
+            _apagar_audios(db, [chave])  # arquivo enviado sem registro no banco não pode ficar sem dono
         return "Não foi possível guardar a gravação; a análise foi salva sem ela.", False
 
 
@@ -716,7 +713,7 @@ def excluir_paciente(request: Request, user: CurrentUser, db: DbSession, pacient
         meta={"paciente": _rastro(user.id, nome), "avaliacoes": n_aval, "planos": n_planos, "gravacoes": len(chaves)},
     )
     db.commit()
-    _apagar_audios(chaves)
+    _apagar_audios(db, chaves)
     return {"avaliacoes_excluidas": n_aval, "planos_excluidos": n_planos, "gravacoes_excluidas": len(chaves),
             "cadastro_excluido": bool(n_cad)}
 
@@ -757,7 +754,7 @@ def excluir_avaliacao(avaliacao_id: str, user: CurrentUser, db: DbSession) -> No
     chave = row.audio_key
     db.delete(row)
     db.commit()
-    _apagar_audios([chave] if chave else [])
+    _apagar_audios(db, [chave] if chave else [])
 
 
 @router.put("/avaliacoes/{avaliacao_id}/anotacao", response_model=AvaliacaoOut, dependencies=[Depends(verify_csrf)])
