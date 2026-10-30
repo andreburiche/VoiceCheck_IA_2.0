@@ -10,14 +10,18 @@ import { friendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import {
   FAIXAS_F0,
+  ROTULO_DDK,
   ROTULO_TAREFA,
+  analisarDdk,
   analisarFala,
   calcularDsi,
   fixoBR,
   listarAvaliacoes,
   type AnaliseFala,
   type Avaliacao,
+  type ResultadoDdk,
   type ResultadoDsi,
+  type TarefaDdk,
   type TarefaFala,
 } from "@/lib/voz-clinica-api";
 import { GravadorClinico, gravadorSuportado, type GravacaoClinica } from "@/lib/voz-clinica-gravador";
@@ -41,28 +45,21 @@ function Erro({ texto }: { texto: string | null }) {
 }
 
 // ---------------------------------------------------------------------------
-// F0 da fala
+// Gravação (comum à fala e à diadococinesia)
 // ---------------------------------------------------------------------------
 
-function PainelFala({ paciente, aoSalvar }: { paciente: string; aoSalvar: () => void }) {
-  const [tarefa, setTarefa] = useState<TarefaFala>("leitura");
-  const [tipoVoz, setTipoVoz] = useState<keyof typeof FAIXAS_F0>("feminina");
+type Gravacao = ReturnType<typeof useGravacao>;
+
+function useGravacao(limiteSegundos: number) {
   const [gravando, setGravando] = useState(false);
   const [tempo, setTempo] = useState(0);
   const [nivel, setNivel] = useState(0);
   const [gravacao, setGravacao] = useState<GravacaoClinica | null>(null);
   const [url, setUrl] = useState<string | null>(null);
-  const [analisando, setAnalisando] = useState(false);
-  const [resultado, setResultado] = useState<AnaliseFala | null>(null);
-  const [situacao, setSituacao] = useState<string | null>(null);
-  const [guardar, setGuardar] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [suportado, setSuportado] = useState(true);
   const gravador = useRef<GravadorClinico | null>(null);
   const relogio = useRef<number | null>(null);
-  const idTarefa = useId();
-  const idTipo = useId();
-  const idGuardar = useId();
 
   useEffect(() => setSuportado(gravadorSuportado()), []);
   useEffect(() => () => {
@@ -89,13 +86,11 @@ function PainelFala({ paciente, aoSalvar }: { paciente: string; aoSalvar: () => 
     }
   }, []);
 
-  async function iniciar() {
+  const iniciar = useCallback(async () => {
     setErro(null);
-    setResultado(null);
-    setSituacao(null);
     setGravacao(null);
     setUrl(null);
-    const g = new GravadorClinico({ aoNivel: setNivel, aoLimite: () => void parar(), limiteSegundos: 60 });
+    const g = new GravadorClinico({ aoNivel: setNivel, aoLimite: () => void parar(), limiteSegundos });
     try {
       await g.iniciar();
     } catch (e) {
@@ -111,6 +106,60 @@ function PainelFala({ paciente, aoSalvar }: { paciente: string; aoSalvar: () => 
     const inicio = performance.now();
     setTempo(0);
     relogio.current = window.setInterval(() => setTempo((performance.now() - inicio) / 1000), 100);
+  }, [limiteSegundos, parar]);
+
+  return { gravando, tempo, nivel, gravacao, url, erro, suportado, iniciar, parar };
+}
+
+function ControlesGravacao({ g, onIniciar, prefixo, rotuloAudio }: { g: Gravacao; onIniciar: () => void; prefixo: string; rotuloAudio: string }) {
+  const pct = Math.min(100, Math.round(g.nivel * 100));
+  return (
+    <>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        {g.gravando ? (
+          <Button type="button" variant="danger" onClick={() => void g.parar()} data-testid={`${prefixo}-parar`}>
+            <Square className="h-4 w-4" aria-hidden /> Parar gravação
+          </Button>
+        ) : (
+          <Button type="button" onClick={onIniciar} disabled={!g.suportado} data-testid={`${prefixo}-gravar`}>
+            <Mic className="h-4 w-4" aria-hidden /> {g.gravacao ? "Gravar de novo" : "Gravar"}
+          </Button>
+        )}
+        <span className="text-data w-14 text-sm text-ink">{g.tempo.toFixed(1).replace(".", ",")} s</span>
+        <div className="h-2.5 min-w-[8rem] flex-1 overflow-hidden rounded-full bg-canvas-overlay ring-1 ring-inset ring-line"
+          role="meter" aria-label="Nível do microfone" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+          <div className={cn("h-full transition-[width] duration-75", g.nivel >= 0.95 ? "bg-signal-err" : "bg-accent")} style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+      {!g.suportado ? <Erro texto="Este navegador não grava áudio. Use Chrome, Edge, Firefox ou Safari atualizados." /> : null}
+      {g.url ? <audio className="mt-4 w-full" src={g.url} controls aria-label={rotuloAudio} /> : null}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// F0 da fala
+// ---------------------------------------------------------------------------
+
+function PainelFala({ paciente, aoSalvar }: { paciente: string; aoSalvar: () => void }) {
+  const [tarefa, setTarefa] = useState<TarefaFala>("leitura");
+  const [tipoVoz, setTipoVoz] = useState<keyof typeof FAIXAS_F0>("feminina");
+  const g = useGravacao(60);
+  const [analisando, setAnalisando] = useState(false);
+  const [resultado, setResultado] = useState<AnaliseFala | null>(null);
+  const [situacao, setSituacao] = useState<string | null>(null);
+  const [guardar, setGuardar] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+  const idTarefa = useId();
+  const idTipo = useId();
+  const idGuardar = useId();
+  const { gravando, gravacao } = g;
+
+  function iniciar() {
+    setErro(null);
+    setResultado(null);
+    setSituacao(null);
+    void g.iniciar();
   }
 
   async function analisar() {
@@ -144,8 +193,6 @@ function PainelFala({ paciente, aoSalvar }: { paciente: string; aoSalvar: () => 
         ["Intensidade média", `${fixoBR(resultado.fala.intensidade_media_dbfs, 1)} dBFS`],
       ]
     : [];
-  const pct = Math.min(100, Math.round(nivel * 100));
-
   return (
     <section className={PAINEL} aria-labelledby="vc2-fala">
       <h2 id="vc2-fala" className={TITULO}>F0 da fala</h2>
@@ -175,24 +222,7 @@ function PainelFala({ paciente, aoSalvar }: { paciente: string; aoSalvar: () => 
         </blockquote>
       ) : null}
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        {gravando ? (
-          <Button type="button" variant="danger" onClick={() => void parar()} data-testid="vc2-fala-parar">
-            <Square className="h-4 w-4" aria-hidden /> Parar gravação
-          </Button>
-        ) : (
-          <Button type="button" onClick={() => void iniciar()} disabled={!suportado} data-testid="vc2-fala-gravar">
-            <Mic className="h-4 w-4" aria-hidden /> {gravacao ? "Gravar de novo" : "Gravar"}
-          </Button>
-        )}
-        <span className="text-data w-14 text-sm text-ink">{tempo.toFixed(1).replace(".", ",")} s</span>
-        <div className="h-2.5 min-w-[8rem] flex-1 overflow-hidden rounded-full bg-canvas-overlay ring-1 ring-inset ring-line"
-          role="meter" aria-label="Nível do microfone" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
-          <div className={cn("h-full transition-[width] duration-75", nivel >= 0.95 ? "bg-signal-err" : "bg-accent")} style={{ width: `${pct}%` }} />
-        </div>
-      </div>
-      {!suportado ? <Erro texto="Este navegador não grava áudio. Use Chrome, Edge, Firefox ou Safari atualizados." /> : null}
-      {url ? <audio className="mt-4 w-full" src={url} controls aria-label="Ouvir a gravação da fala" /> : null}
+      <ControlesGravacao g={g} onIniciar={iniciar} prefixo="vc2-fala" rotuloAudio="Ouvir a gravação da fala" />
 
       <div className="mt-4">
         <Button type="button" onClick={() => void analisar()} disabled={!gravacao || gravacao.duracao < 1 || analisando || gravando} data-testid="vc2-fala-analisar">
@@ -209,7 +239,7 @@ function PainelFala({ paciente, aoSalvar }: { paciente: string; aoSalvar: () => 
         )}
       </div>
       {situacao ? <p className="mt-2 text-xs text-ink-muted" role="status">{situacao}</p> : null}
-      <Erro texto={erro} />
+      <Erro texto={g.erro ?? erro} />
       {resultado && !f ? <Erro texto={resultado.avisos[0] ?? "Não foi encontrada voz suficiente."} /> : null}
       {linhas.length ? (
         <div className="mt-4" aria-live="polite">
@@ -231,6 +261,144 @@ function PainelFala({ paciente, aoSalvar }: { paciente: string; aoSalvar: () => 
           </table>
           <ul className="mt-3 space-y-1" role="status">
             {resultado?.avisos.map((a) => <li key={a} className="text-xs text-signal-warn">{a}</li>)}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Diadococinesia (DDK)
+// ---------------------------------------------------------------------------
+
+const INSTRUCAO_DDK: Record<TarefaDdk, string> = {
+  pa: "Respire e repita /pa/ o mais rápido e claro que conseguir, sem parar, por 5 a 10 segundos.",
+  ta: "Respire e repita /ta/ o mais rápido e claro que conseguir, sem parar, por 5 a 10 segundos.",
+  ka: "Respire e repita /ka/ o mais rápido e claro que conseguir, sem parar, por 5 a 10 segundos.",
+  pataka: "Respire e repita /pataka/ o mais rápido e claro que conseguir, sem parar, por 5 a 10 segundos.",
+};
+
+/** Cada sílaba vira um traço: espaçamento mostra o ritmo, altura mostra a intensidade relativa. */
+function RitmoSilabas({ picos, niveis }: { picos: number[]; niveis: number[] }) {
+  if (picos.length < 2) return null;
+  const t0 = picos[0]!;
+  const dur = Math.max(picos[picos.length - 1]! - t0, 1e-3);
+  return (
+    <figure className="mt-4">
+      <svg viewBox="0 0 600 64" preserveAspectRatio="none" className="h-16 w-full rounded-lg bg-canvas-raised/60 ring-1 ring-inset ring-ink/10"
+        role="img" aria-label={`${picos.length} sílabas em ${fixoBR(dur, 1)} segundos; cada traço é uma sílaba`}>
+        {picos.map((p, i) => {
+          const x = 10 + ((p - t0) / dur) * 580;
+          const h = Math.max(6, 54 * (1 + Math.max(-20, niveis[i] ?? 0) / 20));
+          return <line key={i} x1={x} x2={x} y1={60} y2={60 - h} stroke="var(--accent)" strokeWidth={2} vectorEffect="non-scaling-stroke" />;
+        })}
+      </svg>
+      <figcaption className="mt-1 text-xs text-ink-faint">Cada traço é uma sílaba: espaços iguais = ritmo regular; alturas iguais = intensidade estável.</figcaption>
+    </figure>
+  );
+}
+
+function PainelDdk({ paciente, aoSalvar }: { paciente: string; aoSalvar: () => void }) {
+  const [tarefa, setTarefa] = useState<TarefaDdk>("pa");
+  const g = useGravacao(20);
+  const [analisando, setAnalisando] = useState(false);
+  const [resultado, setResultado] = useState<ResultadoDdk | null>(null);
+  const [situacao, setSituacao] = useState<string | null>(null);
+  const [guardar, setGuardar] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+  const idTarefa = useId();
+  const idGuardar = useId();
+
+  function iniciar() {
+    setErro(null);
+    setResultado(null);
+    setSituacao(null);
+    void g.iniciar();
+  }
+
+  async function analisar() {
+    if (!g.gravacao) return;
+    setAnalisando(true);
+    setErro(null);
+    setSituacao(null);
+    try {
+      const r = await analisarDdk(g.gravacao.wav, { tarefa, paciente, guardarAudio: guardar });
+      setResultado(r.resultado);
+      setSituacao(r.aviso_audio ?? (r.audio_guardado ? "Gravação guardada no histórico." : null));
+      if (r.avaliacao_id) aoSalvar();
+    } catch (e) {
+      setErro(friendlyError(e, "Não foi possível analisar a gravação."));
+    } finally {
+      setAnalisando(false);
+    }
+  }
+
+  const d = resultado;
+  const linhas: [string, string][] = d?.silabas != null
+    ? [
+        ["Taxa", `${fixoBR(d.taxa_silabas_s, 1)} sílabas/s`],
+        ["Sílabas", `${d.silabas} em ${fixoBR(d.tempo_repeticao_s, 1)} s`],
+        ["Intervalo entre sílabas", `${fixoBR(d.intervalo_medio_ms, 0)} ms (DP ${fixoBR(d.intervalo_dp_ms, 0)} ms)`],
+        ["Irregularidade do ritmo (CV)", `${fixoBR(d.intervalo_cv_pct, 1)} %`],
+        ["Variação da intensidade (DP)", `${fixoBR(d.intensidade_dp_db, 1)} dB`],
+        ["Taxa no início → no fim", `${fixoBR(d.taxa_inicio_silabas_s, 1)} → ${fixoBR(d.taxa_fim_silabas_s, 1)} sílabas/s`],
+      ]
+    : [];
+
+  return (
+    <section className={PAINEL} aria-labelledby="vc2-ddk">
+      <h2 id="vc2-ddk" className={TITULO}>Diadococinesia (DDK)</h2>
+      <p className={cn(NOTA, "mt-1")}>
+        Velocidade e regularidade da articulação: /pa/, /ta/ e /ka/ isolados (ritmo alternado) e /pataka/ (sequência).
+      </p>
+      <div className="mt-4 max-w-xs">
+        <Label htmlFor={idTarefa}>Tarefa</Label>
+        <select id={idTarefa} className={cn(SELECT, "mt-1")} value={tarefa} disabled={g.gravando}
+          onChange={(e) => setTarefa(e.target.value as TarefaDdk)} data-testid="vc2-ddk-tarefa">
+          {(Object.keys(ROTULO_DDK) as TarefaDdk[]).map((k) => <option key={k} value={k}>{ROTULO_DDK[k]}</option>)}
+        </select>
+      </div>
+      <p className="mt-3 text-sm text-ink">{INSTRUCAO_DDK[tarefa]}</p>
+      <ControlesGravacao g={g} onIniciar={iniciar} prefixo="vc2-ddk" rotuloAudio="Ouvir a gravação da diadococinesia" />
+      <div className="mt-4">
+        <Button type="button" onClick={() => void analisar()} disabled={!g.gravacao || g.gravacao.duracao < 1 || analisando || g.gravando} data-testid="vc2-ddk-analisar">
+          {analisando ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden /> : null}
+          {analisando ? "Analisando…" : "Analisar sílabas"}
+        </Button>
+        {paciente ? (
+          <label htmlFor={idGuardar} className="mt-3 flex items-start gap-2 text-sm text-ink-muted">
+            <input id={idGuardar} type="checkbox" className="mt-0.5 h-4 w-4 accent-[var(--accent)]" checked={guardar} onChange={(e) => setGuardar(e.target.checked)} />
+            <span>Guardar a gravação no histórico (conta no espaço de armazenamento do plano)</span>
+          </label>
+        ) : (
+          <p className="mt-2 text-xs text-ink-faint">Sem nome de paciente, o resultado aparece aqui mas não fica salvo.</p>
+        )}
+      </div>
+      {situacao ? <p className="mt-2 text-xs text-ink-muted" role="status">{situacao}</p> : null}
+      <Erro texto={g.erro ?? erro} />
+      {d && d.silabas == null ? <Erro texto={d.avisos[0] ?? "Não foram encontradas sílabas."} /> : null}
+      {linhas.length ? (
+        <div className="mt-4" aria-live="polite">
+          <table className="w-full text-sm" data-testid="vc2-ddk-tabela">
+            <thead>
+              <tr className="border-b border-line text-left text-xs text-ink-faint">
+                <th className="py-2 font-medium">Medida</th>
+                <th className="py-2 text-right font-medium">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {linhas.map(([m, v]) => (
+                <tr key={m} className="border-b border-ink/[0.06]">
+                  <td className="py-2 text-ink-muted">{m}</td>
+                  <td className="text-data py-2 text-right text-ink">{v}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <RitmoSilabas picos={d?.picos_s ?? []} niveis={d?.picos_db ?? []} />
+          <ul className="mt-3 space-y-1" role="status">
+            {d?.avisos.map((a) => <li key={a} className="text-xs text-signal-warn">{a}</li>)}
           </ul>
         </div>
       ) : null}
@@ -369,7 +537,7 @@ function FormDsi({ paciente, sugestoes, aoSalvar }: { paciente: string; sugestoe
 // Aba
 // ---------------------------------------------------------------------------
 
-/** Protocolo de voz: quadro com a medida mais recente de cada parte, F0 da fala e DSI. */
+/** Protocolo de voz: quadro com a medida mais recente de cada parte, F0 da fala, DSI e diadococinesia. */
 export function ProtocoloVoz({ paciente, versao, aoSalvar }: { paciente: string; versao: number; aoSalvar: () => void }) {
   const [itens, setItens] = useState<Avaliacao[]>([]);
   const [erro, setErro] = useState<string | null>(null);
@@ -422,6 +590,7 @@ export function ProtocoloVoz({ paciente, versao, aoSalvar }: { paciente: string;
       <div className="grid gap-5 xl:grid-cols-2">
         <PainelFala paciente={paciente} aoSalvar={aoSalvar} />
         <FormDsi paciente={paciente} sugestoes={sugestoes} aoSalvar={aoSalvar} />
+        <PainelDdk paciente={paciente} aoSalvar={aoSalvar} />
       </div>
     </div>
   );

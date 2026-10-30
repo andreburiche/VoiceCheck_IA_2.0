@@ -44,6 +44,7 @@ from app.schemas.voz_clinica import (
     StatusOut,
 )
 from app.services import voz_clinica
+from app.services.voz_clinica.ddk import analisar_ddk
 from app.services.voz_clinica.fala import analisar_fala
 from app.services.voz_clinica.fonetograma import resumir_campo
 from app.services.voz_clinica.indices import dsi
@@ -343,6 +344,37 @@ def revogar_plano(plano_id: str, user: CurrentUser, db: DbSession) -> PlanoOut:
         db.refresh(plano)
     total, ultima = sessoes_por_plano(db, user.id, [plano.id])
     return plano_out(plano, total, ultima)
+
+
+@router.post("/ddk", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
+async def analisar_ddk_rota(
+    request: Request,
+    user: CurrentUser,
+    db: DbSession,
+    file: UploadFile = File(...),
+    tarefa: str = Form("pa"),
+    paciente: str | None = Form(None),
+    guardar_audio: bool = Form(True),
+) -> ResultadoSalvo:
+    """Diadococinesia (/pa/, /ta/, /ka/, /pataka/): taxa e regularidade das sílabas (WAV)."""
+    enforce_rate_limit(
+        request,
+        bucket="voz_clinica",
+        limit=max(5, settings.rate_limit_upload // 2),
+        window_sec=settings.rate_limit_upload_window_sec,
+    )
+    nome = _paciente(paciente)
+    dados = await _read_limited(file, MAX_WAV_BYTES)
+    try:
+        resultado = await asyncio.to_thread(lambda: analisar_ddk(voz_clinica.ler_wav(dados), tarefa=tarefa))
+    except (voz_clinica.ErroAudio, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Voz clínica: falha na análise da diadococinesia")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Não foi possível analisar a gravação") from exc
+    if nome is None or "silabas" not in resultado:
+        return ResultadoSalvo(avaliacao_id=None, resultado=resultado)
+    return await _salvar_com_audio(db, user, nome, "ddk", resultado, dados, guardar_audio)
 
 
 @router.post("/dsi", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])

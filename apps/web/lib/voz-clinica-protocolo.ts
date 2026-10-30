@@ -3,7 +3,10 @@
  * de cada parte da avaliação e sugestões de valores para o DSI.
  */
 import {
+  ROTULO_DDK,
   fixoBR,
+  type ResultadoDdk,
+  type TarefaDdk,
   type AnaliseAcustica,
   type AnaliseFala,
   type Avaliacao,
@@ -97,6 +100,18 @@ export function linhasProtocolo(itens: Avaliacao[]): LinhaProtocolo[] {
   const campo = maisRecente(itens, "fonetograma", (a) => !!(a.resultado as ResultadoFonetograma).resumo?.nota_grave);
   const c = (a: Avaliacao) => (a.resultado as ResultadoFonetograma).resumo;
   add("Extensão (fonetograma)", "Notas e extensão", campo, (a) => `${c(a).nota_grave}–${c(a).nota_aguda} · ${c(a).extensao_st} st`);
+
+  // diadococinesia: uma linha por tarefa já feita; nenhuma feita = uma linha "—"
+  const feitas = (Object.keys(ROTULO_DDK) as TarefaDdk[])
+    .map((tarefa) => [tarefa, maisRecente(itens, "ddk", (a) => (a.resultado as ResultadoDdk).tarefa === tarefa && (a.resultado as ResultadoDdk).silabas != null)] as const)
+    .filter(([, a]) => a);
+  if (!feitas.length) add("Diadococinesia", "Taxa e ritmo", undefined, () => "");
+  for (const [tarefa, a] of feitas) {
+    add("Diadococinesia", ROTULO_DDK[tarefa], a, (x) => {
+      const d = x.resultado as ResultadoDdk;
+      return `${fixoBR(d.taxa_silabas_s, 1)} síl/s · CV ${fixoBR(d.intervalo_cv_pct, 1)}%`;
+    });
+  }
 
   add("Índice", "DSI", maisRecente(itens, "dsi"), (a) => fixoBR((a.resultado as ResultadoDsi).dsi, 2));
 

@@ -3,7 +3,7 @@
  * Uma série por medida; cada uma vira um gráfico próprio (escalas diferentes
  * nunca dividem o mesmo eixo).
  */
-import type { AnaliseAcustica, AnaliseFala, Avaliacao, ResultadoDsi, ResultadoBiofeedback, ResultadoEaseBr, ResultadoGrbasi, ResultadoIdv10, ResultadoFonetograma, ResultadoJogoSalvo, ResultadoQvv } from "@/lib/voz-clinica-api";
+import { ROTULO_DDK, type AnaliseAcustica, type AnaliseFala, type Avaliacao, type ResultadoDdk, type ResultadoDsi, type TarefaDdk, type ResultadoBiofeedback, type ResultadoEaseBr, type ResultadoGrbasi, type ResultadoIdv10, type ResultadoFonetograma, type ResultadoJogoSalvo, type ResultadoQvv } from "@/lib/voz-clinica-api";
 import { JOGOS, type JogoId } from "@/lib/voz-clinica-jogos";
 import type { ResultadoPratica } from "@/lib/voz-clinica-pratica";
 
@@ -151,6 +151,21 @@ const EXTRATORES: Extrator[] = [
     filtro: (a) => (a.resultado as ResultadoJogoSalvo).jogo === jogo,
     valor: (a) => (a.resultado as ResultadoJogoSalvo).pontuacao_pct,
   })),
+  // diadococinesia: uma série por tarefa (/pa/ e /pataka/ têm taxas diferentes)
+  ...(Object.keys(ROTULO_DDK) as TarefaDdk[]).flatMap((tarefa): Extrator[] => [
+    {
+      chave: `ddk_${tarefa}_taxa`, titulo: `Diadococinesia ${ROTULO_DDK[tarefa]} — taxa`, unidade: "síl/s", casas: 1,
+      tipo: "ddk", dominio: null, filtro: (a) => (a.resultado as ResultadoDdk).tarefa === tarefa,
+      leitura: "Sílabas por segundo na repetição rápida; valores maiores indicam articulação mais ágil.",
+      valor: (a) => (a.resultado as ResultadoDdk).taxa_silabas_s,
+    },
+    {
+      chave: `ddk_${tarefa}_cv`, titulo: `Diadococinesia ${ROTULO_DDK[tarefa]} — irregularidade do ritmo`, unidade: "%", casas: 1,
+      tipo: "ddk", dominio: null, filtro: (a) => (a.resultado as ResultadoDdk).tarefa === tarefa,
+      leitura: "Coeficiente de variação dos intervalos entre sílabas; valores menores indicam ritmo mais regular.",
+      valor: (a) => (a.resultado as ResultadoDdk).intervalo_cv_pct,
+    },
+  ]),
 ];
 
 /** Máximo de pontos por gráfico (as sessões mais recentes). */

@@ -8,7 +8,7 @@ import { JOGOS, type ResultadoJogo } from "@/lib/voz-clinica-jogos";
 import { resumoPratica, type ExercicioPratica, type ResultadoPratica } from "@/lib/voz-clinica-pratica";
 
 
-export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica" | "dsi" | "fala";
+export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica" | "dsi" | "fala" | "ddk";
 export type Protocolo = "idv10" | "qvv" | "grbasi" | "easebr";
 
 /** Resumo de sessão de biofeedback salvo (medido no navegador). */
@@ -79,6 +79,25 @@ export type AnaliseFala = {
   avisos: string[];
 };
 
+/** Diadococinesia: /pa/, /ta/, /ka/ (AMR) ou /pataka/ (SMR), medida no servidor. */
+export type TarefaDdk = "pa" | "ta" | "ka" | "pataka";
+export type ResultadoDdk = {
+  tarefa: TarefaDdk;
+  duracao_s: number;
+  silabas?: number;
+  tempo_repeticao_s?: number;
+  taxa_silabas_s?: number;
+  intervalo_medio_ms?: number;
+  intervalo_dp_ms?: number;
+  intervalo_cv_pct?: number;
+  intensidade_dp_db?: number;
+  taxa_inicio_silabas_s?: number | null;
+  taxa_fim_silabas_s?: number | null;
+  picos_s?: number[];
+  picos_db?: number[];
+  avisos: string[];
+};
+
 /** DSI (Wuyts et al., 2000) com as quatro medidas usadas. */
 export type ResultadoDsi = {
   dsi: number;
@@ -135,7 +154,7 @@ export type Avaliacao = {
   paciente: string;
   tipo: TipoAvaliacao;
   motor: string | null;
-  resultado: AnaliseAcustica | ResultadoProtocolo | Anamnese | ResultadoPratica | ResultadoBiofeedback | ResultadoJogoSalvo | ResultadoFonetograma | ResultadoDsi | AnaliseFala;
+  resultado: AnaliseAcustica | ResultadoProtocolo | Anamnese | ResultadoPratica | ResultadoBiofeedback | ResultadoJogoSalvo | ResultadoFonetograma | ResultadoDsi | AnaliseFala | ResultadoDdk;
   criado_em: string;
   /** Há gravação guardada (análise acústica). */
   audio?: boolean;
@@ -178,6 +197,15 @@ export function analisarFala(
   if (opcoes.paciente) dados.append("paciente", opcoes.paciente);
   if (opcoes.guardarAudio === false) dados.append("guardar_audio", "false");
   return apiFetch<Salvo<AnaliseFala>>(`${BASE}/fala`, { method: "POST", body: dados, timeoutMs: 90_000 });
+}
+
+export function analisarDdk(wav: Blob, opcoes: { tarefa: TarefaDdk; paciente?: string | null; guardarAudio?: boolean }) {
+  const dados = new FormData();
+  dados.append("file", wav, "ddk.wav");
+  dados.append("tarefa", opcoes.tarefa);
+  if (opcoes.paciente) dados.append("paciente", opcoes.paciente);
+  if (opcoes.guardarAudio === false) dados.append("guardar_audio", "false");
+  return apiFetch<Salvo<ResultadoDdk>>(`${BASE}/ddk`, { method: "POST", body: dados, timeoutMs: 60_000 });
 }
 
 export function calcularDsi(entrada: ResultadoDsi["entradas"], paciente?: string | null) {
@@ -387,6 +415,10 @@ export function resumoAvaliacao(a: Avaliacao): string {
     const e = r.entradas;
     return `DSI ${fixoBR(r.dsi, 2)} · TMF ${fixoBR(e?.tmf_s, 1)} s · F0-alta ${fixoBR(e?.f0_alta_hz, 0)} Hz · I-baixa ${fixoBR(e?.i_baixa_db_spl, 0)} dB SPL · jitter ${fixoBR(e?.jitter_pct, 2)}%`;
   }
+  if (a.tipo === "ddk") {
+    const r = a.resultado as ResultadoDdk;
+    return `${ROTULO_DDK[r.tarefa] ?? r.tarefa}: ${fixoBR(r.taxa_silabas_s, 1)} sílabas/s · ${r.silabas ?? 0} sílabas · ritmo (CV) ${fixoBR(r.intervalo_cv_pct, 1)}%`;
+  }
   if (a.tipo === "fala") {
     const r = a.resultado as AnaliseFala;
     return `${ROTULO_TAREFA[r.tarefa] ?? "Fala"}: F0 mediana ${fixoBR(r.f0?.mediana_hz, 0)} Hz (${r.f0?.nota_mediana ?? "—"}) · faixa ${fixoBR(r.f0?.faixa_semitons, 1)} st · ${r.fala?.pausas ?? 0} pausas`;
@@ -417,7 +449,10 @@ export const ROTULO_TIPO: Record<TipoAvaliacao, string> = {
   pratica: "Prática em casa",
   dsi: "DSI",
   fala: "F0 da fala",
+  ddk: "Diadococinesia",
 };
+
+export const ROTULO_DDK: Record<TarefaDdk, string> = { pa: "/pa/", ta: "/ta/", ka: "/ka/", pataka: "/pataka/" };
 
 export const ROTULO_TAREFA: Record<TarefaFala, string> = {
   leitura: "Leitura",

@@ -66,6 +66,17 @@ describe("linhasProtocolo", () => {
     expect(valor("Jitter / shimmer")).toBe("0,50 % / 3,20 %");
     expect(valor("DSI")).toBe("3,46");
     expect(valor("IDV-10")).toBe("—");
+    expect(valor("Taxa e ritmo")).toBe("—");
     expect(linhas.find((l) => l.medida === "IDV-10")?.data).toBeNull();
+  });
+});
+
+describe("linhasProtocolo — diadococinesia", () => {
+  it("uma linha por tarefa feita, com a mais recente", () => {
+    const ddk = (tarefa: string, quando: string, taxa: number) =>
+      av("ddk", quando, { tarefa, duracao_s: 8, silabas: 40, taxa_silabas_s: taxa, intervalo_cv_pct: 4.24, avisos: [] });
+    const linhas = linhasProtocolo([ddk("pa", "2026-10-01T10:00:00Z", 5.1), ddk("pa", "2026-10-29T10:00:00Z", 6.33), ddk("pataka", "2026-10-29T10:00:00Z", 5.5)]);
+    const d = linhas.filter((l) => l.grupo === "Diadococinesia");
+    expect(d.map((l) => [l.medida, l.valor])).toEqual([["/pa/", "6,3 síl/s · CV 4,2%"], ["/pataka/", "5,5 síl/s · CV 4,2%"]]);
   });
 });

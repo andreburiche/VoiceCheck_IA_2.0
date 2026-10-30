@@ -439,3 +439,20 @@ def test_gravacao_guardada_ouvir_e_apagar(client: httpx.Client) -> None:
     r = client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
     assert r.json() == {"avaliacoes_excluidas": 2, "planos_excluidos": 0, "gravacoes_excluidas": 1}
     assert client.get(f"/api/v1/voz-clinica/avaliacoes/{c['avaliacao_id']}/audio").status_code == 404
+
+
+def test_ddk_salva_taxa_e_ritmo(client: httpx.Client) -> None:
+    from test_voz_clinica_ddk import silabas
+
+    paciente = f"Ddk {uuid.uuid4().hex[:6]}"
+    wav = para_wav(silabas(taxa_s=6.0)[0])
+    r = client.post("/api/v1/voz-clinica/ddk", files={"file": ("ddk.wav", io.BytesIO(wav), "audio/wav")},
+                    data={"paciente": paciente, "tarefa": "pataka"})
+    assert r.status_code == 200, r.text
+    res = r.json()["resultado"]
+    assert res["silabas"] == 36 and res["taxa_silabas_s"] == pytest.approx(6, rel=0.03) and res["tarefa"] == "pataka"
+    item = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"][0]
+    assert item["tipo"] == "ddk" and item["audio"] is True
+    ruim = client.post("/api/v1/voz-clinica/ddk", files={"file": ("ddk.wav", io.BytesIO(wav), "audio/wav")}, data={"tarefa": "la"})
+    assert ruim.status_code == 400
+    client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
