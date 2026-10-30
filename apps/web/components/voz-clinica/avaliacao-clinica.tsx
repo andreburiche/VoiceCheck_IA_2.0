@@ -16,6 +16,7 @@ import { Fonetograma } from "@/components/voz-clinica/fonetograma";
 import { JogosTerapia } from "@/components/voz-clinica/jogos-terapia";
 import { PraticaCasa } from "@/components/voz-clinica/pratica-casa";
 import { CadastroPacienteForm } from "@/components/voz-clinica/cadastro-paciente";
+import { DiagramaDesvio } from "@/components/voz-clinica/diagrama-desvio";
 import { MidiasPaciente } from "@/components/voz-clinica/midias-paciente";
 import { SessoesTerapia } from "@/components/voz-clinica/sessoes-terapia";
 import { montarDocxClinico, nomeArquivoDocx } from "@/lib/voz-clinica-docx";
@@ -871,6 +872,7 @@ function Historico({ paciente, versao, aoExcluirPaciente }: { paciente: string; 
       ) : null}
       {itens?.length ? <Relatorio paciente={paciente} itens={itens} /> : null}
       {itens?.length ? <Evolucao itens={itens} /> : null}
+      {itens?.length ? <DiagramaDesvio itens={itens} /> : null}
       {itens?.length ? (
         <ul className="mt-3 divide-y divide-ink/[0.07] overflow-hidden rounded-xl ring-1 ring-inset ring-ink/10" data-testid="vc2-historico">
           {itens.map((a) => (

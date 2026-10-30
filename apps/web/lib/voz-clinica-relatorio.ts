@@ -21,6 +21,7 @@ import {
 import { linhasAnamnese, type Anamnese } from "@/lib/voz-clinica-anamnese";
 import { dataCurta, escalaY, seriesEvolucao, variacaoTexto, type SerieEvolucao } from "@/lib/voz-clinica-evolucao";
 import { BRAND, esc, omitEmpty, printHtmlDocument } from "@/lib/voicecheck-report-shared";
+import { ROTULO_QUADRANTE, pontosDdf, svgDdf } from "@/lib/voz-clinica-ddf";
 
 export type OpcoesRelatorio = {
   profissional?: string | null;
@@ -196,6 +197,18 @@ function secaoEvolucao(itens: Avaliacao[]): string {
     <div class="graficos">${graficos}</div></section>`;
 }
 
+function secaoDdf(itens: Avaliacao[]): string {
+  const pontos = pontosDdf(itens);
+  if (!pontos.length) return "";
+  const ult = pontos[pontos.length - 1]!;
+  const lista = pontos.map((p, i) => `<li>${i + 1}. ${esc(dataDia(p.criado_em))} — ${esc(ROTULO_QUADRANTE[p.quadrante])}</li>`).join("");
+  return `<section><h2>Irregularidade × ruído</h2>
+    <div class="ddf"><div>${svgDdf(pontos, "claro", 300)}</div>
+    <div><p>Mais recente: <strong>${esc(ROTULO_QUADRANTE[ult.quadrante])}</strong> (jitter ${esc(fixo(ult.jitter, 2))} %, shimmer ${esc(fixo(ult.shimmer, 2))} %, GNE ${esc(fixo(ult.gne, 2))}).</p>
+    <ol class="muted ddf-lista">${lista}</ol>
+    <p class="muted">Inspirado no Diagrama de Desvio Fonatório (VoxMetria) e no diagrama de rouquidão (lingWAVES), sem ser o oficial (constantes não publicadas). Cada eixo vale 1 no limite de normalidade do VoxMetria (jitter 0,6 %, shimmer 6,5 %, GNE 0,5); na irregularidade conta a medida mais alterada.</p></div></div></section>`;
+}
+
 /** Tabela com todas as sessões (o que os gráficos mostram, em números). */
 function secaoSessoes(itens: Avaliacao[]): string {
   const ordenadas = [...itens].sort((a, b) => a.criado_em.localeCompare(b.criado_em));
@@ -248,6 +261,8 @@ function css(): string {
     .grafico figcaption { display: flex; justify-content: space-between; gap: 6pt; font-size: 8.5pt; margin-bottom: 2pt; }
     .grafico figcaption span { color: ${BRAND.muted}; font-family: ui-monospace, Consolas, monospace; font-size: 8pt; }
     .muted { color: ${BRAND.muted}; font-size: 8pt; }
+    .ddf { display: grid; grid-template-columns: 300px 1fr; gap: 12pt; page-break-inside: avoid; }
+    .ddf-lista { margin: 4pt 0; padding-left: 0; list-style: none; }
     .avisos { margin: 2pt 0 0 14pt; padding: 0; color: ${BRAND.caution}; font-size: 8pt; }
     .obs { white-space: pre-wrap; border: 1pt solid ${BRAND.line}; border-radius: 5pt; padding: 6pt 8pt; }
     .ftr { margin-top: 14pt; padding-top: 6pt; border-top: 1pt solid ${BRAND.line}; font-size: 7.5pt; color: ${BRAND.muted}; }
@@ -299,6 +314,7 @@ export function montarRelatorioClinico(paciente: string, itens: Avaliacao[], opc
   ${secaoAcustica(itens)}
   ${secaoProtocolos(itens)}
   ${secaoEvolucao(itens)}
+  ${secaoDdf(itens)}
   ${secaoSessoes(itens)}
   ${obs ? `<section><h2>Observações do profissional</h2><div class="obs">${esc(obs)}</div></section>` : ""}
   <div class="ftr">
