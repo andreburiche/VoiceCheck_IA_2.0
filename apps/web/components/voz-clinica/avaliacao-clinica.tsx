@@ -16,6 +16,7 @@ import { Fonetograma } from "@/components/voz-clinica/fonetograma";
 import { JogosTerapia } from "@/components/voz-clinica/jogos-terapia";
 import { PraticaCasa } from "@/components/voz-clinica/pratica-casa";
 import { CadastroPacienteForm } from "@/components/voz-clinica/cadastro-paciente";
+import { EditorAudio } from "@/components/voz-clinica/editor-audio";
 import { CargaVocal } from "@/components/voz-clinica/carga-vocal";
 import { ComparacaoAntesDepois } from "@/components/voz-clinica/comparacao";
 import { GraficosAnalise } from "@/components/voz-clinica/graficos-analise";
@@ -24,7 +25,7 @@ import { GraficoEvolucao } from "@/components/voz-clinica/grafico-evolucao";
 import { MAX_PONTOS, seriesEvolucao } from "@/lib/voz-clinica-evolucao";
 import { imprimirRelatorioClinico } from "@/lib/voz-clinica-relatorio";
 import { GravadorClinico, gravadorSuportado, type GravacaoClinica } from "@/lib/voz-clinica-gravador";
-import { importarAudio, recortarGravacao } from "@/lib/voz-clinica-importar";
+import { importarAudio } from "@/lib/voz-clinica-importar";
 import { historicoCsv } from "@/lib/voz-clinica-planilha";
 import {
   FAIXAS_F0,
@@ -105,13 +106,11 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
   const idTipo = useId();
   const idGuardar = useId();
   const idArquivo = useId();
-  const [trecho, setTrecho] = useState<{ ini: string; fim: string }>({ ini: "", fim: "" });
 
   function usar(g: GravacaoClinica) {
     setGravacao(g);
     setTempo(g.duracao);
     setUrlAudio(URL.createObjectURL(g.wav));
-    setTrecho({ ini: "0", fim: g.duracao.toFixed(2).replace(".", ",") });
   }
 
   async function importar(arquivo: File | undefined) {
@@ -126,23 +125,6 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
     }
   }
 
-  async function aplicarRecorte() {
-    if (!gravacao) return;
-    const n = (s: string) => Number(s.trim().replace(",", "."));
-    const ini = n(trecho.ini);
-    const fim = n(trecho.fim);
-    if (!Number.isFinite(ini) || !Number.isFinite(fim) || fim <= ini) {
-      setErro("Informe o início e o fim do trecho, em segundos (fim maior que início).");
-      return;
-    }
-    setErro(null);
-    setResultado(null);
-    try {
-      usar(await recortarGravacao(gravacao, ini, fim));
-    } catch (e) {
-      setErro(friendlyError(e, "Não foi possível recortar."));
-    }
-  }
 
   useEffect(() => setSuportado(gravadorSuportado()), []);
   useEffect(() => () => {
@@ -293,22 +275,7 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
         <audio className="mt-4 w-full" src={urlAudio} controls aria-label="Ouvir a gravação" />
       ) : null}
       {gravacao && !gravando ? (
-        <div className="mt-3 flex flex-wrap items-end gap-2" data-testid="vc2-recorte">
-          <div>
-            <Label htmlFor={`${idArquivo}-ini`} className="text-xs">Trecho: início (s)</Label>
-            <Input id={`${idArquivo}-ini`} className="mt-1 w-24" inputMode="decimal" value={trecho.ini}
-              onChange={(e) => setTrecho((t) => ({ ...t, ini: e.target.value }))} data-testid="vc2-recorte-ini" />
-          </div>
-          <div>
-            <Label htmlFor={`${idArquivo}-fim`} className="text-xs">fim (s)</Label>
-            <Input id={`${idArquivo}-fim`} className="mt-1 w-24" inputMode="decimal" value={trecho.fim}
-              onChange={(e) => setTrecho((t) => ({ ...t, fim: e.target.value }))} data-testid="vc2-recorte-fim" />
-          </div>
-          <Button type="button" variant="secondary" size="sm" onClick={() => void aplicarRecorte()} data-testid="vc2-recortar">
-            Recortar trecho
-          </Button>
-          <span className="text-xs text-ink-faint">Use o espectrograma para achar o trecho estável da vogal.</span>
-        </div>
+        <EditorAudio gravacao={gravacao} aoMudar={(g) => { setResultado(null); setSituacaoAudio(null); usar(g); }} />
       ) : null}
       {gravacao && !gravando ? <Espectrograma wav={gravacao.wav} /> : null}
       <Avisos itens={gravacao?.avisos ?? []} />
