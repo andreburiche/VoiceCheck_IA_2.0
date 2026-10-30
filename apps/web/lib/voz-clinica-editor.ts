@@ -1,6 +1,7 @@
 /**
  * VoiceCheck IA 2.0 — edição da gravação antes da análise (como a edição de áudio do VoxMetria):
- * selecionar com o mouse, zoom, ouvir o trecho, manter só a seleção, apagar, copiar e colar, desfazer.
+ * selecionar com o mouse, zoom, ouvir o trecho, manter só a seleção, apagar, copiar e colar, desfazer,
+ * e marcar trechos com etiquetas exportadas como TextGrid (abre no Praat).
  * Funções puras (testáveis); o desenho e o som ficam no componente.
  */
 
@@ -104,4 +105,61 @@ export const segTexto = (s: number) => s.toFixed(2).replace(".", ",");
 export function textoSeg(t: string): number | null {
   const v = Number(t.trim().replace(",", "."));
   return t.trim() !== "" && Number.isFinite(v) ? v : null;
+}
+
+// ---------------------------------------------------------------------------
+// Marcações (camada de intervalos, como a IntervalTier do TextGrid do Praat)
+// ---------------------------------------------------------------------------
+
+export type Marca = Intervalo & { texto: string };
+
+/** Acrescenta a marca em ordem; recusa sobreposição (uma camada de intervalos não se sobrepõe). */
+export function adicionarMarca(marcas: Marca[], nova: Marca): { marcas: Marca[] } | { erro: string } {
+  const texto = nova.texto.trim();
+  if (!texto) return { erro: "Escreva a etiqueta do trecho (ex.: a, pa, frase 1)." };
+  if (nova.fim - nova.ini < 0.01) return { erro: "Selecione um trecho antes de marcar." };
+  const choque = marcas.find((m) => nova.ini < m.fim - 1e-9 && nova.fim > m.ini + 1e-9);
+  if (choque) return { erro: `O trecho se sobrepõe à marca “${choque.texto}”. Ajuste a seleção ou remova a marca.` };
+  return { marcas: [...marcas, { ini: nova.ini, fim: nova.fim, texto }].sort((a, b) => a.ini - b.ini) };
+}
+
+const num = (v: number) => String(Math.round(v * 1e6) / 1e6);
+const aspas = (s: string) => `"${s.replace(/"/g, '""')}"`;
+
+/**
+ * TextGrid do Praat (formato texto longo), com uma camada de intervalos que cobre a gravação
+ * inteira: os trechos sem marca entram com texto vazio, como o Praat exige.
+ */
+export function textGrid(duracao: number, marcas: Marca[], camada = "trechos"): string {
+  const intervalos: Marca[] = [];
+  let t = 0;
+  for (const m of [...marcas].sort((a, b) => a.ini - b.ini)) {
+    const ini = Math.max(t, Math.min(m.ini, duracao));
+    const fim = Math.min(duracao, m.fim);
+    if (fim <= ini) continue;
+    if (ini > t) intervalos.push({ ini: t, fim: ini, texto: "" });
+    intervalos.push({ ini, fim, texto: m.texto });
+    t = fim;
+  }
+  if (t < duracao || !intervalos.length) intervalos.push({ ini: t, fim: duracao, texto: "" });
+  const linhas = [
+    'File type = "ooTextFile"',
+    'Object class = "TextGrid"',
+    "",
+    "xmin = 0 ",
+    `xmax = ${num(duracao)} `,
+    "tiers? <exists> ",
+    "size = 1 ",
+    "item []: ",
+    "    item [1]:",
+    '        class = "IntervalTier" ',
+    `        name = ${aspas(camada)} `,
+    "        xmin = 0 ",
+    `        xmax = ${num(duracao)} `,
+    `        intervals: size = ${intervalos.length} `,
+  ];
+  intervalos.forEach((iv, i) => {
+    linhas.push(`        intervals [${i + 1}]:`, `            xmin = ${num(iv.ini)} `, `            xmax = ${num(iv.fim)} `, `            text = ${aspas(iv.texto)} `);
+  });
+  return linhas.join("\n") + "\n";
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { apagarTrecho, colarTrecho, colunasMinMax, copiarTrecho, normalizarSelecao, segTexto, textoSeg, zoom } from "@/lib/voz-clinica-editor";
+import { adicionarMarca, apagarTrecho, colarTrecho, colunasMinMax, copiarTrecho, normalizarSelecao, segTexto, textGrid, textoSeg, zoom, type Marca } from "@/lib/voz-clinica-editor";
 
 describe("editor de áudio", () => {
   it("min/max por coluna só da janela visível", () => {
@@ -72,5 +72,36 @@ describe("copiar e colar", () => {
     const t2 = new Float32Array(20).fill(0.3);
     expect(colarTrecho(x, taxa, t2, 0).length).toBe(1020);
     expect(colarTrecho(x, taxa, t2, 99).length).toBe(1020);
+  });
+});
+
+describe("marcações e TextGrid", () => {
+  it("acrescenta em ordem e recusa sobreposição ou etiqueta vazia", () => {
+    let m: Marca[] = [];
+    const r1 = adicionarMarca(m, { ini: 1, fim: 1.5, texto: " pa " });
+    if (!("marcas" in r1)) throw new Error("devia aceitar");
+    m = r1.marcas;
+    const r2 = adicionarMarca(m, { ini: 0.2, fim: 0.6, texto: "a" });
+    if (!("marcas" in r2)) throw new Error("devia aceitar");
+    expect(r2.marcas.map((x) => x.texto)).toEqual(["a", "pa"]);
+    expect("erro" in adicionarMarca(r2.marcas, { ini: 1.4, fim: 2, texto: "ta" })).toBe(true);
+    expect("erro" in adicionarMarca(r2.marcas, { ini: 2, fim: 2.5, texto: "  " })).toBe(true);
+    // encostar na marca vizinha não é sobrepor
+    expect("marcas" in adicionarMarca(r2.marcas, { ini: 1.5, fim: 2, texto: "ta" })).toBe(true);
+  });
+
+  it("TextGrid cobre a gravação inteira, com os vazios entre as marcas", () => {
+    const tg = textGrid(2, [{ ini: 0.5, fim: 1, texto: 'diz "a"' }, { ini: 1, fim: 1.25, texto: "pa" }]);
+    expect(tg.startsWith('File type = "ooTextFile"\nObject class = "TextGrid"')).toBe(true);
+    expect(tg.includes("intervals: size = 4 ")).toBe(true);
+    expect(tg.includes('text = "diz ""a""" ')).toBe(true); // aspas dobradas, como o Praat
+    const xs = [...tg.matchAll(/^ {12}xm(in|ax) = ([0-9.]+) $/gm)].map((r) => Number(r[2]));
+    expect(xs).toEqual([0, 0.5, 0.5, 1, 1, 1.25, 1.25, 2]);
+  });
+
+  it("sem marcas: um intervalo vazio do começo ao fim", () => {
+    const tg = textGrid(3.5, []);
+    expect(tg.includes("intervals: size = 1 ")).toBe(true);
+    expect(tg.includes("xmax = 3.5 ")).toBe(true);
   });
 });

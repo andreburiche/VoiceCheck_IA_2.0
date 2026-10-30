@@ -1,20 +1,22 @@
 "use client";
 
-import { ClipboardPaste, Copy, Play, Scissors, Square, Trash2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { ClipboardPaste, Copy, Download, Play, Scissors, Square, Tag, Trash2, Undo2, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { lerWavPcm16 } from "@/lib/voz-clinica-espectrograma";
-import { apagarTrecho, colarTrecho, colunasMinMax, copiarTrecho, normalizarSelecao, segTexto, textoSeg, zoom, type Intervalo } from "@/lib/voz-clinica-editor";
+import { adicionarMarca, apagarTrecho, colarTrecho, colunasMinMax, copiarTrecho, normalizarSelecao, segTexto, textGrid, textoSeg, zoom, type Intervalo, type Marca } from "@/lib/voz-clinica-editor";
 import type { GravacaoClinica } from "@/lib/voz-clinica-gravador";
 import { codificarWav, recortar } from "@/lib/voz-clinica-wav";
 
 const ALTURA = 120;
 /** A análise aceita até 60 s: a edição não deixa passar disso. */
 const MAX_S = 60;
-const COR = { onda: "#20D9D2", fundo: "rgba(148,163,184,0.06)", selecao: "rgba(32,217,210,0.18)", borda: "rgba(32,217,210,0.8)", eixo: "#94A3B8", cursor: "#F8FAFC" };
+const COR = { onda: "#20D9D2", fundo: "rgba(148,163,184,0.06)", selecao: "rgba(32,217,210,0.18)", borda: "rgba(32,217,210,0.8)", eixo: "#94A3B8", cursor: "#F8FAFC", marca: "rgba(232,184,74,0.22)", marcaBorda: "#E8B84A" };
+/** Faixa das marcações, abaixo da onda (como a camada do TextGrid no Praat). */
+const FAIXA = 22;
 
 function novaGravacao(amostras: Float32Array, taxa: number, avisos: string[]): GravacaoClinica {
   return { wav: new Blob([codificarWav(amostras, taxa)], { type: "audio/wav" }), duracao: amostras.length / taxa, taxa, avisos };
@@ -39,6 +41,9 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
   const [copiado, setCopiado] = useState<{ amostras: Float32Array; taxa: number } | null>(null);
   const [ponto, setPonto] = useState<number | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  /** Marcações da gravação atual (somem se a gravação mudar: os tempos deixariam de valer). */
+  const [marcas, setMarcas] = useState<Marca[]>([]);
+  const [etiqueta, setEtiqueta] = useState("");
   const arrasto = useRef<number | null>(null);
   const som = useRef<{ ctx: AudioContext; fonte: AudioBufferSourceNode } | null>(null);
 
@@ -54,6 +59,7 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
         setJanela({ ini: 0, fim: d });
         setSel(null);
         setPonto(null);
+        setMarcas([]);
         setCampos({ ini: "0,00", fim: segTexto(d) });
         setErro(null);
       } catch {
@@ -81,11 +87,12 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
     const dpr = window.devicePixelRatio || 1;
     const w = c.clientWidth;
     c.width = Math.round(w * dpr);
-    c.height = Math.round(ALTURA * dpr);
+    const altura = ALTURA + (marcas.length ? FAIXA : 0);
+    c.height = Math.round(altura * dpr);
     const g = c.getContext("2d");
     if (!g) return;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    g.clearRect(0, 0, w, ALTURA);
+    g.clearRect(0, 0, w, altura);
     const ih = ALTURA - 18;
     const x = (t: number) => ((t - janela.ini) / (janela.fim - janela.ini)) * w;
     g.fillStyle = COR.fundo;
@@ -116,6 +123,30 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
       g.fillStyle = COR.eixo;
       for (let y = 0; y < ih; y += 6) g.fillRect(x(ponto), y, 1, 3);
     }
+    if (marcas.length) {
+      // faixa das marcações: retângulo por trecho e a etiqueta, cortada se não couber
+      const y0 = ALTURA;
+      g.font = "12px ui-sans-serif, system-ui, sans-serif";
+      g.textBaseline = "middle";
+      g.textAlign = "center";
+      for (const m of marcas) {
+        const a = Math.max(0, x(m.ini));
+        const b = Math.min(w, x(m.fim));
+        if (b <= 0 || a >= w) continue;
+        g.fillStyle = COR.marca;
+        g.fillRect(a, y0, b - a, FAIXA - 2);
+        g.fillStyle = COR.marcaBorda;
+        g.fillRect(a, y0, 1, FAIXA - 2);
+        g.fillRect(b - 1, y0, 1, FAIXA - 2);
+        g.save();
+        g.beginPath();
+        g.rect(a + 2, y0, Math.max(0, b - a - 4), FAIXA);
+        g.clip();
+        g.fillStyle = COR.cursor;
+        g.fillText(m.texto, (a + b) / 2, y0 + (FAIXA - 2) / 2);
+        g.restore();
+      }
+    }
     g.font = "11px ui-monospace, Consolas, monospace";
     g.fillStyle = COR.eixo;
     g.textBaseline = "alphabetic";
@@ -123,7 +154,7 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
     g.fillText(`${segTexto(janela.ini)} s`, 2, ALTURA - 4);
     g.textAlign = "right";
     g.fillText(`${segTexto(janela.fim)} s`, w - 2, ALTURA - 4);
-  }, [audio, janela, sel, cursor, ponto]);
+  }, [audio, janela, sel, cursor, ponto, marcas]);
 
   // cursor de reprodução
   useEffect(() => {
@@ -215,6 +246,47 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
     editar(colarTrecho(audio.amostras, audio.taxa, copiado.amostras, alvo));
     setAviso(sel ? "Seleção substituída pelo trecho copiado." : `Trecho colado em ${segTexto(typeof alvo === "number" ? alvo : alvo.ini)} s.`);
   }
+  function marcar() {
+    const s = selecaoDosCampos();
+    if (!s) { setErro("Selecione o trecho que quer marcar."); return; }
+    const r = adicionarMarca(marcas, { ...s, texto: etiqueta });
+    if ("erro" in r) { setErro(r.erro); return; }
+    setMarcas(r.marcas);
+    setEtiqueta("");
+    setErro(null);
+    setAviso(`Trecho de ${segTexto(s.ini)} a ${segTexto(s.fim)} s marcado como “${etiqueta.trim()}”.`);
+  }
+  function ouvirMarca(m: Marca) {
+    aplicarSel({ ini: m.ini, fim: m.fim });
+    if (!audio) return;
+    parar();
+    const ctx = new AudioContext();
+    const pedaco = recortar(audio.amostras, audio.taxa, m.ini, m.fim);
+    const buf = ctx.createBuffer(1, Math.max(1, pedaco.length), audio.taxa);
+    buf.getChannelData(0).set(pedaco);
+    const fonte = ctx.createBufferSource();
+    fonte.buffer = buf;
+    fonte.connect(ctx.destination);
+    fonte.onended = () => parar();
+    fonte.start();
+    som.current = { ctx, fonte };
+    setTocando({ t0: ctx.currentTime, ini: m.ini, fim: m.fim });
+  }
+  function baixar(blob: Blob, nome: string) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = nome;
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function baixarPraat() {
+    // o par WAV + TextGrid com o mesmo nome abre junto no Praat (Open › Read from file, os dois)
+    const base = `gravacao-${new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "")}`;
+    baixar(new Blob([textGrid(duracao, marcas)], { type: "text/plain;charset=utf-8" }), `${base}.TextGrid`);
+    window.setTimeout(() => baixar(gravacao.wav, `${base}.wav`), 300);
+    setAviso("Baixados o WAV e o TextGrid com o mesmo nome: no Praat, abra os dois e selecione-os juntos (View & Edit).");
+  }
   function desfazer() {
     const anterior = historico[historico.length - 1];
     if (!anterior) return;
@@ -228,7 +300,7 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
       <canvas
         ref={canvas}
         className="block w-full cursor-crosshair touch-none rounded-lg ring-1 ring-inset ring-ink/10"
-        style={{ height: ALTURA }}
+        style={{ height: ALTURA + (marcas.length ? FAIXA : 0) }}
         role="img"
         aria-label={`Forma de onda de ${segTexto(janela.ini)} a ${segTexto(janela.fim)} s${sel ? `; seleção de ${segTexto(sel.ini)} a ${segTexto(sel.fim)} s` : ""}. Arraste para selecionar ou use os campos de início e fim.`}
         onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); arrasto.current = tempoDoEvento(e); setPonto(arrasto.current); aplicarSel(null); }}
@@ -284,8 +356,40 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
           <Undo2 className="h-4 w-4" aria-hidden /> Desfazer
         </Button>
       </div>
+      <div className="mt-3 flex flex-wrap items-end gap-2" data-testid="vc2-marcas">
+        <div>
+          <Label htmlFor={`${id}-etq`} className="text-xs">Etiqueta do trecho</Label>
+          <Input id={`${id}-etq`} className="mt-1 h-9 w-40" maxLength={40} value={etiqueta} placeholder="ex.: pa, frase 1"
+            onChange={(e) => setEtiqueta(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); marcar(); } }}
+            data-testid="vc2-marca-texto" />
+        </div>
+        <Button type="button" size="sm" variant="secondary" onClick={marcar} disabled={!audio} data-testid="vc2-marcar">
+          <Tag className="h-4 w-4" aria-hidden /> Marcar seleção
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={baixarPraat} disabled={!audio} data-testid="vc2-baixar-praat"
+          title="Baixa a gravação (WAV) e as marcações (TextGrid) para abrir no Praat">
+          <Download className="h-4 w-4" aria-hidden /> WAV + TextGrid (Praat)
+        </Button>
+      </div>
+      {marcas.length ? (
+        <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Trechos marcados">
+          {marcas.map((m) => (
+            <li key={`${m.ini}-${m.fim}`} className="inline-flex items-center rounded-lg text-sm ring-1 ring-inset ring-[#E8B84A]/50">
+              <button type="button" onClick={() => ouvirMarca(m)} className="min-h-[36px] rounded-l-lg px-2.5 text-ink hover:bg-canvas-overlay/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                aria-label={`Ouvir ${m.texto}, de ${segTexto(m.ini)} a ${segTexto(m.fim)} s`}>
+                {m.texto} <span className="text-data text-xs text-ink-muted">{segTexto(m.ini)}–{segTexto(m.fim)} s</span>
+              </button>
+              <button type="button" onClick={() => setMarcas((ms) => ms.filter((x) => x !== m))}
+                className="flex min-h-[36px] min-w-[32px] items-center justify-center rounded-r-lg text-ink-muted hover:text-signal-err focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                aria-label={`Remover a marca ${m.texto}`}>
+                <X className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <p className="mt-1 text-xs text-ink-faint">
-        Arraste sobre a onda para selecionar; um clique marca onde colar. Para a análise, deixe só o trecho estável da vogal (sem o início e o fim).
+        Arraste sobre a onda para selecionar; um clique marca onde colar. As marcações valem para a gravação atual (editar a gravação as apaga). Para a análise, deixe só o trecho estável da vogal (sem o início e o fim).
       </p>
       {aviso && !erro ? <p className="mt-1 text-xs text-ink-muted" role="status" data-testid="vc2-editor-aviso">{aviso}</p> : null}
       {erro ? <p className="mt-2 text-sm text-signal-err" role="alert">{erro}</p> : null}
