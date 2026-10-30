@@ -160,6 +160,18 @@ const EXTRATORES: Extrator[] = [
     leitura: "Diferença média entre a voz mais forte e a mais fraca por nota (relativa: mesmo microfone e distância entre sessões).",
     valor: (a) => (a.resultado as ResultadoFonetograma).resumo?.faixa_dinamica_media_db,
   },
+  {
+    chave: "campo_spl_min", titulo: "Fonetograma — voz mais fraca (dB SPL)", unidade: "dB SPL", casas: 1, tipo: "fonetograma", dominio: null,
+    filtro: (a) => (a.resultado as ResultadoFonetograma).resumo_spl?.db_min != null,
+    leitura: "Só fonetogramas com o microfone calibrado por decibelímetro. Mais baixo = consegue sustentar a voz mais fraca.",
+    valor: (a) => (a.resultado as ResultadoFonetograma).resumo_spl?.db_min,
+  },
+  {
+    chave: "campo_spl_max", titulo: "Fonetograma — voz mais forte (dB SPL)", unidade: "dB SPL", casas: 1, tipo: "fonetograma", dominio: null,
+    filtro: (a) => (a.resultado as ResultadoFonetograma).resumo_spl?.db_max != null,
+    leitura: "Só fonetogramas com o microfone calibrado por decibelímetro.",
+    valor: (a) => (a.resultado as ResultadoFonetograma).resumo_spl?.db_max,
+  },
   ...(Object.keys(JOGOS) as JogoId[]).map((jogo): Extrator => ({
     chave: `jogo_${jogo}`,
     titulo: `Jogo — ${JOGOS[jogo].titulo}`,

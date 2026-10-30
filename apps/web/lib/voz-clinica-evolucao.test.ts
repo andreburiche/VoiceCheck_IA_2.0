@@ -138,3 +138,16 @@ describe("evolução da nasalância e do EGG", () => {
     expect(s.map((x) => x.titulo)).toEqual(["Quociente de contato (EGG, nível 35%)"]);
   });
 });
+
+describe("evolução do fonetograma em dB SPL", () => {
+  const campo = (dia: number, spl: { db_min: number; db_max: number } | null) => ({ id: `f${dia}`, paciente: "Ana", tipo: "fonetograma", motor: null,
+    criado_em: `2026-10-${String(dia).padStart(2, "0")}T10:00:00Z`,
+    resultado: { resumo: { extensao_st: 20, faixa_dinamica_media_db: 20 }, ...(spl ? { resumo_spl: { ...spl, deslocamento_db: 100 } } : {}) } }) as unknown as Avaliacao;
+
+  it("só os fonetogramas calibrados entram nas séries em dB SPL", () => {
+    const s = seriesEvolucao([campo(1, { db_min: 58, db_max: 96 }), campo(5, null), campo(9, { db_min: 54.5, db_max: 99 })]);
+    const fraca = s.find((x) => x.titulo === "Fonetograma — voz mais fraca (dB SPL)")!;
+    expect(fraca.pontos.map((p) => p.valor)).toEqual([58, 54.5]);
+    expect(s.find((x) => x.titulo === "Fonetograma — extensão")!.pontos).toHaveLength(3);
+  });
+});

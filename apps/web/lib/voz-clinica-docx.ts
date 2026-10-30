@@ -17,6 +17,7 @@ import {
   type ResultadoSessao,
 } from "@/lib/voz-clinica-api";
 import { linhasAnamnese, type Anamnese } from "@/lib/voz-clinica-anamnese";
+import { notaIntensidade } from "@/lib/voz-clinica-calibracao";
 import type { OpcoesRelatorio } from "@/lib/voz-clinica-relatorio";
 
 // ---------------------------------------------------------------------------
@@ -255,7 +256,7 @@ export function corpoDocx(paciente: string, itens: Avaliacao[], opcoes: OpcoesRe
     b.push(par(obs));
   }
   b.push(par("Os gráficos de evolução estão no relatório em PDF.", "Nota"));
-  b.push(par("Medidas acústicas calculadas a partir das gravações enviadas. A intensidade é relativa (dBFS): valores absolutos em dB SPL exigem microfone calibrado.", "Nota"));
+  b.push(par(notaIntensidade(itens.map((a) => a.resultado)), "Nota"));
   b.push(par("Notas de corte: IDV-10 7,5 e QVV 91,25 (Behlau et al., 2016). EASE-BR: total de 0 a 66 (Rocha et al., 2014), sem nota de corte publicada.", "Nota"));
   b.push(par("Este relatório apoia a avaliação do profissional e não é um diagnóstico médico.", "Nota"));
   return b.join("");

@@ -147,6 +147,21 @@ export function paraSpl(dbfs: number, c: Pick<Calibracao, "deslocamento_db">): n
   return Math.round((dbfs + c.deslocamento_db) * 10) / 10;
 }
 
+/**
+ * Nota de rodapé dos relatórios sobre a intensidade: relativa (dBFS), a não ser nos registros
+ * feitos com o microfone calibrado — e, nesse caso, com que calibração.
+ */
+export function notaIntensidade(resultados: unknown[]): string {
+  const cals = resultados
+    .map((r) => (r && typeof r === "object" ? (r as { calibracao?: Partial<Calibracao> }).calibracao : undefined))
+    .filter((c): c is Calibracao => !!c && erroDaCalibracao(c) === null);
+  if (!cals.length) return "Medidas acústicas calculadas a partir das gravações enviadas. A intensidade é relativa (dBFS): valores absolutos em dB SPL exigem microfone calibrado.";
+  const unicas = [...new Map(cals.map((c) => [`${c.data}|${c.deslocamento_db}`, c])).values()]
+    .sort((a, b) => a.data.localeCompare(b.data));
+  const desc = unicas.map((c) => `${new Date(c.data).toLocaleDateString("pt-BR")} (${c.distancia_cm.toLocaleString("pt-BR")} cm, ponderação ${c.ponderacao}, referência ${c.referencia_db_spl.toLocaleString("pt-BR")} dB SPL)`);
+  return `Medidas acústicas calculadas a partir das gravações enviadas. A intensidade é relativa (dBFS), exceto onde aparece em dB SPL: nesses registros o microfone foi calibrado com decibelímetro em ${desc.join("; ")}. A conversão vale para o mesmo microfone, ganho e distância da calibração.`;
+}
+
 /** Avisos que não impedem o uso, mas o profissional precisa ver. */
 export function avisosDaCalibracao(c: Calibracao, microfoneAtual: string | null, agora = new Date()): string[] {
   const avisos: string[] = [];

@@ -19,6 +19,7 @@ import {
   type ResultadoQvv,
 } from "@/lib/voz-clinica-api";
 import { linhasAnamnese, type Anamnese } from "@/lib/voz-clinica-anamnese";
+import { notaIntensidade } from "@/lib/voz-clinica-calibracao";
 import { dataCurta, escalaY, seriesEvolucao, variacaoTexto, type SerieEvolucao } from "@/lib/voz-clinica-evolucao";
 import { BRAND, esc, omitEmpty, printHtmlDocument } from "@/lib/voicecheck-report-shared";
 import { ROTULO_QUADRANTE, pontosDdf, svgDdf } from "@/lib/voz-clinica-ddf";
@@ -318,7 +319,7 @@ export function montarRelatorioClinico(paciente: string, itens: Avaliacao[], opc
   ${secaoSessoes(itens)}
   ${obs ? `<section><h2>Observações do profissional</h2><div class="obs">${esc(obs)}</div></section>` : ""}
   <div class="ftr">
-    <p>Medidas acústicas calculadas a partir das gravações enviadas. A intensidade é relativa (dBFS): valores absolutos em dB SPL exigem microfone calibrado.</p>
+    <p>${esc(notaIntensidade(itens.map((a) => a.resultado)))}</p>
     <p>Notas de corte: IDV-10 7,5 e QVV 91,25 (Behlau et al., 2016). EASE-BR: 22 itens de 0 a 3, itens 6, 12 e 21 invertidos, total de 0 a 66 (Rocha et al., 2014), sem nota de corte publicada. Os textos dos itens dos protocolos seguem as versões validadas no Brasil.</p>
     <p>Este relatório apoia a avaliação do profissional e não é um diagnóstico médico.</p>
   </div>

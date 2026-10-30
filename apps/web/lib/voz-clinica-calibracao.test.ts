@@ -8,6 +8,7 @@ import {
   criarCalibracao,
   guardarCalibracao,
   medirReferencia,
+  notaIntensidade,
   paraSpl,
 } from "@/lib/voz-clinica-calibracao";
 
@@ -76,5 +77,14 @@ describe("calibração dBFS → dB SPL", () => {
     expect(avisos[0]).toMatch(/90 dias/);
     expect(avisos[1]).toMatch(/microfone mudou/);
     expect(avisosDaCalibracao({ ...c, ponderacao: "C", data: "2026-10-29T12:00:00Z" }, "USB Mic", new Date("2026-10-30T12:00:00Z"))).toEqual([]);
+  });
+
+  it("nota dos relatórios: dBFS sem calibração; descreve a calibração quando há", () => {
+    expect(notaIntensidade([{}, null, { motor: "praat" }])).toContain("valores absolutos em dB SPL exigem microfone calibrado");
+    const c = criarCalibracao(-30, 75, "C", 30, "USB", new Date("2026-10-20T12:00:00Z"));
+    const nota = notaIntensidade([{ calibracao: c }, { calibracao: c }, { calibracao: { ...c, deslocamento_db: 999 } }]);
+    expect(nota).toContain("exceto onde aparece em dB SPL");
+    expect(nota).toContain("20/10/2026 (30 cm, ponderação C, referência 75 dB SPL)");
+    expect(nota.split("ponderação").length).toBe(2); // repetida e inválida não entram
   });
 });
