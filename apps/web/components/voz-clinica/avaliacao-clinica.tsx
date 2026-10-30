@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileText, LoaderCircle, Mic, Square, Trash2 } from "lucide-react";
+import { Download, FileText, LoaderCircle, Mic, NotebookPen, Square, Trash2, Upload } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -22,10 +22,12 @@ import { GraficoEvolucao } from "@/components/voz-clinica/grafico-evolucao";
 import { MAX_PONTOS, seriesEvolucao } from "@/lib/voz-clinica-evolucao";
 import { imprimirRelatorioClinico } from "@/lib/voz-clinica-relatorio";
 import { GravadorClinico, gravadorSuportado, type GravacaoClinica } from "@/lib/voz-clinica-gravador";
+import { importarAudio, recortarGravacao } from "@/lib/voz-clinica-importar";
 import {
   FAIXAS_F0,
   ROTULO_TIPO,
   analisarGravacao,
+  anotarAvaliacao,
   calcularProtocolo,
   excluirAvaliacao,
   excluirPaciente,
@@ -97,6 +99,45 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
   const relogio = useRef<number | null>(null);
   const idTipo = useId();
   const idGuardar = useId();
+  const idArquivo = useId();
+  const [trecho, setTrecho] = useState<{ ini: string; fim: string }>({ ini: "", fim: "" });
+
+  function usar(g: GravacaoClinica) {
+    setGravacao(g);
+    setTempo(g.duracao);
+    setUrlAudio(URL.createObjectURL(g.wav));
+    setTrecho({ ini: "0", fim: g.duracao.toFixed(2).replace(".", ",") });
+  }
+
+  async function importar(arquivo: File | undefined) {
+    if (!arquivo) return;
+    setErro(null);
+    setResultado(null);
+    setSituacaoAudio(null);
+    try {
+      usar(await importarAudio(arquivo));
+    } catch (e) {
+      setErro(friendlyError(e, "Não foi possível abrir o arquivo."));
+    }
+  }
+
+  async function aplicarRecorte() {
+    if (!gravacao) return;
+    const n = (s: string) => Number(s.trim().replace(",", "."));
+    const ini = n(trecho.ini);
+    const fim = n(trecho.fim);
+    if (!Number.isFinite(ini) || !Number.isFinite(fim) || fim <= ini) {
+      setErro("Informe o início e o fim do trecho, em segundos (fim maior que início).");
+      return;
+    }
+    setErro(null);
+    setResultado(null);
+    try {
+      usar(await recortarGravacao(gravacao, ini, fim));
+    } catch (e) {
+      setErro(friendlyError(e, "Não foi possível recortar."));
+    }
+  }
 
   useEffect(() => setSuportado(gravadorSuportado()), []);
   useEffect(() => () => {
@@ -231,8 +272,38 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
         <Erro texto="Este navegador não grava áudio. Use Chrome, Edge, Firefox ou Safari atualizados." />
       ) : null}
 
+      {!gravando ? (
+        <div className="mt-3">
+          <label htmlFor={idArquivo}
+            className="inline-flex min-h-[36px] cursor-pointer items-center gap-1.5 rounded-lg px-2 text-sm text-ink-muted ring-1 ring-inset ring-line hover:text-ink focus-within:ring-2 focus-within:ring-accent">
+            <Upload className="h-4 w-4" aria-hidden /> Importar arquivo de áudio
+          </label>
+          <input id={idArquivo} type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg" className="sr-only"
+            onChange={(e) => { void importar(e.target.files?.[0]); e.target.value = ""; }} data-testid="vc2-importar" />
+          <span className="ml-2 text-xs text-ink-faint">WAV de preferência; até 60 s.</span>
+        </div>
+      ) : null}
+
       {urlAudio ? (
         <audio className="mt-4 w-full" src={urlAudio} controls aria-label="Ouvir a gravação" />
+      ) : null}
+      {gravacao && !gravando ? (
+        <div className="mt-3 flex flex-wrap items-end gap-2" data-testid="vc2-recorte">
+          <div>
+            <Label htmlFor={`${idArquivo}-ini`} className="text-xs">Trecho: início (s)</Label>
+            <Input id={`${idArquivo}-ini`} className="mt-1 w-24" inputMode="decimal" value={trecho.ini}
+              onChange={(e) => setTrecho((t) => ({ ...t, ini: e.target.value }))} data-testid="vc2-recorte-ini" />
+          </div>
+          <div>
+            <Label htmlFor={`${idArquivo}-fim`} className="text-xs">fim (s)</Label>
+            <Input id={`${idArquivo}-fim`} className="mt-1 w-24" inputMode="decimal" value={trecho.fim}
+              onChange={(e) => setTrecho((t) => ({ ...t, fim: e.target.value }))} data-testid="vc2-recorte-fim" />
+          </div>
+          <Button type="button" variant="secondary" size="sm" onClick={() => void aplicarRecorte()} data-testid="vc2-recortar">
+            Recortar trecho
+          </Button>
+          <span className="text-xs text-ink-faint">Use o espectrograma para achar o trecho estável da vogal.</span>
+        </div>
       ) : null}
       {gravacao && !gravando ? <Espectrograma wav={gravacao.wav} /> : null}
       <Avisos itens={gravacao?.avisos ?? []} />
@@ -292,7 +363,7 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
             Medido pelo motor {resultado?.motor === "praat" ? `Praat ${resultado.versao_praat ?? ""}` : "interno"}. Não é diagnóstico médico.
           </p>
           <Avisos itens={resultado?.avisos ?? []} />
-          {resultado?.graficos ? <GraficosAnalise dados={resultado.graficos} /> : null}
+          {resultado?.graficos ? <GraficosAnalise dados={resultado.graficos} formantes={resultado.formantes} /> : null}
         </div>
       ) : null}
     </section>
@@ -585,6 +656,58 @@ function DadosDoPaciente({ paciente, aoExcluir }: { paciente: string; aoExcluir:
   );
 }
 
+/** Anotação livre do profissional em cada avaliação (como o editor de anotações do VoxMetria). */
+function Anotacao({ avaliacao, aoSalvar }: { avaliacao: Avaliacao; aoSalvar: (a: Avaliacao) => void }) {
+  const [editando, setEditando] = useState(false);
+  const [texto, setTexto] = useState(avaliacao.anotacao ?? "");
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const id = useId();
+
+  async function salvar() {
+    setSalvando(true);
+    setErro(null);
+    try {
+      aoSalvar(await anotarAvaliacao(avaliacao.id, texto));
+      setEditando(false);
+    } catch (e) {
+      setErro(friendlyError(e, "Não foi possível salvar a anotação."));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  if (!editando) {
+    return (
+      <div className="mt-1">
+        {avaliacao.anotacao ? (
+          <p className="whitespace-pre-wrap text-xs text-ink" data-testid="vc2-anotacao-texto">{avaliacao.anotacao}</p>
+        ) : null}
+        <button type="button" onClick={() => { setTexto(avaliacao.anotacao ?? ""); setEditando(true); }}
+          className="mt-0.5 inline-flex min-h-[28px] items-center gap-1 rounded text-xs text-ink-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          data-testid="vc2-anotar">
+          <NotebookPen className="h-3.5 w-3.5" aria-hidden /> {avaliacao.anotacao ? "Editar anotação" : "Anotar"}
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-2">
+      <label htmlFor={id} className="text-xs text-ink-muted">Anotação</label>
+      <textarea id={id} value={texto} maxLength={4000} rows={3} onChange={(e) => setTexto(e.target.value)}
+        className="mt-1 block w-full rounded-lg border border-line bg-canvas-raised px-3 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        data-testid="vc2-anotacao-campo" />
+      <div className="mt-1 flex gap-2">
+        <Button type="button" size="sm" onClick={() => void salvar()} disabled={salvando} data-testid="vc2-anotacao-salvar">
+          {salvando ? "Salvando…" : "Salvar anotação"}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setEditando(false)}>Cancelar</Button>
+      </div>
+      <Erro texto={erro} />
+    </div>
+  );
+}
+
 function Historico({ paciente, versao, aoExcluirPaciente }: { paciente: string; versao: number; aoExcluirPaciente: () => void }) {
   const [itens, setItens] = useState<Avaliacao[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -659,6 +782,7 @@ function Historico({ paciente, versao, aoExcluirPaciente }: { paciente: string; 
                   {ROTULO_TIPO[a.tipo]} <span className="text-data ml-2 text-xs font-normal text-ink-faint">{formatarData(a.criado_em)}</span>
                 </p>
                 <p className="text-data mt-0.5 truncate text-xs text-ink-muted">{resumoAvaliacao(a)}</p>
+                <Anotacao avaliacao={a} aoSalvar={(nova) => setItens((l) => l?.map((x) => (x.id === nova.id ? nova : x)) ?? l)} />
               </div>
               <Button
                 type="button"

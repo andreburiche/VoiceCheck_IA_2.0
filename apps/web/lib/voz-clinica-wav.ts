@@ -49,3 +49,20 @@ export function codificarWav(amostras: Float32Array, taxa: number): ArrayBuffer 
   }
   return buffer;
 }
+
+/** Média dos canais (estéreo → mono), como o servidor faz ao ler o WAV. */
+export function misturarMono(canais: Float32Array[]): Float32Array {
+  if (!canais.length) return new Float32Array(0);
+  if (canais.length === 1) return canais[0]!;
+  const n = Math.min(...canais.map((c) => c.length));
+  const saida = new Float32Array(n);
+  for (const c of canais) for (let i = 0; i < n; i++) saida[i]! += c[i]! / canais.length;
+  return saida;
+}
+
+/** Trecho [inicio, fim) em segundos, limitado à duração. */
+export function recortar(amostras: Float32Array, taxa: number, inicio_s: number, fim_s: number): Float32Array {
+  const a = Math.max(0, Math.min(amostras.length, Math.round(inicio_s * taxa)));
+  const b = Math.max(a, Math.min(amostras.length, Math.round(fim_s * taxa)));
+  return amostras.slice(a, b);
+}

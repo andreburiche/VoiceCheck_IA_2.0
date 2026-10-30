@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { codificarWav, juntarBlocos } from "@/lib/voz-clinica-wav";
+import { codificarWav, juntarBlocos, misturarMono, recortar } from "@/lib/voz-clinica-wav";
 import { avisosDeFiltros, avisosDeNivel } from "@/lib/voz-clinica-gravador";
 
 describe("codificarWav", () => {
@@ -52,5 +52,16 @@ describe("avisos do gravador", () => {
     expect(avisosDeNivel(1)[0]).toContain("saturou");
     expect(avisosDeNivel(0.01)[0]).toContain("baixo");
     expect(avisosDeNivel(0.5)).toEqual([]);
+  });
+});
+
+describe("misturarMono e recortar", () => {
+  it("média dos canais e corte em segundos", () => {
+    const m = misturarMono([new Float32Array([1, 0, 0.5]), new Float32Array([0, 0, 0.5])]);
+    expect(Array.from(m)).toEqual([0.5, 0, 0.5]);
+    const x = Float32Array.from({ length: 10 }, (_, i) => i);
+    expect(Array.from(recortar(x, 2, 1, 3))).toEqual([2, 3, 4, 5]);
+    expect(Array.from(recortar(x, 2, 4, 99))).toEqual([8, 9]);
+    expect(recortar(x, 2, 3, 1).length).toBe(0);
   });
 });

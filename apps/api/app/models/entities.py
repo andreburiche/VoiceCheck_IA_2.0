@@ -556,6 +556,8 @@ class ClinicalEvaluation(Base, TimestampMixin):
     audio_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     #: Tamanho do WAV guardado; entra na cota de armazenamento do plano.
     audio_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    #: Anotação livre do profissional sobre esta avaliação/gravação (texto, até 4000 caracteres).
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class HomePracticePlan(Base, TimestampMixin):

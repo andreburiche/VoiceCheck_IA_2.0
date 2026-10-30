@@ -480,3 +480,21 @@ def test_cepstral_vogal_e_frase(client: httpx.Client) -> None:
     sem_frase = client.post("/api/v1/voz-clinica/cepstral", files={"vogal": ("v.wav", io.BytesIO(para_wav(_vogal())), "audio/wav")})
     assert sem_frase.status_code == 422
     client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
+
+
+def test_anotacao_por_avaliacao(client: httpx.Client) -> None:
+    paciente = f"Nota {uuid.uuid4().hex[:6]}"
+    ident = client.post("/api/v1/voz-clinica/protocolos/idv10", json={"respostas": [1] * 10, "paciente": paciente}).json()["avaliacao_id"]
+    r = client.put(f"/api/v1/voz-clinica/avaliacoes/{ident}/anotacao", json={"texto": "  Gravado após a aula; voz cansada.  "})
+    assert r.status_code == 200, r.text
+    assert r.json()["anotacao"] == "Gravado após a aula; voz cansada." and r.json()["resultado"]["total"] == 10
+    item = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"][0]
+    assert item["anotacao"] == "Gravado após a aula; voz cansada."
+    exportado = client.get("/api/v1/voz-clinica/pacientes/exportar", params={"paciente": paciente}).json()
+    assert exportado["avaliacoes"][0]["anotacao"].startswith("Gravado")
+    assert client.put(f"/api/v1/voz-clinica/avaliacoes/{ident}/anotacao", json={"texto": "  "}).json()["anotacao"] is None
+    assert client.put(f"/api/v1/voz-clinica/avaliacoes/{ident}/anotacao", json={"texto": "x" * 4001}).status_code == 422
+    assert _cliente("intruso").put(f"/api/v1/voz-clinica/avaliacoes/{ident}/anotacao", json={"texto": "a"}).status_code == 404
+    sem_csrf = httpx.Client(base_url=BASE, cookies=client.cookies)
+    assert sem_csrf.put(f"/api/v1/voz-clinica/avaliacoes/{ident}/anotacao", json={"texto": "a"}).status_code == 403
+    client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})

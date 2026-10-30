@@ -13,12 +13,12 @@ import {
   type Espectrograma as Dados,
 } from "@/lib/voz-clinica-espectrograma";
 
-const FAIXA_DINAMICA_DB = 70;
+const FAIXA_PADRAO_DB = 70;
 const FMAX = 5000;
 
 type Modo = "larga" | "estreita";
 
-function desenhar(c: HTMLCanvasElement, e: Dados, duracao: number, f0: { t: number; hz: number | null }[] | null) {
+function desenhar(c: HTMLCanvasElement, e: Dados, duracao: number, f0: { t: number; hz: number | null }[] | null, faixaDb = FAIXA_PADRAO_DB, ganhoDb = 0) {
   const dpr = window.devicePixelRatio || 1;
   const w = c.clientWidth;
   const h = c.clientHeight;
@@ -36,7 +36,7 @@ function desenhar(c: HTMLCanvasElement, e: Dados, duracao: number, f0: { t: numb
   const img = new ImageData(e.quadros, e.faixas);
   for (let q = 0; q < e.quadros; q++) {
     for (let k = 0; k < e.faixas; k++) {
-      const v = (e.db[q * e.faixas + k]! + FAIXA_DINAMICA_DB) / FAIXA_DINAMICA_DB;
+      const v = Math.max(0, Math.min(1, (e.db[q * e.faixas + k]! + ganhoDb + faixaDb) / faixaDb));
       const [r, gr, b] = corSequencial(v);
       const i = ((e.faixas - 1 - k) * e.quadros + q) * 4; // grave embaixo
       img.data[i] = r; img.data[i + 1] = gr; img.data[i + 2] = b; img.data[i + 3] = 255;
@@ -90,6 +90,8 @@ export function Espectrograma({ wav }: { wav: Blob }) {
   const id = useId();
   const [modo, setModo] = useState<Modo>("estreita");
   const [comF0, setComF0] = useState(true);
+  const [ganho, setGanho] = useState(0);
+  const [faixa, setFaixa] = useState(FAIXA_PADRAO_DB);
   const [estado, setEstado] = useState<"calculando" | "pronto" | "erro">("calculando");
   const canvas = useRef<HTMLCanvasElement>(null);
   const audio = useRef<{ amostras: Float32Array; taxa: number } | null>(null);
@@ -120,10 +122,10 @@ export function Espectrograma({ wav }: { wav: Blob }) {
     const t = window.setTimeout(() => {
       const e = calcularEspectrograma(a.amostras, a.taxa, { ...(modo === "larga" ? BANDA_LARGA : BANDA_ESTREITA), fmax: FMAX });
       if (comF0 && !f0.current) f0.current = contornoF0(a.amostras, a.taxa);
-      desenhar(c, e, a.amostras.length / a.taxa, comF0 ? f0.current : null);
+      desenhar(c, e, a.amostras.length / a.taxa, comF0 ? f0.current : null, faixa, ganho);
     }, 0);
     return () => window.clearTimeout(t);
-  }, [estado, modo, comF0]);
+  }, [estado, modo, comF0, ganho, faixa]);
 
   return (
     <figure className="mt-4" aria-labelledby={`${id}-t`} data-testid="vc2-espectro">
@@ -142,6 +144,16 @@ export function Espectrograma({ wav }: { wav: Blob }) {
           <label className="inline-flex items-center gap-1.5 text-ink-muted">
             <input type="checkbox" checked={comF0} onChange={(e) => setComF0(e.target.checked)} className="accent-[var(--accent)]" />
             Curva de F0
+          </label>
+          <label className="inline-flex items-center gap-1.5 text-ink-muted">
+            Ganho
+            <input type="range" min={-20} max={30} step={2} value={ganho} onChange={(e) => setGanho(Number(e.target.value))}
+              className="w-20 accent-[var(--accent)]" aria-valuetext={`${ganho} dB`} data-testid="vc2-espectro-ganho" />
+          </label>
+          <label className="inline-flex items-center gap-1.5 text-ink-muted">
+            Contraste
+            <input type="range" min={40} max={100} step={5} value={140 - faixa} onChange={(e) => setFaixa(140 - Number(e.target.value))}
+              className="w-20 accent-[var(--accent)]" aria-valuetext={`faixa de ${faixa} dB`} />
           </label>
         </span>
       </figcaption>

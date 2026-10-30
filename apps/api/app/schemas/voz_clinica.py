@@ -152,6 +152,13 @@ class AvaliacaoOut(BaseModel):
     criado_em: DataUtc
     #: Há gravação guardada (GET /avaliacoes/{id}/audio).
     audio: bool = False
+    #: Anotação do profissional (PUT /avaliacoes/{id}/anotacao).
+    anotacao: str | None = None
+
+
+class AnotacaoEntrada(BaseModel):
+    #: Texto livre; vazio apaga a anotação.
+    texto: str = Field(max_length=4000)
 
 
 class AvaliacaoLista(BaseModel):

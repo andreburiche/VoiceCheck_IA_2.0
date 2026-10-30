@@ -27,6 +27,7 @@ from app.api.v1.pratica_casa import plano_out, sessoes_por_plano
 from app.models import ClinicalEvaluation, HomePracticePlan
 from app.schemas.voz_clinica import (
     AnamneseEntrada,
+    AnotacaoEntrada,
     AvaliacaoLista,
     BiofeedbackEntrada,
     FonetogramaEntrada,
@@ -86,7 +87,7 @@ def _salvar(db: DbSession, user: CurrentUser, paciente: str | None, tipo: str,
 def _saida(row: ClinicalEvaluation) -> AvaliacaoOut:
     return AvaliacaoOut(
         id=row.id, paciente=row.patient_name, tipo=row.kind, motor=row.engine,
-        resultado=row.result, criado_em=row.created_at, audio=row.audio_key is not None,
+        resultado=row.result, criado_em=row.created_at, audio=row.audio_key is not None, anotacao=row.notes,
     )
 
 
@@ -567,6 +568,17 @@ def excluir_avaliacao(avaliacao_id: str, user: CurrentUser, db: DbSession) -> No
     db.delete(row)
     db.commit()
     _apagar_audios([chave] if chave else [])
+
+
+@router.put("/avaliacoes/{avaliacao_id}/anotacao", response_model=AvaliacaoOut, dependencies=[Depends(verify_csrf)])
+def anotar_avaliacao(avaliacao_id: str, entrada: AnotacaoEntrada, user: CurrentUser, db: DbSession) -> AvaliacaoOut:
+    """Anotação livre do profissional sobre a avaliação (texto vazio apaga). O resultado calculado não muda."""
+    row = _avaliacao_do_usuario(db, user, avaliacao_id)
+    texto = entrada.texto.strip()
+    row.notes = texto or None
+    db.commit()
+    db.refresh(row)
+    return _saida(row)
 
 
 @router.get("/avaliacoes/{avaliacao_id}/audio")

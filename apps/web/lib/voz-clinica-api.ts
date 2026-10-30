@@ -181,6 +181,8 @@ export type Avaliacao = {
   criado_em: string;
   /** Há gravação guardada (análise acústica). */
   audio?: boolean;
+  /** Anotação livre do profissional. */
+  anotacao?: string | null;
 };
 
 export type PacienteResumo = { paciente: string; avaliacoes: number; ultima: string };
@@ -345,6 +347,11 @@ export async function baixarAudioAvaliacao(id: string): Promise<Blob> {
     throw new Error(res.status === 404 ? "A gravação desta sessão não está mais guardada." : "Não foi possível carregar a gravação.");
   }
   return res.blob();
+}
+
+/** Anotação do profissional (texto vazio apaga). */
+export function anotarAvaliacao(id: string, texto: string) {
+  return apiFetch<Avaliacao>(`${BASE}/avaliacoes/${encodeURIComponent(id)}/anotacao`, { method: "PUT", json: { texto } });
 }
 
 export function excluirAvaliacao(id: string) {

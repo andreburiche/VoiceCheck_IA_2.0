@@ -11,6 +11,7 @@ const VISTAS = [
   { id: "contorno", rotulo: "F0 e intensidade" },
   { id: "histograma", rotulo: "Histograma da F0" },
   { id: "espectro", rotulo: "Espectro (FFT + LPC)" },
+  { id: "vogal", rotulo: "Vogal (F1 × F2)" },
 ] as const;
 type Vista = (typeof VISTAS)[number]["id"];
 
@@ -49,7 +50,9 @@ function EixoTempo({ w, h, duracao }: { w: number; h: number; duracao: number })
   const x = (t: number) => PE + (t / duracao) * (w - PE - PD);
   return (
     <g>
-      {marcas.map((t) => <Texto key={t} x={x(t)} y={h - 6} ancora="middle">{fixoBR(t, passo < 1 ? 1 : 0)} s</Texto>)}
+      {marcas.map((t) => (
+        <Texto key={t} x={x(t)} y={h - 6} ancora={x(t) > w - 30 ? "end" : t === 0 ? "start" : "middle"}>{fixoBR(t, passo < 1 ? 1 : 0)} s</Texto>
+      ))}
     </g>
   );
 }
@@ -181,8 +184,42 @@ function Espectro({ d, w }: { d: Dados; w: number }) {
   );
 }
 
+type Formantes = { f1_hz: number | null; f2_hz: number | null } | undefined;
+
+/** Plano F1 × F2 (como a tela "Vogais" do VoxMetria): F2 decresce para a direita, F1 cresce para baixo. */
+function PlanoVogal({ formantes, w }: { formantes: Formantes; w: number }) {
+  const f1 = formantes?.f1_hz;
+  const f2 = formantes?.f2_hz;
+  if (!f1 || !f2) return <p className="text-sm text-ink-muted">F1 e F2 não foram medidos nesta gravação.</p>;
+  const h = 240;
+  const iw = w - PE - PD;
+  const ih = h - PT - PB;
+  const F2 = [3000, 500] as const; // esquerda → direita
+  const F1 = [200, 1100] as const; // topo → base
+  const x = (v: number) => ((F2[0] - Math.max(F2[1], Math.min(F2[0], v))) / (F2[0] - F2[1])) * iw;
+  const y = (v: number) => ((Math.max(F1[0], Math.min(F1[1], v)) - F1[0]) / (F1[1] - F1[0])) * ih;
+  return (
+    <div>
+      <svg width={w} height={h} role="img" aria-label={`Vogal no plano F1 × F2: F1 ${fixoBR(f1, 0)} Hz, F2 ${fixoBR(f2, 0)} Hz`}>
+        <g transform={`translate(${PE} ${PT})`}>
+          {[500, 1000, 1500, 2000, 2500, 3000].map((v) => <line key={v} x1={x(v)} x2={x(v)} y1={0} y2={ih} stroke="currentColor" className="text-ink/10" />)}
+          {[200, 400, 600, 800, 1000].map((v) => <line key={v} x1={0} x2={iw} y1={y(v)} y2={y(v)} stroke="currentColor" className="text-ink/10" />)}
+          <circle cx={x(f2)} cy={y(f1)} r={7} fill="var(--accent)" stroke="currentColor" className="text-canvas" strokeWidth={2} />
+          <Texto x={x(f2) + 10} y={y(f1) + 4}>{`F1 ${fixoBR(f1, 0)} · F2 ${fixoBR(f2, 0)} Hz`}</Texto>
+          <Texto x={4} y={12}>anterior (/i/, /e/)</Texto>
+          <Texto x={iw - 4} y={12} ancora="end">posterior (/u/, /o/)</Texto>
+          <Texto x={iw / 2} y={ih - 4} ancora="middle">aberta (/a/)</Texto>
+        </g>
+        {[200, 400, 600, 800, 1000].map((v) => <Texto key={v} x={PE - 6} y={PT + y(v) + 4} ancora="end">{v}</Texto>)}
+        {[3000, 2000, 1000, 500].map((v) => <Texto key={v} x={PE + x(v)} y={h - 6} ancora="middle">{v}</Texto>)}
+      </svg>
+      <p className="mt-1 text-xs text-ink-faint">Eixo horizontal: F2 (Hz, de 3000 a 500). Vertical: F1 (Hz, de 200 a 1100). Compare a mesma vogal entre sessões.</p>
+    </div>
+  );
+}
+
 /** Gráficos da análise acústica: sinal com voz/sem voz, F0 e intensidade, histograma da F0 e espectro. */
-export function GraficosAnalise({ dados }: { dados: Dados }) {
+export function GraficosAnalise({ dados, formantes }: { dados: Dados; formantes?: Formantes }) {
   const [vista, setVista] = useState<Vista>("sinal");
   const [ref, w] = useLargura();
   return (
@@ -202,6 +239,7 @@ export function GraficosAnalise({ dados }: { dados: Dados }) {
         {vista === "contorno" ? <Contorno d={dados} w={w} /> : null}
         {vista === "histograma" ? <Histograma d={dados} w={w} /> : null}
         {vista === "espectro" ? <Espectro d={dados} w={w} /> : null}
+        {vista === "vogal" ? <PlanoVogal formantes={formantes} w={w} /> : null}
       </div>
       {vista === "sinal" ? (
         <p className="mt-1 text-xs text-ink-faint">
