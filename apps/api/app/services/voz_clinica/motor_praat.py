@@ -11,7 +11,8 @@ from __future__ import annotations
 import numpy as np
 
 from .audio import Audio
-from .motor_interno import estatisticas_f0, medidas_fonacao
+from . import excitacao
+from .motor_interno import _trechos_vozeados, estatisticas_f0, marcar_ciclos, medidas_fonacao
 
 try:  # importação opcional
     import parselmouth
@@ -110,6 +111,13 @@ def analisar(audio: Audio, f0_min=75.0, f0_max=600.0) -> dict:
         return round(float(np.median(valores)), 1) if valores else None
 
     cpps = _seguro(avisos, "CPPS", lambda: _cpps(snd))
+    # GNE e MWC (medidas do GHD): calculadas aqui mesmo, sobre o pitch do Praat
+    try:
+        exc = excitacao.medir(
+            audio.amostras, audio.taxa, _trechos_vozeados(tempos, f0s), marcar_ciclos(audio, tempos, f0s))
+    except Exception as erro:  # a análise principal não pode cair por causa de uma medida extra
+        avisos.append(f"GNE/MWC: não calculado ({erro.__class__.__name__}).")
+        exc = {}
 
     if np.max(np.abs(audio.amostras)) >= 0.999:
         avisos.append("A gravação saturou (clipping); afaste o microfone e grave de novo.")
@@ -127,6 +135,7 @@ def analisar(audio: Audio, f0_min=75.0, f0_max=600.0) -> dict:
         "perturbacao": perturbacao,
         "ruido": {"hnr_db": _r(hnr, 2)},
         "cpps_db": _r(cpps, 2),
+        "excitacao": exc,
         "formantes": {"f1_hz": mediana_formante(1), "f2_hz": mediana_formante(2), "f3_hz": mediana_formante(3)},
         "fonacao": medidas_fonacao(tempos, f0s, f0_min),
         "avisos": avisos,

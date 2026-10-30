@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from . import excitacao
 from .audio import Audio, reamostrar
 
 PASSO = 0.01  # s entre quadros de pitch
@@ -438,6 +439,7 @@ def analisar(audio: Audio, f0_min=75.0, f0_max=600.0) -> dict:
 
     ciclos = marcar_ciclos(audio, tempos, f0s)
     pert = perturbacao(ciclos)
+    exc = excitacao.medir(audio.amostras, audio.taxa, _trechos_vozeados(tempos, f0s), ciclos)
     if not pert:
         avisos.append("Ciclos insuficientes para jitter e shimmer; use vogal sustentada de 3 s ou mais.")
     if np.max(np.abs(audio.amostras)) >= 0.999:
@@ -456,6 +458,7 @@ def analisar(audio: Audio, f0_min=75.0, f0_max=600.0) -> dict:
         "perturbacao": pert,
         "ruido": {"hnr_db": round(float(np.mean(hnr)), 2)},
         "cpps_db": cpps(audio),
+        "excitacao": exc,
         "formantes": formantes(audio, tempos, f0s),
         "fonacao": medidas_fonacao(tempos, f0s, f0_min),
         "avisos": avisos,

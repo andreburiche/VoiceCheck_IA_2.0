@@ -52,6 +52,8 @@ export type AnaliseAcustica = {
   };
   ruido?: { hnr_db: number | null };
   cpps_db?: number | null;
+  /** Medidas do GHD: GNE (0–1, excitação glótica × ruído) e MWC (0–1, semelhança entre ciclos). */
+  excitacao?: { gne?: number; gne_janelas?: number; mwc?: number };
   formantes?: { f1_hz: number | null; f2_hz: number | null; f3_hz: number | null };
   fonacao?: { tmf_s: number; fracao_surdos_pct: number; quebras_de_voz: number };
   avisos: string[];
@@ -251,6 +253,8 @@ export function linhasAcusticas(r: AnaliseAcustica): [string, string][] {
     ["Shimmer local", comUnidade(p.shimmer_local_pct, 2, "%")],
     ["HNR", comUnidade(r.ruido?.hnr_db, 1, "dB")],
     ["CPPS", comUnidade(r.cpps_db, 1, "dB")],
+    ["GNE (pulsos glóticos × ruído)", fixoBR(r.excitacao?.gne, 2)],
+    ["MWC (semelhança entre ciclos)", fixoBR(r.excitacao?.mwc, 2)],
     [
       "F1 / F2",
       r.formantes?.f1_hz && r.formantes?.f2_hz

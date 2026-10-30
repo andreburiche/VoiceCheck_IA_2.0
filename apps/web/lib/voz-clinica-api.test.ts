@@ -38,6 +38,13 @@ describe("linhasAcusticas", () => {
     expect(linhas["CPPS"]).toBe("12,5 dB");
     expect(linhas["F1 / F2"]).toBe("735 / 1.237 Hz");
     expect(linhas["Quebras de voz"]).toBe("0");
+    expect(linhas["GNE (pulsos glóticos × ruído)"]).toBe("—"); // análise antiga, sem o bloco
+  });
+
+  it("mostra GNE e MWC com duas casas", () => {
+    const linhas = Object.fromEntries(linhasAcusticas({ ...ANALISE, excitacao: { gne: 0.9687, mwc: 0.9, gne_janelas: 40 } }));
+    expect(linhas["GNE (pulsos glóticos × ruído)"]).toBe("0,97");
+    expect(linhas["MWC (semelhança entre ciclos)"]).toBe("0,90");
   });
 
   it("usa casas decimais fixas (3,90 e não 3,9)", () => {

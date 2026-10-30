@@ -61,6 +61,16 @@ const EXTRATORES: Extrator[] = [
     valor: (a) => acustica(a).cpps_db,
   },
   {
+    chave: "gne", titulo: "GNE", unidade: "", casas: 2, tipo: "acustica", dominio: [0, 1],
+    leitura: "Excitação glótica em relação ao ruído (eixo de ruído do GHD); valores maiores indicam menos ruído.",
+    valor: (a) => acustica(a).excitacao?.gne,
+  },
+  {
+    chave: "mwc", titulo: "MWC — semelhança entre ciclos", unidade: "", casas: 2, tipo: "acustica", dominio: [0, 1],
+    leitura: "Correlação média entre ciclos vizinhos (parte do eixo de irregularidade do GHD); valores maiores indicam ciclos mais regulares.",
+    valor: (a) => acustica(a).excitacao?.mwc,
+  },
+  {
     chave: "idv10", titulo: "IDV-10", unidade: "pts", casas: 0, tipo: "idv10", dominio: [0, 40],
     corte: { valor: 7.5, rotulo: "corte 7,5" },
     leitura: "Desvantagem vocal percebida pelo paciente; valores menores indicam menos impacto.",

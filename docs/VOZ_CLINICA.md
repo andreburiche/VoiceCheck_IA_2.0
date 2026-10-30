@@ -106,6 +106,13 @@ thread para não travar a API.
 | `praat` | Automático se `praat-parselmouth` estiver instalado (está no requirements) | Usa o próprio Praat; números comparáveis aos da literatura |
 | `interno` | Reserva | numpy/scipy. Jitter e shimmer conferidos com erro < 2,5% em voz sintética; HNR e CPPS seguem a tendência do Praat, mas os valores absolutos diferem |
 
+Nos dois motores, `excitacao.py` calcula também:
+
+- **GNE** (Glottal-to-Noise Excitation, Michaelis, Gramss & Strube 1997): 1 = pulsos glóticos excitam todas as faixas juntos (voz periódica); valores baixos = excitação por ruído. Filtro inverso LPC 13 a 10 kHz, bandas de 1 kHz a cada 300 Hz, janelas de 100 ms, mediana. Em voz sintética: limpa 1,00; com ruído crescente 0,99 → 0,80; ruído branco 0,30.
+- **MWC** (semelhança da forma de onda entre ciclos vizinhos): 1 = ciclos idênticos.
+
+Os dois aparecem na tabela e no gráfico de evolução. **O diagrama de rouquidão de Göttingen (GHD) em si não está feito:** os eixos combinam jitter, shimmer, MWC e GNE com pesos publicados só na tese de Michaelis (1999, Univ. Göttingen), que não conseguimos obter. Com o PDF da tese, o gráfico pode ser montado sobre essas medidas.
+
 ## Testes
 
 ```bash
@@ -191,5 +198,8 @@ Em desenvolvimento, a tela de login tem "Acesso rápido" com as contas de teste 
 5. ~~Espectrograma~~ (feito).
 6. ~~Anamnese vocal e EASE-BR~~ (feitos).
 7. ~~Prática em casa (celular, offline)~~ (feita).
+8. ~~GNE e MWC~~ (feitos; validados no Docker com Praat e MySQL, 126 testes). Pendente: diagrama GHD (constantes da tese de Michaelis).
+9. Gravações guardadas e comparação antes/depois.
+10. Protocolo de voz completo (DSI na tela, F0 da fala), DDK, teste de carga vocal, gráficos LTAS/cepstro.
 
 Com isso, a tela cobre as funções dos seis programas levantados (VoxMetria, VoxGames, Praat, Voice Analyst, lingWAVES, iVox). Próximo passo: validação no Docker (rotas contra MySQL, motor Praat) e com pacientes reais.

@@ -46,6 +46,19 @@ describe("seriesEvolucao", () => {
   });
 });
 
+describe("GNE e MWC na evolução", () => {
+  it("viram séries de 0 a 1 quando as análises trazem o bloco excitacao", () => {
+    const a1 = acustica(3, 1.2, 10); const a2 = acustica(9, 1.0, 11);
+    (a1.resultado as { excitacao?: object }).excitacao = { gne: 0.81, mwc: 0.9 };
+    (a2.resultado as { excitacao?: object }).excitacao = { gne: 0.93, mwc: 0.95 };
+    const series = seriesEvolucao([a2, a1]);
+    const gne = series.find((s) => s.chave === "gne")!;
+    expect(gne.dominio).toEqual([0, 1]);
+    expect(gne.pontos.map((p) => p.valor)).toEqual([0.81, 0.93]);
+    expect(series.some((s) => s.chave === "mwc")).toBe(true);
+  });
+});
+
 describe("EASE-BR na evolução", () => {
   it("vira uma série própria de 0 a 66, sem linha de corte", () => {
     const e = (dia: number, total: number): Avaliacao => ({
