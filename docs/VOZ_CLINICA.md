@@ -143,15 +143,22 @@ docker exec -e PUBLIC_API_URL=http://localhost:8000 estudio-api pytest -q tests/
 # Site
 pnpm --filter @estudio/web test -- voz-clinica
 pnpm --filter @estudio/web typecheck
+# Navegador, de ponta a ponta, contra o site completo (Next + API + MySQL):
+#   no Windows, duplo clique em testar-v2-tela.bat (sobe a v2 local e roda o Playwright num contêiner);
+#   ou, com o site no ar: PLAYWRIGHT_BASE_URL=http://localhost:3100 pnpm --filter @estudio/web test:e2e e2e/voz-clinica.spec.ts
 ```
+
+`apps/web/e2e/voz-clinica.spec.ts` grava pelo microfone simulado (vogal sintética de F0 180 Hz em
+`e2e/fixtures/`), analisa, confere a F0, salva no histórico, registra o IDV-10, exporta e exclui o
+paciente (LGPD) e falha se o nome do paciente aparecer em alguma URL. Em 30/10/2026: 4 de 4 passaram
+contra a v2 local completa.
 
 Já verificado durante o desenvolvimento: 43 testes de cálculo; tela completa no
 Chromium com microfone simulado (gravar → analisar → protocolos → histórico →
 excluir), com o React do projeto e a API simulada pelo mesmo código de análise;
 TypeScript com as opções estritas do projeto.
 
-**Ainda não executado:** motor Praat (Parselmouth) e rotas contra MySQL — rodam
-no Docker com os comandos acima.
+Motor Praat (Parselmouth) e rotas contra MySQL: rodam no Docker (`testar-v2-docker.bat`).
 
 ## Revisão independente (29/10/2026)
 
