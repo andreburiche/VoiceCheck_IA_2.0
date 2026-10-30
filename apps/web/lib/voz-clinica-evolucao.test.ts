@@ -117,3 +117,24 @@ describe("textos", () => {
     expect(dataCurta("inválida")).toBe("—");
   });
 });
+
+describe("evolução da nasalância e do EGG", () => {
+  const nas = (dia: number, tarefa: string, media: number) => ({ id: `n${dia}${tarefa}`, paciente: "Ana", tipo: "nasalancia", motor: null,
+    criado_em: `2026-10-${String(dia).padStart(2, "0")}T10:00:00Z`, resultado: { tarefa, media_pct: media } }) as unknown as Avaliacao;
+  const egg = (dia: number, limiar: number, cq: number) => ({ id: `e${dia}${limiar}`, paciente: "Ana", tipo: "egg", motor: null,
+    criado_em: `2026-10-${String(dia).padStart(2, "0")}T10:00:00Z`, resultado: { limiar_pct: limiar, cq_media_pct: cq } }) as unknown as Avaliacao;
+
+  it("nasalância: uma série por tarefa (oral e nasal não se misturam)", () => {
+    const s = seriesEvolucao([nas(1, "oral", 12), nas(8, "oral", 10), nas(1, "nasal", 55), nas(8, "nasal", 50), nas(9, "vogal", 20)]);
+    const titulos = s.map((x) => x.titulo);
+    expect(titulos).toContain("Nasalância — texto oral");
+    expect(titulos).toContain("Nasalância — texto nasal");
+    expect(titulos.some((t) => t.includes("vogal"))).toBe(false); // só 1 ponto: sem série
+    expect(s.find((x) => x.titulo.includes("nasal"))!.pontos.map((p) => p.valor)).toEqual([55, 50]);
+  });
+
+  it("EGG: uma série por nível-critério", () => {
+    const s = seriesEvolucao([egg(1, 35, 45), egg(8, 35, 48), egg(9, 25, 52)]);
+    expect(s.map((x) => x.titulo)).toEqual(["Quociente de contato (EGG, nível 35%)"]);
+  });
+});

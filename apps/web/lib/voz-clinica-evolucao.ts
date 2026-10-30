@@ -3,7 +3,7 @@
  * Uma série por medida; cada uma vira um gráfico próprio (escalas diferentes
  * nunca dividem o mesmo eixo).
  */
-import { ROTULO_DDK, type AnaliseAcustica, type AnaliseFala, type Avaliacao, type ResultadoCarga, type ResultadoCepstral, type ResultadoDdk, type ResultadoDsi, type TarefaDdk, type ResultadoBiofeedback, type ResultadoEaseBr, type ResultadoGrbasi, type ResultadoIdv10, type ResultadoFonetograma, type ResultadoJogoSalvo, type ResultadoQvv } from "@/lib/voz-clinica-api";
+import { ROTULO_DDK, ROTULO_TAREFA_NASAL, type AnaliseAcustica, type EggSalvo, type NasalanciaSalva, type AnaliseFala, type Avaliacao, type ResultadoCarga, type ResultadoCepstral, type ResultadoDdk, type ResultadoDsi, type TarefaDdk, type ResultadoBiofeedback, type ResultadoEaseBr, type ResultadoGrbasi, type ResultadoIdv10, type ResultadoFonetograma, type ResultadoJogoSalvo, type ResultadoQvv } from "@/lib/voz-clinica-api";
 import { JOGOS, type JogoId } from "@/lib/voz-clinica-jogos";
 import type { ResultadoPratica } from "@/lib/voz-clinica-pratica";
 
@@ -186,6 +186,20 @@ const EXTRATORES: Extrator[] = [
       valor: (a) => (a.resultado as ResultadoDdk).intervalo_cv_pct,
     },
   ]),
+  // nasalância: uma série por tarefa (texto oral e texto nasal têm valores muito diferentes)
+  ...(Object.keys(ROTULO_TAREFA_NASAL) as NasalanciaSalva["tarefa"][]).map((tarefa): Extrator => ({
+    chave: `nasalancia_${tarefa}`, titulo: `Nasalância — ${ROTULO_TAREFA_NASAL[tarefa]}`, unidade: "%", casas: 1,
+    tipo: "nasalancia", dominio: [0, 100], filtro: (a) => (a.resultado as NasalanciaSalva).tarefa === tarefa,
+    leitura: "Energia nasal ÷ (nasal + oral); compare só a mesma tarefa, com o mesmo equipamento.",
+    valor: (a) => (a.resultado as NasalanciaSalva).media_pct,
+  })),
+  // EGG: uma série por nível-critério (CQ a 25 % e a 35 % não são comparáveis)
+  ...([25, 35, 50] as const).map((nivel): Extrator => ({
+    chave: `egg_cq_${nivel}`, titulo: `Quociente de contato (EGG, nível ${nivel}%)`, unidade: "%", casas: 1, tipo: "egg", dominio: [0, 100],
+    filtro: (a) => (a.resultado as EggSalvo).limiar_pct === nivel,
+    leitura: "Fração do ciclo com as pregas em contato; compare só a mesma tarefa e o mesmo aparelho.",
+    valor: (a) => (a.resultado as EggSalvo).cq_media_pct,
+  })),
 ];
 
 /** Máximo de pontos por gráfico (as sessões mais recentes). */
