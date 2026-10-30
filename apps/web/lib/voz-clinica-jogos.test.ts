@@ -20,6 +20,8 @@ import {
   estadoAtaqueInicial,
   gerarSinais,
   VARIACOES,
+  opcoesDesafios,
+  toleranciaSopro,
   limiarDeRuido,
   passoAtaque,
   pontuacaoAtaque,
@@ -228,5 +230,54 @@ describe("variações (vários jogos por módulo)", () => {
   it("surdo/sonoro com um par só; sinais ritmados a cada 2 s", () => {
     expect(gerarDesafios(12, 5, "f").every((d) => d.som === "f" || d.som === "v")).toBe(true);
     expect(gerarSinais(4, 1, 3, "ritmado")).toEqual([3, 5, 7, 9]);
+  });
+});
+
+describe("cinco variações por módulo (como o VoxGames)", () => {
+  it("todo módulo tem 5 variações, com ids únicos", () => {
+    for (const lista of Object.values(VARIACOES)) {
+      expect(lista.length).toBe(5);
+      expect(new Set(lista.map((v) => v.id)).size).toBe(5);
+    }
+  });
+
+  it("pulsos: emissões de 0,8 s, fortes, com pausa", () => {
+    const p = gerarPercurso("altitude", 30, 3, "pulsos");
+    expect(p.length >= 10).toBe(true);
+    for (const s of p) {
+      expect(s.fim - s.inicio <= 0.8 + 1e-9).toBe(true);
+      expect(s.de >= 0.65 && s.de <= 0.85).toBe(true);
+    }
+    expect(p[1]!.inicio - p[0]!.fim).toBeCloseTo(1);
+  });
+
+  it("saltos: alterna grave e agudo sem deslize", () => {
+    const p = gerarPercurso("trilha", 20, 1, "saltos");
+    expect(p.slice(0, 4).map((s) => s.de)).toEqual([0.2, 0.8, 0.2, 0.8]);
+    for (const s of p) expect(s.de).toBe(s.ate);
+  });
+
+  it("entonação: só curvas de pergunta (sobe) e afirmação (desce)", () => {
+    const p = gerarPercurso("trilha", 40, 7, "entonacao");
+    const sobe = p.filter((s) => s.ate > s.de).length;
+    const desce = p.filter((s) => s.ate < s.de).length;
+    expect(sobe > 0 && desce > 0 && sobe + desce === p.length).toBe(true);
+  });
+
+  it("som e silêncio lento (3 s) e acelerando (3 s até 1 s)", () => {
+    const lento = gerarSinais(4, 1, 3, "lento");
+    expect(lento).toEqual([3, 6, 9, 12]);
+    const ac = gerarSinais(6, 1, 3, "acelerando");
+    const passos = ac.slice(1).map((v, i) => Math.round((v - ac[i]!) * 100) / 100);
+    expect(passos[0]).toBe(3);
+    expect(passos[passos.length - 1]).toBe(1);
+    for (let i = 1; i < passos.length; i++) expect(passos[i]! < passos[i - 1]!).toBe(true);
+  });
+
+  it("contagem tolera pausas entre números; rápido segura menos", () => {
+    expect(toleranciaSopro("contagem")).toBe(0.5);
+    expect(toleranciaSopro("livre")).toBe(0.15);
+    expect(opcoesDesafios("rapido")).toEqual({ segurar_s: 0.4, limite_s: 3 });
+    expect(opcoesDesafios("todos")).toEqual({ segurar_s: 0.6, limite_s: 5 });
   });
 });

@@ -14,6 +14,9 @@ export const TEMA: Record<string, { cena: Cena; personagem: Personagem; nome: st
   deslizes: { cena: "espaco", personagem: "foguete", nome: "Foguete" },
   escada: { cena: "ceu", personagem: "balao", nome: "Balão na escada" },
   sirene: { cena: "mar", personagem: "peixe", nome: "Peixe" },
+  pulsos: { cena: "espaco", personagem: "foguete", nome: "Foguete em pulsos" },
+  saltos: { cena: "mar", personagem: "peixe", nome: "Peixe saltando" },
+  entonacao: { cena: "ceu", personagem: "passaro", nome: "Pássaro cantando" },
 };
 
 const CORES = {
@@ -71,6 +74,7 @@ export function desenharPersonagem(g: CanvasRenderingContext2D, p: Personagem, x
   const cor = feliz ? "#20D9D2" : "#F8FAFC";
   g.save();
   g.translate(x, y);
+  g.scale(1.5, 1.5);
   if (p === "balao") {
     g.strokeStyle = "rgba(248,250,252,0.7)";
     g.lineWidth = 1.5;

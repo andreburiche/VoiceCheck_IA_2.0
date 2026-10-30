@@ -46,26 +46,36 @@ export const VARIACOES: Record<JogoId, { id: string; rotulo: string; descricao: 
     { id: "patamares", rotulo: "Patamares", descricao: "Três níveis (fraco, médio, forte), com pausa para respirar." },
     { id: "forte-fraco", rotulo: "Forte e fraco", descricao: "Alterna só entre bem fraco e bem forte." },
     { id: "ondas", rotulo: "Ondas", descricao: "Crescendo e decrescendo contínuos." },
+    { id: "escada", rotulo: "Escada", descricao: "Cinco degraus de intensidade, subindo e descendo." },
+    { id: "pulsos", rotulo: "Pulsos", descricao: "Emissões curtas e fortes (0,8 s), com pausa entre elas: ataque e projeção." },
   ],
   trilha: [
     { id: "deslizes", rotulo: "Deslizes", descricao: "Patamares ligados por subidas e descidas." },
     { id: "escada", rotulo: "Escada", descricao: "Degraus subindo e descendo, sem deslizar." },
     { id: "sirene", rotulo: "Sirene", descricao: "Glissando contínuo, do grave ao agudo e de volta." },
+    { id: "saltos", rotulo: "Saltos", descricao: "Pula do grave para o agudo sem deslizar (intervalos)." },
+    { id: "entonacao", rotulo: "Entonação", descricao: "Curvas de pergunta (sobe) e de afirmação (desce)." },
   ],
   sopro: [
     { id: "livre", rotulo: "Vogal", descricao: "“a” confortável até completar a meta." },
     { id: "fricativa", rotulo: "/s/ e /z/", descricao: "Sustente o som mostrado (s ou z); só conta o tempo com som." },
+    { id: "tubo", rotulo: "Canudo", descricao: "Som de “u” dentro de um canudo (exercício de trato vocal semiocluído)." },
+    { id: "vibrante", rotulo: "Vibração", descricao: "Vibração de língua (trrr) ou de lábios (brrr) sustentada." },
+    { id: "contagem", rotulo: "Contagem", descricao: "Contar em voz alta (1, 2, 3…) num fôlego só; pausas curtas entre os números não contam como fim." },
   ],
   "surdo-sonoro": [
     { id: "todos", rotulo: "Todos os pares", descricao: "s/z, f/v e ch/j sorteados." },
     { id: "s", rotulo: "s / z", descricao: "Só o par s/z." },
     { id: "f", rotulo: "f / v", descricao: "Só o par f/v." },
     { id: "ch", rotulo: "ch / j", descricao: "Só o par ch/j." },
+    { id: "rapido", rotulo: "Rápido", descricao: "Todos os pares, segurando só 0,4 s e com 3 s para responder." },
   ],
   "som-silencio": [
     { id: "imprevisivel", rotulo: "Imprevisível", descricao: "Sinais a cada 1,8 a 3,5 s." },
     { id: "ritmado", rotulo: "Ritmado", descricao: "Sinal a cada 2 s, no mesmo ritmo." },
     { id: "rapido", rotulo: "Rápido", descricao: "Sinais a cada 1 a 1,8 s." },
+    { id: "lento", rotulo: "Lento", descricao: "Sinal a cada 3 s, para começar ou para crianças." },
+    { id: "acelerando", rotulo: "Acelerando", descricao: "Começa a cada 3 s e acelera até 1 s." },
   ],
 };
 
@@ -129,6 +139,38 @@ export function gerarPercurso(jogo: "altitude" | "trilha", duracao_s: number, se
       segs.push({ inicio: t, fim, de: subindo ? baixo : alto, ate: subindo ? alto : baixo });
       t = fim + (v === "ondas" && !subindo ? 1.2 : 0); // ondas: respira depois de cada onda
       subindo = !subindo;
+    }
+    return segs;
+  }
+  if (v === "pulsos") {
+    // altitude: emissões curtas e fortes, cada uma num nível alto um pouco diferente
+    while (t < duracao_s) {
+      const fim = Math.min(duracao_s, t + 0.8);
+      const nivel = 0.65 + rnd() * 0.2;
+      segs.push({ inicio: t, fim, de: nivel, ate: nivel });
+      t = fim + 1;
+    }
+    return segs;
+  }
+  if (v === "saltos") {
+    // trilha: grave e agudo alternados, sem deslize; respira a cada 4 saltos
+    let k = 0;
+    while (t < duracao_s) {
+      const fim = Math.min(duracao_s, t + 2);
+      const nivel = k % 2 === 0 ? 0.2 : 0.8;
+      segs.push({ inicio: t, fim, de: nivel, ate: nivel });
+      t = fim;
+      k++;
+      if (k % 4 === 0) t += 1.5;
+    }
+    return segs;
+  }
+  if (v === "entonacao") {
+    // pergunta (sobe) e afirmação (desce), sorteadas, com pausa entre as frases
+    while (t < duracao_s) {
+      const fim = Math.min(duracao_s, t + 2);
+      segs.push(rnd() < 0.5 ? { inicio: t, fim, de: 0.35, ate: 0.75 } : { inicio: t, fim, de: 0.6, ate: 0.25 });
+      t = fim + 1.2;
     }
     return segs;
   }
@@ -202,6 +244,16 @@ export function pontuacaoPercurso(e: EstadoPercurso): number {
 // ---------------------------------------------------------------------------
 // Sopro longo
 // ---------------------------------------------------------------------------
+
+/** Pausa tolerada sem interromper a emissão: maior na contagem (entre um número e outro). */
+export function toleranciaSopro(variacao?: string): number {
+  return variacao === "contagem" ? 0.5 : 0.15;
+}
+
+/** Variação "rápido": segura menos tempo e tem menos tempo para responder. */
+export function opcoesDesafios(variacao?: string): { segurar_s: number; limite_s: number } {
+  return variacao === "rapido" ? { segurar_s: 0.4, limite_s: 3 } : { segurar_s: 0.6, limite_s: 5 };
+}
 
 export type EstadoSopro = { t: number | null; atual_s: number; melhor_s: number; semVoz_s: number };
 
@@ -353,7 +405,12 @@ export function gerarSinais(quantidade: number, semente = 1, inicio_s = 3, ritmo
   let t = inicio_s;
   for (let i = 0; i < quantidade; i++) {
     saida.push(Math.round(t * 100) / 100);
-    t += ritmo === "ritmado" ? 2 : ritmo === "rapido" ? 1 + rnd() * 0.8 : 1.8 + rnd() * 1.7;
+    t +=
+      ritmo === "ritmado" ? 2
+      : ritmo === "lento" ? 3
+      : ritmo === "acelerando" ? 3 - (2 * i) / Math.max(1, quantidade - 2) // de 3 s até 1 s
+      : ritmo === "rapido" ? 1 + rnd() * 0.8
+      : 1.8 + rnd() * 1.7;
   }
   return saida;
 }

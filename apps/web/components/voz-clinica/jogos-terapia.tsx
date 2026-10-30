@@ -27,9 +27,11 @@ import {
   limiarDeRuido,
   normalizar,
   passoAtaque,
+  opcoesDesafios,
   passoDesafios,
   passoPercurso,
   passoSopro,
+  toleranciaSopro,
   pontuacaoAtaque,
   pontuacaoDesafios,
   pontuacaoPercurso,
@@ -315,7 +317,7 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
         const comSom = p.variacao === "fricativa"
           ? classificarSom(buffer, a.ctx.sampleRate) !== "silencio"
           : pitchYin(buffer, a.ctx.sampleRate, 60, 1000) !== null;
-        p.soproE = passoSopro(p.soproE, t, comSom);
+        p.soproE = passoSopro(p.soproE, t, comSom, toleranciaSopro(p.variacao));
       } else if (p.jogo === "som-silencio") {
         const db = nivelDbfs(buffer);
         // ruído de fundo medido de 0,5 s até 0,5 s antes do primeiro sinal (o paciente em silêncio)
@@ -324,7 +326,7 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
         if (p.limiar !== null) p.ataqueE = passoAtaque(p.ataqueE, t, db, p.sinais, p.limiar);
       } else {
         p.classe = classificarSom(buffer, a.ctx.sampleRate);
-        p.desafiosE = passoDesafios(p.desafiosE, t + p.inicio, p.classe, p.desafios);
+        p.desafiosE = passoDesafios(p.desafiosE, t + p.inicio, p.classe, p.desafios, opcoesDesafios(p.variacao));
       }
 
       if (p.jogo === "altitude" || p.jogo === "trilha") {
