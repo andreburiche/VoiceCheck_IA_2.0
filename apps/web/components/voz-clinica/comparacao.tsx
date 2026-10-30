@@ -3,6 +3,7 @@
 import { Download } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
+import { Espectrograma } from "@/components/voz-clinica/espectrograma";
 import { friendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { baixarAudioAvaliacao, fixoBR, listarAvaliacoes, type AnaliseAcustica, type Avaliacao } from "@/lib/voz-clinica-api";
@@ -33,20 +34,23 @@ function rotuloSessao(a: Avaliacao, n: number): string {
 }
 
 /** Player de uma sessão: busca o WAV guardado só quando a sessão é escolhida. */
-function Gravacao({ avaliacao, rotulo }: { avaliacao: Avaliacao; rotulo: string }) {
+function Gravacao({ avaliacao, rotulo, espectro }: { avaliacao: Avaliacao; rotulo: string; espectro: boolean }) {
   const [url, setUrl] = useState<string | null>(null);
+  const [blob, setBlob] = useState<Blob | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   useEffect(() => {
     setUrl(null);
+    setBlob(null);
     setErro(null);
     if (!avaliacao.audio) return;
     let ativo = true;
     let criada: string | null = null;
     baixarAudioAvaliacao(avaliacao.id)
-      .then((blob) => {
+      .then((b) => {
         if (!ativo) return;
-        criada = URL.createObjectURL(blob);
+        criada = URL.createObjectURL(b);
         setUrl(criada);
+        setBlob(b);
       })
       .catch((e) => ativo && setErro(friendlyError(e, "Não foi possível carregar a gravação.")));
     return () => {
@@ -67,6 +71,7 @@ function Gravacao({ avaliacao, rotulo }: { avaliacao: Avaliacao; rotulo: string 
       <a href={url} download={arquivo} className="inline-flex items-center gap-1 text-xs text-ink-muted underline-offset-2 hover:text-ink hover:underline">
         <Download className="h-3.5 w-3.5" aria-hidden /> Baixar WAV
       </a>
+      {espectro && blob ? <div className="min-w-0" data-testid="vc2-comparar-espectro"><Espectrograma wav={blob} /></div> : null}
     </div>
   );
 }
@@ -80,6 +85,8 @@ export function ComparacaoAntesDepois({ paciente, versao }: { paciente: string; 
   const idA = useId();
   const idD = useId();
   const pedido = useRef(0);
+  // espectrogramas lado a lado (como no VoxMetria); calculados só quando pedidos
+  const [espectro, setEspectro] = useState(false);
 
   useEffect(() => {
     if (!paciente) return;
@@ -133,7 +140,7 @@ export function ComparacaoAntesDepois({ paciente, versao }: { paciente: string; 
               { id: idA, rotulo: "Antes", valor: idAntes, mudar: setIdAntes, sessao: antes, teste: "vc2-comparar-antes" },
               { id: idD, rotulo: "Depois", valor: idDepois, mudar: setIdDepois, sessao: depois, teste: "vc2-comparar-depois" },
             ].map((lado) => (
-              <div key={lado.rotulo} className="rounded-xl p-3 ring-1 ring-inset ring-ink/10">
+              <div key={lado.rotulo} className="min-w-0 rounded-xl p-3 ring-1 ring-inset ring-ink/10">
                 <label htmlFor={lado.id} className="text-sm font-medium text-ink">{lado.rotulo}</label>
                 <select
                   id={lado.id}
@@ -146,10 +153,17 @@ export function ComparacaoAntesDepois({ paciente, versao }: { paciente: string; 
                     <option key={a.id} value={a.id}>{rotuloSessao(a, i + 1)}</option>
                   ))}
                 </select>
-                {lado.sessao ? <Gravacao avaliacao={lado.sessao} rotulo={`${lado.rotulo.toLowerCase()} (${dataHora(lado.sessao.criado_em)})`} /> : null}
+                {lado.sessao ? <Gravacao avaliacao={lado.sessao} rotulo={`${lado.rotulo.toLowerCase()} (${dataHora(lado.sessao.criado_em)})`} espectro={espectro} /> : null}
               </div>
             ))}
           </div>
+
+          {antes?.audio || depois?.audio ? (
+            <label className="mt-3 flex items-center gap-2 text-sm text-ink">
+              <input type="checkbox" className="h-4 w-4 accent-[var(--accent)]" checked={espectro} onChange={(e) => setEspectro(e.target.checked)} data-testid="vc2-comparar-ver-espectro" />
+              Mostrar os espectrogramas lado a lado
+            </label>
+          ) : null}
 
           {idAntes === idDepois ? (
             <p className="mt-4 text-sm text-ink-muted">Escolha duas sessões diferentes.</p>
