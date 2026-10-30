@@ -5,18 +5,18 @@ export const BRAND = {
   slogan: "Análise vocal inteligente",
   productLine: "Estúdio musical inteligente",
   /**
-   * Lockup oficial v2 (mesmo arquivo em Home, Login, Header, Sidebar).
-   * Recortado sem margem transparente. Proporção: 2064×459 (≈4,5:1).
+   * Lockup oficial v3 (mesmo arquivo em Home, Login, Header, Sidebar).
+   * Recortado sem margem transparente. Proporção: 2000×420 (≈4,8:1).
    */
   /** PNG transparente (sem fundo preto) — Home/Login/Header */
-  logoSrc: "/brand/voicecheck-lockup-v2.png",
-  /** PNG original com fundo preto — impressão / tema claro */
-  logoSrcDark: "/brand/voicecheck-lockup-v2-dark.png",
+  logoSrc: "/brand/voicecheck-lockup-v3.png",
+  /** PNG com o fundo escuro da aplicação — impressão / tema claro */
+  logoSrcDark: "/brand/voicecheck-lockup-v3-dark.png",
   /** Emblema isolado transparente */
-  markSrc: "/brand/voicecheck-mark-v2.png",
+  markSrc: "/brand/voicecheck-mark-v3.png",
   /** Ícone para iOS (180×180) */
-  appleIconSrc: "/brand/apple-touch-icon.png",
+  appleIconSrc: "/brand/apple-touch-icon-v3.png",
   /** Dimensões intrínsecas do lockup (evita distorção no next/image) */
-  logoWidth: 2064,
-  logoHeight: 459,
+  logoWidth: 2000,
+  logoHeight: 420,
 } as const;

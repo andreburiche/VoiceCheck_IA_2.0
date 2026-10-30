@@ -10,7 +10,7 @@
   "background_color": "#070B14",
   "theme_color": "#070B14",
   "icons": [
-    { "src": "/brand/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
-    { "src": "/brand/voicecheck-mark-v2.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+    { "src": "/brand/apple-touch-icon-v3.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "/brand/voicecheck-mark-v3.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
   ]
 }
