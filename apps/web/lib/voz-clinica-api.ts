@@ -4,6 +4,7 @@ import type { Anamnese } from "@/lib/voz-clinica-anamnese";
 import { resumoAnamnese } from "@/lib/voz-clinica-anamnese";
 import type { ResumoBiofeedback } from "@/lib/voz-clinica-biofeedback";
 import type { ResumoCarga } from "@/lib/voz-clinica-carga";
+import type { Calibracao } from "@/lib/voz-clinica-calibracao";
 import type { PontoCampo, ResumoCampo } from "@/lib/voz-clinica-fonetograma";
 import { JOGOS, VARIACOES, type ResultadoJogo } from "@/lib/voz-clinica-jogos";
 import { resumoPratica, type ExercicioPratica, type ResultadoPratica } from "@/lib/voz-clinica-pratica";
@@ -28,6 +29,9 @@ export type ResultadoFonetograma = {
   resumo: ResumoCampo;
   unidade_intensidade: "dBFS";
   fonte: "navegador";
+  /** Presente quando o microfone foi calibrado com decibelímetro. */
+  calibracao?: Calibracao;
+  resumo_spl?: { db_min: number | null; db_max: number | null; deslocamento_db: number };
 };
 
 export type AnaliseAcustica = {
@@ -438,10 +442,14 @@ export function salvarJogo(paciente: string, resultado: ResultadoJogo) {
   });
 }
 
-export function salvarFonetograma(paciente: string, duracao_s: number, pontos: PontoCampo[]) {
+export function salvarFonetograma(paciente: string, duracao_s: number, pontos: PontoCampo[], calibracao: Calibracao | null = null) {
   return apiFetch<Salvo<ResultadoFonetograma>>(`${BASE}/fonetograma`, {
     method: "POST",
-    json: { paciente, duracao_s, pontos: pontos.map(({ midi, min_db, max_db, tempo_s }) => ({ midi, min_db, max_db, tempo_s })) },
+    json: {
+      paciente, duracao_s,
+      pontos: pontos.map(({ midi, min_db, max_db, tempo_s }) => ({ midi, min_db, max_db, tempo_s })),
+      ...(calibracao ? { calibracao } : {}),
+    },
   });
 }
 
@@ -692,9 +700,13 @@ export function resumoAvaliacao(a: Avaliacao): string {
   if (a.tipo === "egg") return resumoEgg(a.resultado as EggSalvo);
   if (a.tipo === "anamnese") return resumoAnamnese(a.resultado as Anamnese);
   if (a.tipo === "fonetograma") {
-    const r = (a.resultado as ResultadoFonetograma).resumo;
+    const f = a.resultado as ResultadoFonetograma;
+    const r = f.resumo;
     if (!r?.nota_grave) return "Sem notas registradas";
-    return `${r.nota_grave}–${r.nota_aguda} (${fixoBR(r.hz_grave, 0)}–${fixoBR(r.hz_agudo, 0)} Hz) · ${r.extensao_st} semitons · faixa dinâmica média ${fixoBR(r.faixa_dinamica_media_db, 1)} dB`;
+    const spl = f.resumo_spl?.db_min != null && f.resumo_spl.db_max != null
+      ? ` · ${fixoBR(f.resumo_spl.db_min, 0)}–${fixoBR(f.resumo_spl.db_max, 0)} dB SPL (calibrado, ponderação ${f.calibracao?.ponderacao ?? "?"})`
+      : "";
+    return `${r.nota_grave}–${r.nota_aguda} (${fixoBR(r.hz_grave, 0)}–${fixoBR(r.hz_agudo, 0)} Hz) · ${r.extensao_st} semitons · faixa dinâmica média ${fixoBR(r.faixa_dinamica_media_db, 1)} dB${spl}`;
   }
   if (a.tipo === "jogo") {
     const r = a.resultado as ResultadoJogoSalvo;

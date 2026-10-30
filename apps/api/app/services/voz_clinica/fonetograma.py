@@ -1,6 +1,7 @@
 """Resumo do fonetograma (campo vocal) a partir dos pontos por semitom.
 
-Intensidade em dBFS (relativa): sem microfone calibrado não há dB SPL.
+Intensidade em dBFS (relativa). Com a calibração por decibelímetro feita no navegador
+(dB SPL = dBFS + deslocamento), o resumo também sai em dB SPL.
 """
 
 from __future__ import annotations
@@ -36,3 +37,11 @@ def resumir_campo(pontos: list[dict]) -> dict:
         "faixa_dinamica_media_db": round(sum(faixas) / len(faixas), 1),
         "area_st_db": round(sum(faixas), 1),
     }
+
+
+def resumo_em_spl(resumo: dict, deslocamento_db: float) -> dict:
+    """Mínimo e máximo em dB SPL; faixa dinâmica e área não mudam (são diferenças)."""
+    def spl(v):
+        return None if v is None else round(v + deslocamento_db, 1)
+
+    return {"db_min": spl(resumo.get("db_min")), "db_max": spl(resumo.get("db_max")), "deslocamento_db": round(deslocamento_db, 1)}

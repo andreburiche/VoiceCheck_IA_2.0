@@ -60,7 +60,7 @@ from app.services.voz_clinica.ddk import analisar_ddk
 from app.services.voz_clinica import manipulacao, midias
 from app.services.voz_clinica.exclusao import apagar_ou_agendar, tentar_pendentes
 from app.services.voz_clinica.fala import analisar_fala
-from app.services.voz_clinica.fonetograma import resumir_campo
+from app.services.voz_clinica.fonetograma import resumir_campo, resumo_em_spl
 from app.services.voz_clinica.indices import dsi
 from app.services.audit import write_audit
 from app.services.quotas import QuotaExceeded, assert_can_upload
@@ -503,6 +503,10 @@ def salvar_fonetograma(entrada: FonetogramaEntrada, user: CurrentUser, db: DbSes
         "unidade_intensidade": "dBFS",
         "fonte": "navegador",
     }
+    if entrada.calibracao is not None:
+        cal = entrada.calibracao
+        resultado["calibracao"] = {**cal.model_dump(exclude={"data"}), "data": cal.data.isoformat()}
+        resultado["resumo_spl"] = resumo_em_spl(resultado["resumo"], cal.deslocamento_db)
     salvo = _salvar(db, user, nome, "fonetograma", resultado)
     return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
 

@@ -30,7 +30,7 @@ function maisRecente(itens: Avaliacao[], tipo: Avaliacao["tipo"], ok: (a: Avalia
 
 
 export type Sugestao = { valor: number; origem: string };
-export type SugestoesDsi = { tmf_s?: Sugestao; f0_alta_hz?: Sugestao; jitter_pct?: Sugestao };
+export type SugestoesDsi = { tmf_s?: Sugestao; f0_alta_hz?: Sugestao; i_baixa_db_spl?: Sugestao; jitter_pct?: Sugestao };
 
 function dia(iso: string): string {
   const d = new Date(iso);
@@ -48,7 +48,8 @@ function mesmoDia(a: string, b: string): boolean {
  *   três tentativas da vogal sustentada o máximo possível);
  * - F0-alta: nota mais aguda do fonetograma mais recente;
  * - jitter: análise acústica mais recente.
- * A intensidade mais fraca (I-baixa) precisa de dB SPL: não há sugestão sem calibração.
+ * - I-baixa: menor intensidade do fonetograma mais recente feito com calibração (dB SPL);
+ *   sem calibração não há sugestão (dBFS não serve para o DSI).
  */
 export function sugestoesDsi(itens: Avaliacao[]): SugestoesDsi {
   const s: SugestoesDsi = {};
@@ -68,6 +69,15 @@ export function sugestoesDsi(itens: Avaliacao[]): SugestoesDsi {
   if (campo) {
     const r = (campo.resultado as ResultadoFonetograma).resumo;
     s.f0_alta_hz = { valor: Math.round(r.hz_agudo as number), origem: `fonetograma de ${dia(campo.criado_em)} (${r.nota_aguda})` };
+  }
+  const calibrado = maisRecente(itens, "fonetograma", (a) => (a.resultado as ResultadoFonetograma).resumo_spl?.db_min != null);
+  if (calibrado) {
+    const f = calibrado.resultado as ResultadoFonetograma;
+    const cal = f.calibracao;
+    s.i_baixa_db_spl = {
+      valor: Math.round((f.resumo_spl!.db_min as number) * 10) / 10,
+      origem: `fonetograma calibrado de ${dia(calibrado.criado_em)}${cal ? ` (${cal.distancia_cm} cm, ponderação ${cal.ponderacao})` : ""}`,
+    };
   }
   return s;
 }

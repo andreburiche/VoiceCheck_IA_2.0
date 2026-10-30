@@ -245,6 +245,25 @@ def test_fonetograma_resumo_calculado_no_servidor(client: httpx.Client) -> None:
     assert res["resumo"]["extensao_st"] == 19
     assert res["pontos"][0]["midi"] == 48  # guardado em ordem
     assert res["unidade_intensidade"] == "dBFS"
+    assert "resumo_spl" not in res and "calibracao" not in res
+
+
+def test_fonetograma_com_calibracao_sai_em_db_spl(client: httpx.Client) -> None:
+    """Calibrado com decibelímetro (como no lingWAVES): mínimo e máximo também em dB SPL."""
+    paciente = f"CampoSpl {uuid.uuid4().hex[:6]}"
+    pontos = [{"midi": m, "min_db": -40.0, "max_db": -12.0, "tempo_s": 0.4} for m in range(48, 60)]
+    cal = {"deslocamento_db": 104.8, "referencia_db_spl": 75, "ponderacao": "C", "distancia_cm": 30,
+           "microfone": "USB Mic", "data": "2026-10-30T12:00:00Z"}
+    r = client.post("/api/v1/voz-clinica/fonetograma", json={"paciente": paciente, "duracao_s": 20, "pontos": pontos, "calibracao": cal})
+    assert r.status_code == 200, r.text
+    res = r.json()["resultado"]
+    assert res["resumo_spl"] == {"db_min": 64.8, "db_max": 92.8, "deslocamento_db": 104.8}
+    assert res["resumo"]["db_min"] == -40.0 and res["unidade_intensidade"] == "dBFS"  # pontos continuam em dBFS
+    assert res["calibracao"]["ponderacao"] == "C" and res["calibracao"]["microfone"] == "USB Mic"
+    for ruim in ({"deslocamento_db": 500}, {"ponderacao": "B"}, {"distancia_cm": 0}, {"data": "2099-01-01T00:00:00Z"}):
+        corpo = {"paciente": paciente, "duracao_s": 20, "pontos": pontos, "calibracao": {**cal, **ruim}}
+        assert client.post("/api/v1/voz-clinica/fonetograma", json=corpo).status_code == 422
+    client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
 
 
 @pytest.mark.parametrize("pontos", [

@@ -35,6 +35,20 @@ describe("sugestoesDsi", () => {
     expect(s.f0_alta_hz).toEqual({ valor: 659, origem: "fonetograma de 20/10/2026 (E5)" });
   });
 
+  it("I-baixa só vem de fonetograma calibrado (dB SPL)", () => {
+    const semCal = campo("2026-10-25T13:00:00Z", 659.3, "E5");
+    expect(sugestoesDsi([semCal]).i_baixa_db_spl).toBeUndefined();
+    const comCal = av("fonetograma", "2026-10-20T13:00:00Z", {
+      resumo: { nota_grave: "A2", nota_aguda: "E5", hz_grave: 110, hz_agudo: 659.3, extensao_st: 31, db_min: -50.2 },
+      calibracao: { deslocamento_db: 104.8, referencia_db_spl: 75, ponderacao: "C", distancia_cm: 30, microfone: "", data: "2026-10-20T12:00:00Z" },
+      resumo_spl: { db_min: 54.6, db_max: 95, deslocamento_db: 104.8 },
+    });
+    // o fonetograma mais recente (sem calibração) dá a F0-alta; o calibrado, mais antigo, dá a I-baixa
+    const s = sugestoesDsi([semCal, comCal]);
+    expect(s.i_baixa_db_spl).toEqual({ valor: 54.6, origem: "fonetograma calibrado de 20/10/2026 (30 cm, ponderação C)" });
+    expect(s.f0_alta_hz?.origem).toContain("25/10/2026");
+  });
+
   it("sem histórico não sugere nada", () => {
     expect(sugestoesDsi([])).toEqual({});
   });

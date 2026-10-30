@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from datetime import timezone
 from typing import Annotated, Any, Literal
 
@@ -152,12 +152,33 @@ class PontoCampo(BaseModel):
         return self
 
 
+class CalibracaoSpl(BaseModel):
+    """Calibração do microfone com decibelímetro (feita no navegador): dB SPL = dBFS + deslocamento."""
+
+    deslocamento_db: float = Field(ge=40, le=160)
+    referencia_db_spl: float = Field(ge=40, le=130)
+    ponderacao: Literal["A", "C", "Z"]
+    distancia_cm: float = Field(ge=5, le=100)
+    microfone: str = Field(default="", max_length=120)
+    data: datetime
+
+    @model_validator(mode="after")
+    def _data(self) -> "CalibracaoSpl":
+        agora = datetime.now(timezone.utc)
+        quando = self.data if self.data.tzinfo else self.data.replace(tzinfo=timezone.utc)
+        if quando > agora + timedelta(days=1) or quando.year < 2000:
+            raise ValueError("Data da calibração inválida")
+        return self
+
+
 class FonetogramaEntrada(BaseModel):
     """Pontos do campo vocal medidos no navegador; o resumo é recalculado no servidor."""
 
     paciente: str = Field(min_length=1, max_length=120)
     duracao_s: float = Field(ge=0, le=3600)
     pontos: list[PontoCampo] = Field(min_length=1, max_length=85)
+    #: Sem calibração, só dBFS (relativo). Com ela, o resumo também sai em dB SPL.
+    calibracao: CalibracaoSpl | None = None
 
     @model_validator(mode="after")
     def _unicos(self) -> "FonetogramaEntrada":

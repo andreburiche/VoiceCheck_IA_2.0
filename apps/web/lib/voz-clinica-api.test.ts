@@ -93,6 +93,18 @@ describe("resumos", () => {
     expect(resumoAvaliacao(a)).toBe("F0 179,5 Hz · jitter 1,15% · shimmer 4,24% · CPPS 12,5 dB");
   });
 
+  it("fonetograma calibrado mostra também os dB SPL", () => {
+    const resumo = { nota_grave: "C3", nota_aguda: "B3", hz_grave: 130.8, hz_agudo: 246.9, extensao_st: 11, semitons_alcancados: 12,
+      db_min: -40, db_max: -12, faixa_dinamica_media_db: 28, area_st_db: 336 };
+    const base = { id: "9", paciente: "Ana", tipo: "fonetograma" as const, motor: null, criado_em: "2026-10-29T10:00:00Z" };
+    const semCal: Avaliacao = { ...base, resultado: { duracao_s: 20, pontos: [], resumo, unidade_intensidade: "dBFS", fonte: "navegador" } };
+    expect(resumoAvaliacao(semCal)).toBe("C3–B3 (131–247 Hz) · 11 semitons · faixa dinâmica média 28,0 dB");
+    const comCal: Avaliacao = { ...base, resultado: { duracao_s: 20, pontos: [], resumo, unidade_intensidade: "dBFS", fonte: "navegador",
+      calibracao: { deslocamento_db: 104.8, referencia_db_spl: 75, ponderacao: "C", distancia_cm: 30, microfone: "USB", data: "2026-10-30T12:00:00Z" },
+      resumo_spl: { db_min: 64.8, db_max: 92.8, deslocamento_db: 104.8 } } };
+    expect(resumoAvaliacao(comCal)).toContain("· 65–93 dB SPL (calibrado, ponderação C)");
+  });
+
   it("DSI e F0 da fala viram linhas curtas", () => {
     const dsi: Avaliacao = { id: "2", paciente: "Ana", tipo: "dsi", motor: null, criado_em: "2026-10-29T10:00:00Z",
       resultado: { dsi: 3.41, entradas: { tmf_s: 18.5, f0_alta_hz: 659, i_baixa_db_spl: 52, jitter_pct: 0.42 }, escala: "", referencia: "" } };

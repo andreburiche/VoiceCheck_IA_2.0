@@ -552,7 +552,7 @@ const CAMPOS_DSI: { chave: CampoDsi; rotulo: string; unidade: string; dica: stri
   { chave: "f0_alta_hz", rotulo: "F0 mais aguda (F0-alta)", unidade: "Hz", max: 3000,
     dica: "Nota mais aguda alcançada, em qualquer intensidade (fonetograma)." },
   { chave: "i_baixa_db_spl", rotulo: "Intensidade mais fraca (I-baixa)", unidade: "dB SPL", max: 140,
-    dica: "Som mais fraco que a pessoa sustenta, medido com decibelímetro a 30 cm da boca. O microfone do computador não mede dB SPL." },
+    dica: "Som mais fraco que a pessoa sustenta, a 30 cm da boca, em dB SPL: decibelímetro ou fonetograma com o microfone calibrado (aba Fonetograma)." },
   { chave: "jitter_pct", rotulo: "Jitter local", unidade: "%", max: 100,
     dica: "Da vogal /a/ sustentada em altura e intensidade confortáveis." },
 ];
@@ -575,7 +575,7 @@ function FormDsi({ paciente, sugestoes, aoSalvar }: { paciente: string; sugestoe
   useEffect(() => {
     setValores((atual) => {
       const novo = { ...atual };
-      for (const c of ["tmf_s", "f0_alta_hz", "jitter_pct"] as const) {
+      for (const c of ["tmf_s", "f0_alta_hz", "i_baixa_db_spl", "jitter_pct"] as const) {
         const s = sugestoes[c];
         if (s && !mexidos.has(c)) novo[c] = String(s.valor).replace(".", ",");
       }
@@ -615,7 +615,7 @@ function FormDsi({ paciente, sugestoes, aoSalvar }: { paciente: string; sugestoe
       <form className="mt-4 grid gap-4 sm:grid-cols-2" onSubmit={(e) => void calcular(e)} data-testid="vc2-form-dsi" noValidate>
         {CAMPOS_DSI.map((c) => {
           const id = `${base}-${c.chave}`;
-          const s = c.chave === "i_baixa_db_spl" ? undefined : sugestoes[c.chave];
+          const s = sugestoes[c.chave];
           return (
             <div key={c.chave}>
               <Label htmlFor={id}>{c.rotulo} ({c.unidade})</Label>
