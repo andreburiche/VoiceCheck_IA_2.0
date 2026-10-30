@@ -44,6 +44,7 @@ from app.schemas.voz_clinica import (
     StatusOut,
 )
 from app.services import voz_clinica
+from app.services.voz_clinica.fala import analisar_fala
 from app.services.voz_clinica.fonetograma import resumir_campo
 from app.services.voz_clinica.indices import dsi
 from app.services.audit import write_audit
@@ -146,7 +147,16 @@ async def analisar(
 
     if nome is None or "f0" not in resultado:
         return ResultadoSalvo(avaliacao_id=None, resultado=resultado)
-    row = ClinicalEvaluation(owner_id=user.id, patient_name=nome, kind="acustica", engine=resultado.get("motor"), result=resultado)
+    return await _salvar_com_audio(db, user, nome, "acustica", resultado, dados, guardar_audio)
+
+
+async def _salvar_com_audio(db: DbSession, user: CurrentUser, nome: str, tipo: str, resultado: dict,
+                            dados: bytes, guardar_audio: bool) -> ResultadoSalvo:
+    """Salva a avaliação e, se pedido e houver cota, a gravação no storage.
+
+    Cota cheia ou storage fora do ar não perdem a análise: ela é salva sem o áudio, com aviso.
+    """
+    row = ClinicalEvaluation(owner_id=user.id, patient_name=nome, kind=tipo, engine=resultado.get("motor"), result=resultado)
     db.add(row)
     db.flush()  # gera o id, usado na chave do arquivo
     aviso = None
@@ -163,6 +173,44 @@ async def analisar(
             aviso = "Não foi possível guardar a gravação; a análise foi salva sem ela."
     db.commit()
     return ResultadoSalvo(avaliacao_id=row.id, resultado=resultado, audio_guardado=row.audio_key is not None, aviso_audio=aviso)
+
+
+@router.post("/fala", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
+async def analisar_fala_rota(
+    request: Request,
+    user: CurrentUser,
+    db: DbSession,
+    file: UploadFile = File(...),
+    f0_min: float = Form(75.0),
+    f0_max: float = Form(500.0),
+    tarefa: str = Form("leitura"),
+    motor: str = Form("auto"),
+    paciente: str | None = Form(None),
+    guardar_audio: bool = Form(True),
+) -> ResultadoSalvo:
+    """F0 da fala: leitura, contagem ou fala espontânea (WAV), para o protocolo de voz."""
+    enforce_rate_limit(
+        request,
+        bucket="voz_clinica",
+        limit=max(5, settings.rate_limit_upload // 2),
+        window_sec=settings.rate_limit_upload_window_sec,
+    )
+    nome = _paciente(paciente)
+    dados = await _read_limited(file, MAX_WAV_BYTES)
+
+    def _rodar() -> dict:
+        return analisar_fala(voz_clinica.ler_wav(dados), motor=motor, f0_min=f0_min, f0_max=f0_max, tarefa=tarefa)
+
+    try:
+        resultado = await asyncio.to_thread(_rodar)
+    except (voz_clinica.ErroAudio, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Voz clínica: falha na análise da fala")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Não foi possível analisar a gravação") from exc
+    if nome is None or "f0" not in resultado:
+        return ResultadoSalvo(avaliacao_id=None, resultado=resultado)
+    return await _salvar_com_audio(db, user, nome, "fala", resultado, dados, guardar_audio)
 
 
 @router.post("/protocolos/{nome}", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
@@ -297,9 +345,11 @@ def revogar_plano(plano_id: str, user: CurrentUser, db: DbSession) -> PlanoOut:
     return plano_out(plano, total, ultima)
 
 
-@router.post("/dsi", dependencies=[Depends(verify_csrf)])
-def calcular_dsi(entrada: DsiEntrada, user: CurrentUser) -> dict:
-    return dsi(entrada.tmf_s, entrada.f0_alta_hz, entrada.i_baixa_db_spl, entrada.jitter_pct)
+@router.post("/dsi", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
+def calcular_dsi(entrada: DsiEntrada, user: CurrentUser, db: DbSession) -> ResultadoSalvo:
+    """DSI (Wuyts et al., 2000). Com paciente, fica salvo com as quatro medidas usadas."""
+    resultado = dsi(entrada.tmf_s, entrada.f0_alta_hz, entrada.i_baixa_db_spl, entrada.jitter_pct)
+    return ResultadoSalvo(avaliacao_id=_salvar(db, user, _paciente(entrada.paciente), "dsi", resultado), resultado=resultado)
 
 
 @router.get("/pacientes", response_model=PacienteLista)

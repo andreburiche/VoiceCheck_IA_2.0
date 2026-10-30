@@ -23,6 +23,12 @@ def dsi(tmf_s: float, f0_alta_hz: float, i_baixa_db_spl: float, jitter_pct: floa
     valor = 0.13 * tmf_s + 0.0053 * f0_alta_hz - 0.26 * i_baixa_db_spl - 1.18 * jitter_pct + 12.4
     return {
         "dsi": round(valor, 2),
+        "entradas": {
+            "tmf_s": tmf_s,
+            "f0_alta_hz": f0_alta_hz,
+            "i_baixa_db_spl": i_baixa_db_spl,
+            "jitter_pct": jitter_pct,
+        },
         "escala": "de -5 (disfonia grave) a +5 (voz normal); interpretar junto com a avaliação clínica",
         "referencia": "Wuyts et al., 2000 (J Speech Lang Hear Res 43:796-809)",
     }

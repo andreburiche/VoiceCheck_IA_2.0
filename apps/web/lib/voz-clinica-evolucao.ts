@@ -3,7 +3,7 @@
  * Uma série por medida; cada uma vira um gráfico próprio (escalas diferentes
  * nunca dividem o mesmo eixo).
  */
-import type { AnaliseAcustica, Avaliacao, ResultadoBiofeedback, ResultadoEaseBr, ResultadoGrbasi, ResultadoIdv10, ResultadoFonetograma, ResultadoJogoSalvo, ResultadoQvv } from "@/lib/voz-clinica-api";
+import type { AnaliseAcustica, AnaliseFala, Avaliacao, ResultadoDsi, ResultadoBiofeedback, ResultadoEaseBr, ResultadoGrbasi, ResultadoIdv10, ResultadoFonetograma, ResultadoJogoSalvo, ResultadoQvv } from "@/lib/voz-clinica-api";
 import { JOGOS, type JogoId } from "@/lib/voz-clinica-jogos";
 import type { ResultadoPratica } from "@/lib/voz-clinica-pratica";
 
@@ -69,6 +69,21 @@ const EXTRATORES: Extrator[] = [
     chave: "mwc", titulo: "MWC — semelhança entre ciclos", unidade: "", casas: 2, tipo: "acustica", dominio: [0, 1],
     leitura: "Correlação média entre ciclos vizinhos (parte do eixo de irregularidade do GHD); valores maiores indicam ciclos mais regulares.",
     valor: (a) => acustica(a).excitacao?.mwc,
+  },
+  {
+    chave: "fala_f0", titulo: "F0 da fala (mediana)", unidade: "Hz", casas: 0, tipo: "fala", dominio: null,
+    leitura: "Altura habitual da voz na fala; a direção desejada depende do objetivo da terapia.",
+    valor: (a) => (a.resultado as AnaliseFala).f0?.mediana_hz,
+  },
+  {
+    chave: "fala_faixa", titulo: "F0 da fala — faixa (p5–p95)", unidade: "st", casas: 1, tipo: "fala", dominio: null,
+    leitura: "Variação de altura na fala (entonação); faixas muito estreitas soam monótonas.",
+    valor: (a) => (a.resultado as AnaliseFala).f0?.faixa_semitons,
+  },
+  {
+    chave: "dsi", titulo: "DSI", unidade: "", casas: 2, tipo: "dsi", dominio: null,
+    leitura: "Índice de gravidade da disfonia; valores maiores indicam voz mais próxima do normal (+5).",
+    valor: (a) => (a.resultado as ResultadoDsi).dsi,
   },
   {
     chave: "idv10", titulo: "IDV-10", unidade: "pts", casas: 0, tipo: "idv10", dominio: [0, 40],

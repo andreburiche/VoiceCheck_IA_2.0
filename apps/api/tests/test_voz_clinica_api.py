@@ -145,7 +145,37 @@ def test_dsi(client: httpx.Client) -> None:
         json={"tmf_s": 20, "f0_alta_hz": 600, "i_baixa_db_spl": 50, "jitter_pct": 0.5},
     )
     assert r.status_code == 200, r.text
-    assert r.json()["dsi"] == pytest.approx(4.59, abs=0.01)
+    assert r.json()["avaliacao_id"] is None  # sem paciente não salva
+    assert r.json()["resultado"]["dsi"] == pytest.approx(4.59, abs=0.01)
+
+    paciente = f"Dsi {uuid.uuid4().hex[:6]}"
+    s = client.post("/api/v1/voz-clinica/dsi",
+                    json={"tmf_s": 20, "f0_alta_hz": 600, "i_baixa_db_spl": 50, "jitter_pct": 0.5, "paciente": paciente})
+    assert s.json()["avaliacao_id"]
+    item = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"][0]
+    assert item["tipo"] == "dsi" and item["resultado"]["entradas"]["tmf_s"] == 20
+    assert client.post("/api/v1/voz-clinica/dsi", json={"tmf_s": -1, "f0_alta_hz": 600, "i_baixa_db_spl": 50, "jitter_pct": 0.5}).status_code == 422
+
+
+def test_f0_da_fala_salva_com_gravacao(client: httpx.Client) -> None:
+    from test_voz_clinica_fala import _frases
+
+    paciente = f"Fala {uuid.uuid4().hex[:6]}"
+    wav = para_wav(_frases())
+    r = client.post("/api/v1/voz-clinica/fala", files={"file": ("fala.wav", io.BytesIO(wav), "audio/wav")},
+                    data={"paciente": paciente, "tarefa": "leitura", "f0_min": "75", "f0_max": "400"})
+    assert r.status_code == 200, r.text
+    corpo = r.json()
+    assert corpo["resultado"]["f0"]["mediana_hz"] == pytest.approx(180, rel=0.03)
+    assert corpo["resultado"]["fala"]["pausas"] == 4 and corpo["audio_guardado"] is True
+    item = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"][0]
+    assert item["tipo"] == "fala" and item["audio"] is True
+    assert client.get(f"/api/v1/voz-clinica/avaliacoes/{item['id']}/audio").content == wav
+
+    ruim = client.post("/api/v1/voz-clinica/fala", files={"file": ("fala.wav", io.BytesIO(wav), "audio/wav")},
+                       data={"tarefa": "cantar"})
+    assert ruim.status_code == 400 and "Tarefa" in ruim.json()["message"]
+    client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
 
 
 def _sessao(**extra) -> dict:

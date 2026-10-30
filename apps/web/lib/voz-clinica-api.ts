@@ -8,7 +8,7 @@ import { JOGOS, type ResultadoJogo } from "@/lib/voz-clinica-jogos";
 import { resumoPratica, type ExercicioPratica, type ResultadoPratica } from "@/lib/voz-clinica-pratica";
 
 
-export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica";
+export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica" | "dsi" | "fala";
 export type Protocolo = "idv10" | "qvv" | "grbasi" | "easebr";
 
 /** Resumo de sessão de biofeedback salvo (medido no navegador). */
@@ -59,6 +59,34 @@ export type AnaliseAcustica = {
   avisos: string[];
 };
 
+/** F0 da fala (leitura, contagem ou fala espontânea), calculada no servidor. */
+export type TarefaFala = "leitura" | "contagem" | "espontanea";
+export type AnaliseFala = {
+  motor: "praat" | "interno";
+  tarefa: TarefaFala;
+  duracao_s: number;
+  f0?: {
+    media_hz: number;
+    mediana_hz: number;
+    nota_mediana: string;
+    dp_hz: number;
+    dp_semitons: number;
+    p5_hz: number;
+    p95_hz: number;
+    faixa_semitons: number;
+  };
+  fala?: { tempo_vozeado_s: number; fracao_vozeada_pct: number; pausas: number; intensidade_media_dbfs: number };
+  avisos: string[];
+};
+
+/** DSI (Wuyts et al., 2000) com as quatro medidas usadas. */
+export type ResultadoDsi = {
+  dsi: number;
+  entradas: { tmf_s: number; f0_alta_hz: number; i_baixa_db_spl: number; jitter_pct: number };
+  escala: string;
+  referencia: string;
+};
+
 export type ResultadoIdv10 = {
   protocolo: "IDV-10";
   total: number;
@@ -107,7 +135,7 @@ export type Avaliacao = {
   paciente: string;
   tipo: TipoAvaliacao;
   motor: string | null;
-  resultado: AnaliseAcustica | ResultadoProtocolo | Anamnese | ResultadoPratica | ResultadoBiofeedback | ResultadoJogoSalvo | ResultadoFonetograma;
+  resultado: AnaliseAcustica | ResultadoProtocolo | Anamnese | ResultadoPratica | ResultadoBiofeedback | ResultadoJogoSalvo | ResultadoFonetograma | ResultadoDsi | AnaliseFala;
   criado_em: string;
   /** Há gravação guardada (análise acústica). */
   audio?: boolean;
@@ -136,6 +164,24 @@ export function analisarGravacao(
     body: dados,
     timeoutMs: 90_000,
   });
+}
+
+export function analisarFala(
+  wav: Blob,
+  opcoes: { f0Min: number; f0Max: number; tarefa: TarefaFala; paciente?: string | null; guardarAudio?: boolean },
+) {
+  const dados = new FormData();
+  dados.append("file", wav, "fala.wav");
+  dados.append("f0_min", String(opcoes.f0Min));
+  dados.append("f0_max", String(opcoes.f0Max));
+  dados.append("tarefa", opcoes.tarefa);
+  if (opcoes.paciente) dados.append("paciente", opcoes.paciente);
+  if (opcoes.guardarAudio === false) dados.append("guardar_audio", "false");
+  return apiFetch<Salvo<AnaliseFala>>(`${BASE}/fala`, { method: "POST", body: dados, timeoutMs: 90_000 });
+}
+
+export function calcularDsi(entrada: ResultadoDsi["entradas"], paciente?: string | null) {
+  return apiFetch<Salvo<ResultadoDsi>>(`${BASE}/dsi`, { method: "POST", json: { ...entrada, paciente: paciente || null } });
 }
 
 export function calcularProtocolo(
@@ -336,6 +382,15 @@ export function resumoAvaliacao(a: Avaliacao): string {
       `alvo ${fixoBR(r.alvo_pitch_hz.min, 0)}–${fixoBR(r.alvo_pitch_hz.max, 0)} Hz`,
     ].join(" · ");
   }
+  if (a.tipo === "dsi") {
+    const r = a.resultado as ResultadoDsi;
+    const e = r.entradas;
+    return `DSI ${fixoBR(r.dsi, 2)} · TMF ${fixoBR(e?.tmf_s, 1)} s · F0-alta ${fixoBR(e?.f0_alta_hz, 0)} Hz · I-baixa ${fixoBR(e?.i_baixa_db_spl, 0)} dB SPL · jitter ${fixoBR(e?.jitter_pct, 2)}%`;
+  }
+  if (a.tipo === "fala") {
+    const r = a.resultado as AnaliseFala;
+    return `${ROTULO_TAREFA[r.tarefa] ?? "Fala"}: F0 mediana ${fixoBR(r.f0?.mediana_hz, 0)} Hz (${r.f0?.nota_mediana ?? "—"}) · faixa ${fixoBR(r.f0?.faixa_semitons, 1)} st · ${r.fala?.pausas ?? 0} pausas`;
+  }
   if (a.tipo === "acustica") {
     const r = a.resultado as AnaliseAcustica;
     const p = r.perturbacao ?? {};
@@ -360,4 +415,12 @@ export const ROTULO_TIPO: Record<TipoAvaliacao, string> = {
   easebr: "EASE-BR",
   anamnese: "Anamnese",
   pratica: "Prática em casa",
+  dsi: "DSI",
+  fala: "F0 da fala",
+};
+
+export const ROTULO_TAREFA: Record<TarefaFala, string> = {
+  leitura: "Leitura",
+  contagem: "Contagem",
+  espontanea: "Fala espontânea",
 };

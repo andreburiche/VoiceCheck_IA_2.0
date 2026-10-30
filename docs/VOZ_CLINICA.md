@@ -23,6 +23,7 @@ paciente. Biofeedback e jogos (VoxGames, Voice Analyst) ficam para a fase 2.
 | Anamnese | Aba própria. Queixa, tempo e evolução, 10 sintomas marcáveis, profissão, uso profissional da voz, horas de uso por dia, canto, tabagismo, álcool, água, refluxo, alergia respiratória, audição, terapia anterior, cirurgias/intubações, medicamentos e observações. Tudo opcional; só o que foi preenchido é salvo (tipo `anamnese`, uma versão nova a cada salvamento). "Usar a última anamnese" recupera a versão anterior para atualizar. O relatório PDF traz a mais recente |
 | Histórico | Lista por paciente, mais recente primeiro, com exclusão confirmada |
 | Evolução | Um gráfico por medida (jitter, shimmer, HNR, CPPS, IDV-10, QVV, GRBASI G, EASE-BR), até 12 sessões, com linha da nota de corte nos protocolos e valor de cada sessão ao passar o mouse ou focar pelo teclado. Aparece a partir da 2ª avaliação do mesmo tipo |
+| Protocolo de voz | Quadro com a medida mais recente de cada parte (fala, vogal, fonetograma, DSI, IDV-10, QVV, GRBASI). **F0 da fala**: leitura de texto, contagem ou fala espontânea (até 60 s) → F0 mediana e nota, média, desvio (Hz e st), faixa p5–p95, tempo com voz, pausas ≥ 250 ms. **DSI** (Wuyts 2000) com TMF, F0-alta e jitter sugeridos do histórico e I-baixa em dB SPL digitada (decibelímetro), salvo com as quatro medidas |
 | Comparar | Duas análises acústicas lado a lado (padrão: a primeira e a mais recente): ouvir e baixar as gravações e ver, para cada medida, antes, depois, diferença e se melhorou, piorou ou ficou sem mudança relevante (tolerância da variação comum entre gravações; F0 sem juízo de melhor/pior) |
 | Relatório em PDF | Botão no histórico: análise acústica e protocolos mais recentes, gráficos de evolução, todas as sessões, profissional e observações (opcionais). HTML A4 impresso pelo navegador ("Salvar como PDF"), mesmo mecanismo dos relatórios do VoiceCheck |
 | Biofeedback ao vivo | Pitch (nota e Hz) e volume (dBFS) na tela enquanto o paciente fala ou canta, com faixas-alvo definidas pelo profissional, indicação "abaixo / dentro / acima" escrita (não só cor), curva dos últimos 8 s e % do tempo na faixa. Pitch por YIN a ~60 leituras/s com mediana de 3 contra leituras isoladas. O áudio não sai do aparelho; ao parar, o resumo da sessão pode ser salvo no histórico (tipo `biofeedback`) e entra na evolução |
@@ -209,6 +210,7 @@ Em desenvolvimento, a tela de login tem "Acesso rápido" com as contas de teste 
 7. ~~Prática em casa (celular, offline)~~ (feita).
 8. ~~GNE e MWC~~ (feitos; validados no Docker com Praat e MySQL, 126 testes). Pendente: diagrama GHD (constantes da tese de Michaelis).
 9. ~~Gravações guardadas e comparação antes/depois~~ (feitas; ver abaixo).
-10. Protocolo de voz completo (DSI na tela, F0 da fala), DDK, teste de carga vocal, gráficos LTAS/cepstro.
+10. ~~Protocolo de voz (DSI na tela, F0 da fala)~~ (feito).
+11. DDK, teste de carga vocal, gráficos LTAS/cepstro.
 
 Com isso, a tela cobre as funções dos seis programas levantados (VoxMetria, VoxGames, Praat, Voice Analyst, lingWAVES, iVox). Próximo passo: validação no Docker (rotas contra MySQL, motor Praat) e com pacientes reais.

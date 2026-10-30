@@ -87,6 +87,18 @@ describe("resumos", () => {
     const a: Avaliacao = { id: "1", paciente: "Ana", tipo: "acustica", motor: "interno", resultado: ANALISE, criado_em: "2026-10-29T10:00:00Z" };
     expect(resumoAvaliacao(a)).toBe("F0 179,5 Hz · jitter 1,15% · shimmer 4,24% · CPPS 12,5 dB");
   });
+
+  it("DSI e F0 da fala viram linhas curtas", () => {
+    const dsi: Avaliacao = { id: "2", paciente: "Ana", tipo: "dsi", motor: null, criado_em: "2026-10-29T10:00:00Z",
+      resultado: { dsi: 3.41, entradas: { tmf_s: 18.5, f0_alta_hz: 659, i_baixa_db_spl: 52, jitter_pct: 0.42 }, escala: "", referencia: "" } };
+    expect(resumoAvaliacao(dsi)).toBe("DSI 3,41 · TMF 18,5 s · F0-alta 659 Hz · I-baixa 52 dB SPL · jitter 0,42%");
+    const fala: Avaliacao = { id: "3", paciente: "Ana", tipo: "fala", motor: "praat", criado_em: "2026-10-29T10:00:00Z",
+      resultado: { motor: "praat", tarefa: "contagem", duracao_s: 20, avisos: [],
+        f0: { media_hz: 205, mediana_hz: 201.6, nota_mediana: "G3", dp_hz: 20, dp_semitons: 1.8, p5_hz: 170, p95_hz: 249, faixa_semitons: 6.58 },
+        fala: { tempo_vozeado_s: 12, fracao_vozeada_pct: 60, pausas: 7, intensidade_media_dbfs: -24 } } };
+    expect(resumoAvaliacao(fala)).toBe("Contagem: F0 mediana 202 Hz (G3) · faixa 6,6 st · 7 pausas");
+    expect(ROTULO_TIPO.fala).toBe("F0 da fala");
+  });
 });
 
 describe("EASE-BR e anamnese", () => {

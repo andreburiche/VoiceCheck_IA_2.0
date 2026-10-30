@@ -16,6 +16,7 @@ import { Fonetograma } from "@/components/voz-clinica/fonetograma";
 import { JogosTerapia } from "@/components/voz-clinica/jogos-terapia";
 import { PraticaCasa } from "@/components/voz-clinica/pratica-casa";
 import { ComparacaoAntesDepois } from "@/components/voz-clinica/comparacao";
+import { ProtocoloVoz } from "@/components/voz-clinica/protocolo-voz";
 import { GraficoEvolucao } from "@/components/voz-clinica/grafico-evolucao";
 import { MAX_PONTOS, seriesEvolucao } from "@/lib/voz-clinica-evolucao";
 import { imprimirRelatorioClinico } from "@/lib/voz-clinica-relatorio";
@@ -694,6 +695,7 @@ function Historico({ paciente, versao, aoExcluirPaciente }: { paciente: string; 
 const ABAS = [
   { id: "avaliacao", rotulo: "Avaliação" },
   { id: "anamnese", rotulo: "Anamnese" },
+  { id: "protocolo", rotulo: "Protocolo de voz" },
   { id: "comparar", rotulo: "Comparar" },
   { id: "fonetograma", rotulo: "Fonetograma" },
   { id: "biofeedback", rotulo: "Biofeedback" },
@@ -815,6 +817,12 @@ export function AvaliacaoClinica() {
       <div role="tabpanel" id={`${idPaciente}-painel-anamnese`} aria-labelledby={`${idPaciente}-aba-anamnese`} hidden={aba !== "anamnese"}>
         <AnamneseVocal paciente={nome} aoSalvar={aoSalvar} />
       </div>
+      {/* só montada quando aberta: a gravação da fala libera o microfone ao sair */}
+      {aba === "protocolo" ? (
+        <div role="tabpanel" id={`${idPaciente}-painel-protocolo`} aria-labelledby={`${idPaciente}-aba-protocolo`}>
+          <ProtocoloVoz paciente={nome} versao={versao} aoSalvar={aoSalvar} />
+        </div>
+      ) : null}
       {aba === "comparar" ? (
         <div role="tabpanel" id={`${idPaciente}-painel-comparar`} aria-labelledby={`${idPaciente}-aba-comparar`}>
           <ComparacaoAntesDepois paciente={nome} versao={versao} />

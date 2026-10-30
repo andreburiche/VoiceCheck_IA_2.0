@@ -17,7 +17,8 @@ def _com_fuso(d: datetime) -> datetime:
 DataUtc = Annotated[datetime, AfterValidator(_com_fuso)]
 
 TipoAvaliacao = Literal[
-    "acustica", "idv10", "qvv", "grbasi", "easebr", "anamnese", "biofeedback", "jogo", "fonetograma", "pratica"
+    "acustica", "idv10", "qvv", "grbasi", "easebr", "anamnese", "biofeedback", "jogo", "fonetograma", "pratica",
+    "dsi", "fala",
 ]
 JogoId = Literal["altitude", "trilha", "sopro", "surdo-sonoro"]
 
@@ -34,6 +35,8 @@ class DsiEntrada(BaseModel):
     f0_alta_hz: float = Field(ge=0, le=3000)
     i_baixa_db_spl: float = Field(ge=0, le=140)
     jitter_pct: float = Field(ge=0, le=100)
+    #: Se informado, o DSI fica salvo no histórico do paciente (com as quatro medidas usadas).
+    paciente: str | None = Field(default=None, max_length=120)
 
 
 class Faixa(BaseModel):
