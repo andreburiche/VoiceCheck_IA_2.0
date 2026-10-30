@@ -103,7 +103,7 @@ function leituraEm(leituras: LeituraExemplo[], t: number): LeituraExemplo | null
  * Painel "ao vivo" da página inicial: uma frase cantada de exemplo, medida no navegador com as
  * mesmas funções da avaliação clínica, desenhada da esquerda para a direita em loop.
  */
-export function PainelAoVivo() {
+export function PainelAoVivo({ compacto = false }: { compacto?: boolean } = {}) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const caixa = useRef<HTMLDivElement>(null);
   const dados = useRef<Dados | null>(null);
@@ -182,7 +182,8 @@ export function PainelAoVivo() {
     <div ref={caixa} className="panel-glass overflow-hidden rounded-2xl" data-testid="landing-painel">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-5 py-3">
         <p className="text-sm font-semibold text-ink">
-          Vogal /a/ cantada <span className="font-normal text-ink-muted">· voz de exemplo, medida agora no seu navegador</span>
+          Vogal /a/ cantada{" "}
+          <span className="font-normal text-ink-muted">{compacto ? "· medida agora" : "· voz de exemplo, medida agora no seu navegador"}</span>
         </p>
         <span className="inline-flex items-center gap-2 rounded-full bg-canvas-overlay px-3 py-1 text-xs text-ink">
           <span className={estado === "medindo" ? "h-2 w-2 rounded-full bg-flare motion-safe:animate-pulse" : "h-2 w-2 rounded-full bg-accent"} aria-hidden />
@@ -191,18 +192,18 @@ export function PainelAoVivo() {
       </div>
       <canvas
         ref={canvas}
-        className="block h-[300px] w-full sm:h-[360px]"
+        className={compacto ? "block h-[220px] w-full xl:h-[250px]" : "block h-[300px] w-full sm:h-[360px]"}
         role="img"
         aria-label="Espectrograma e curva de F0 de uma frase cantada de exemplo: sobe de sol 3 a ré 4, sustenta com vibrato e desce."
       />
-      <dl className="grid grid-cols-2 border-t border-line/70 sm:grid-cols-4">
+      <dl className={`grid grid-cols-2 border-t border-line/70 ${compacto ? "xl:grid-cols-4" : "sm:grid-cols-4"}`}>
         {[
           [rotuloF0, f0 !== null ? `${Math.round(f0)}` : "—", "Hz"],
           ["Nota", f0 !== null ? notaDe(f0) : "—", ""],
           [estado === "pronto" ? "Nível máximo" : "Nível", leitura && leitura.db > -60 ? `${Math.round(leitura.db)}` : "—", "dBFS"],
           ["Tempo", leitura ? leitura.t.toFixed(1).replace(".", ",") : "—", "s"],
         ].map(([rotulo, valor, unidade], i) => (
-          <div key={i} className={`px-5 py-3 ${i > 0 ? "sm:border-l sm:border-line/70" : ""} ${i % 2 === 1 ? "border-l border-line/70" : ""} ${i >= 2 ? "border-t border-line/70 sm:border-t-0" : ""}`}>
+          <div key={i} className={`py-3 ${compacto ? "px-4" : "px-5"} ${i > 0 ? (compacto ? "xl:border-l xl:border-line/70" : "sm:border-l sm:border-line/70") : ""} ${i % 2 === 1 ? "border-l border-line/70" : ""} ${i >= 2 ? (compacto ? "border-t border-line/70 xl:border-t-0" : "border-t border-line/70 sm:border-t-0") : ""}`}>
             <dt className="hud-label">{rotulo}</dt>
             <dd className="mt-0.5">
               <span className="text-data text-xl font-semibold text-accent">{valor}</span>

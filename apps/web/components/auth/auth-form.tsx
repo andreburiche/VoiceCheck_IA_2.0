@@ -128,7 +128,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
         </h1>
         <p className="mt-2 text-base text-ink-muted">
           {mode === "login"
-            ? "Continue de onde parou nas suas músicas."
+            ? "Continue de onde parou: pacientes, alunos e projetos."
             : "Grátis para começar. Leva menos de um minuto."}
         </p>
       </div>

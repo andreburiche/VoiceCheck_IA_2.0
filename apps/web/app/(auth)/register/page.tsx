@@ -1,15 +1,16 @@
 import { AuthForm } from "@/components/auth/auth-form";
 import { AuthShell } from "@/components/auth/auth-shell";
-import { StudioPreview } from "@/components/marketing/studio-preview";
+import { PassosCadastro } from "@/components/auth/passos-cadastro";
 
 export const metadata = { title: "Criar conta" };
 
 export default function RegisterPage() {
   return (
     <AuthShell
-      title="Separe, treine e analise."
-      text="Envie uma música e em poucos minutos você tem as faixas separadas e o estúdio de treino pronto."
-      aside={<StudioPreview />}
+      title="Comece pela"
+      highlight="próxima voz."
+      text="Avaliação, terapia e treino de canto numa só conta, com números que conferem com o Praat."
+      aside={<PassosCadastro />}
     >
       <AuthForm mode="register" />
     </AuthShell>
