@@ -38,9 +38,11 @@ def test_motores_concordam_na_f0_e_nos_formantes():
 
 @pytest.mark.parametrize("f0", [110, 220])
 @pytest.mark.parametrize("sj,sa,ruido", [(0.005, 0.03, 0.005), (0.01, 0.06, 0.01)])
-def test_motor_interno_concorda_com_o_praat_em_jitter_e_shimmer(f0, sj, sa, ruido):
+def test_motor_interno_concorda_com_o_praat_em_jitter_shimmer_e_cpps(f0, sj, sa, ruido):
     """Concordância medida (scripts/concordancia_motores.py): o motor interno é a reserva do Praat."""
     audio = sintetizar(f0=f0, sj=sj, sa=sa, ruido=ruido, formantes=VOGAL, seed=7).audio
-    praat, interno = motor_praat.analisar(audio)["perturbacao"], motor_interno.analisar(audio)["perturbacao"]
+    rp, ri = motor_praat.analisar(audio), motor_interno.analisar(audio)
+    praat, interno = rp["perturbacao"], ri["perturbacao"]
     assert interno["jitter_local_pct"] == pytest.approx(praat["jitter_local_pct"], abs=0.3)
     assert interno["shimmer_local_pct"] == pytest.approx(praat["shimmer_local_pct"], abs=1.0)
+    assert ri["cpps_db"] == pytest.approx(rp["cpps_db"], abs=1.0)  # calibrado: erro médio 0,35 dB

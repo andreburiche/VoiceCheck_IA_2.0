@@ -306,10 +306,15 @@ def perturbacao(trechos) -> dict:
 # --------------------------------------------------------------------------
 
 def cpps(audio: Audio, f0_min=60.0, f0_max=330.0, suavizar: bool = True) -> float | None:
-    """CPPS (suavizado, Hillenbrand) ou, com suavizar=False, CPP: pico cepstral de cada quadro sem média."""
+    """CPPS (suavizado, Hillenbrand) ou, com suavizar=False, CPP: pico cepstral de cada quadro sem média.
+
+    Parâmetros do "To PowerCepstrogram" + "Get CPPS" do Praat: janela de 3 períodos do piso de
+    pitch (3/60 Hz = 50 ms) e reta de tendência de 1 ms até o fim da quefrência. Calibrado
+    contra o Praat (docs/CONCORDANCIA_MOTORES.md): erro médio 0,35 dB (antes 1,59, sempre abaixo).
+    """
     taxa = 10000
     x = reamostrar(audio.amostras, audio.taxa, taxa)
-    janela = int(0.04 * taxa)
+    janela = int(round(3.0 / 60.0 * taxa))
     passo = int(0.002 * taxa)
     inicios = _quadros(len(x), janela, passo)
     if len(inicios) < 5:
@@ -339,7 +344,7 @@ def cpps(audio: Audio, f0_min=60.0, f0_max=330.0, suavizar: bool = True) -> floa
 
     quef = np.arange(cg.shape[1]) * dq
     faixa = (quef >= 1.0 / f0_max) & (quef <= 1.0 / f0_min)
-    ajuste = (quef >= 0.001) & (quef <= 0.0167)
+    ajuste = quef >= 0.001  # até o fim da quefrência, como o Praat (trend line 0,001–0)
     valores = []
     for linha, ativo in zip(cg, ativos):
         if not ativo:
