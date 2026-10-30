@@ -25,6 +25,7 @@ import { MAX_PONTOS, seriesEvolucao } from "@/lib/voz-clinica-evolucao";
 import { imprimirRelatorioClinico } from "@/lib/voz-clinica-relatorio";
 import { GravadorClinico, gravadorSuportado, type GravacaoClinica } from "@/lib/voz-clinica-gravador";
 import { importarAudio, recortarGravacao } from "@/lib/voz-clinica-importar";
+import { historicoCsv } from "@/lib/voz-clinica-planilha";
 import {
   FAIXAS_F0,
   ROTULO_TIPO,
@@ -595,12 +596,24 @@ function Relatorio({ paciente, itens }: { paciente: string; itens: Avaliacao[] }
 }
 
 /** Direitos do titular (LGPD art. 18): exportar e excluir tudo do paciente. */
-function DadosDoPaciente({ paciente, aoExcluir }: { paciente: string; aoExcluir: (resumo: string) => void }) {
+function DadosDoPaciente({ paciente, itens, aoExcluir }: { paciente: string; itens: Avaliacao[]; aoExcluir: (resumo: string) => void }) {
   const [exportando, setExportando] = useState(false);
   const [confirmar, setConfirmar] = useState(false);
   const [excluindo, setExcluindo] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+
+  function planilha() {
+    const base = paciente.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "paciente";
+    const arquivo = `voicecheck-${base}-historico.csv`;
+    const url = URL.createObjectURL(new Blob([historicoCsv(itens)], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = arquivo;
+    a.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setMsg(`Planilha ${arquivo} gerada (${itens.length} ${itens.length === 1 ? "avaliação" : "avaliações"}). Ela contém dados de saúde: guarde e envie com cuidado.`);
+  }
 
   async function exportar() {
     setExportando(true);
@@ -648,6 +661,9 @@ function DadosDoPaciente({ paciente, aoExcluir }: { paciente: string; aoExcluir:
       <div className="mt-2 flex flex-wrap gap-2">
         <Button type="button" variant="secondary" size="sm" onClick={() => void exportar()} disabled={exportando} data-testid="vc2-exportar">
           <Download className="h-4 w-4" aria-hidden /> {exportando ? "Exportando…" : "Exportar todos os dados"}
+        </Button>
+        <Button type="button" variant="secondary" size="sm" onClick={planilha} data-testid="vc2-planilha">
+          <FileText className="h-4 w-4" aria-hidden /> Planilha (CSV)
         </Button>
         <Button type="button" variant="ghost" size="sm" className="text-signal-err hover:text-signal-err" onClick={() => setConfirmar(true)} data-testid="vc2-excluir-paciente">
           <Trash2 className="h-4 w-4" aria-hidden /> Excluir todos os dados
@@ -821,7 +837,7 @@ function Historico({ paciente, versao, aoExcluirPaciente }: { paciente: string; 
         onCancel={() => setExcluir(null)}
       />
       {itens?.length ? (
-        <DadosDoPaciente paciente={paciente} aoExcluir={(resumo) => { setAvisoExclusao(resumo); aoExcluirPaciente(); void carregar(); }} />
+        <DadosDoPaciente paciente={paciente} itens={itens} aoExcluir={(resumo) => { setAvisoExclusao(resumo); aoExcluirPaciente(); void carregar(); }} />
       ) : null}
     </section>
   );

@@ -6,10 +6,11 @@
  * - trilha:   o PITCH controla a altura; seguir patamares e deslizes
  * - sopro:    sustentar a voz sem parar até a meta de tempo
  * - surdo-sonoro: produzir o par pedido (s/z, f/v, ch/j)
+ * - som-silencio: ficar em silêncio e soltar um som curto quando o sinal acender (ataque vocal)
  */
 import { nivelDbfs, pitchYin, type Faixa } from "@/lib/voz-clinica-biofeedback";
 
-export type JogoId = "altitude" | "trilha" | "sopro" | "surdo-sonoro";
+export type JogoId = "altitude" | "trilha" | "sopro" | "surdo-sonoro" | "som-silencio";
 
 export const JOGOS: Record<JogoId, { titulo: string; treina: string; instrucao: string }> = {
   altitude: {
@@ -31,6 +32,11 @@ export const JOGOS: Record<JogoId, { titulo: string; treina: string; instrucao: 
     titulo: "Surdo ou sonoro",
     treina: "Sonorização (s/z, f/v, ch/j)",
     instrucao: "Produza o som pedido na tela e segure por um instante. Sons sonoros vibram na garganta; surdos, não.",
+  },
+  "som-silencio": {
+    titulo: "Som e silêncio",
+    treina: "Ataque vocal e plosivos",
+    instrucao: "Fique em silêncio. Quando o círculo acender, diga uma vez, curto: “pá” (ou “a”). Som fora da hora conta como antecipação.",
   },
 };
 
@@ -263,6 +269,82 @@ export function passoDesafios(
 export function pontuacaoDesafios(e: EstadoDesafios): number {
   const total = e.acertos + e.erros;
   return total > 0 ? Math.round((1000 * e.acertos) / total) / 10 : 0;
+}
+
+// ---------------------------------------------------------------------------
+// Som e silêncio (ataque vocal)
+// ---------------------------------------------------------------------------
+
+/** Instantes (s) em que o sinal acende: o primeiro após 3 s, depois a cada 1,8 a 3,5 s (imprevisível). */
+export function gerarSinais(quantidade: number, semente = 1, inicio_s = 3): number[] {
+  const rnd = aleatorio(semente);
+  const saida: number[] = [];
+  let t = inicio_s;
+  for (let i = 0; i < quantidade; i++) {
+    saida.push(Math.round(t * 100) / 100);
+    t += 1.8 + rnd() * 1.7;
+  }
+  return saida;
+}
+
+/** Limiar de som a partir do ruído de fundo medido antes do primeiro sinal: ruído + 15 dB, entre -50 e -20 dBFS. */
+export function limiarDeRuido(dbs: number[]): number {
+  if (!dbs.length) return -40;
+  const o = dbs.slice().sort((a, b) => a - b);
+  const mediana = o[Math.floor(o.length / 2)]!;
+  return Math.max(-50, Math.min(-20, mediana + 15));
+}
+
+export type EstadoAtaque = {
+  t: number | null;
+  /** Havia som no quadro anterior (para detectar o início de cada som). */
+  comSom: boolean;
+  /** Próximo sinal ainda sem resposta. */
+  indice: number;
+  acertos: number;
+  perdidos: number;
+  antecipados: number;
+  /** Tempo de reação (ms) de cada acerto. */
+  reacoes_ms: number[];
+  historico: boolean[];
+};
+
+export const estadoAtaqueInicial = (): EstadoAtaque => ({
+  t: null, comSom: false, indice: 0, acertos: 0, perdidos: 0, antecipados: 0, reacoes_ms: [], historico: [],
+});
+
+/**
+ * Avança o jogo: cada INÍCIO de som (silêncio → som, com 6 dB de histerese para não contar
+ * a mesma sílaba duas vezes) dentro da janela de um sinal é acerto; fora dela, antecipação.
+ * Sinal sem resposta até o fim da janela conta como perdido.
+ */
+export function passoAtaque(e: EstadoAtaque, t: number, db: number, sinais: number[], limiar: number, janela_s = 1.2): EstadoAtaque {
+  let s = { ...e, t };
+  // sinais cuja janela já passou sem resposta
+  while (s.indice < sinais.length && t > sinais[s.indice]! + janela_s) {
+    s = { ...s, indice: s.indice + 1, perdidos: s.perdidos + 1, historico: [...s.historico, false] };
+  }
+  const som = s.comSom ? db >= limiar - 6 : db >= limiar;
+  if (som && !s.comSom) {
+    const sinal = sinais[s.indice];
+    if (sinal !== undefined && t >= sinal && t <= sinal + janela_s) {
+      s = { ...s, indice: s.indice + 1, acertos: s.acertos + 1, reacoes_ms: [...s.reacoes_ms, Math.round((t - sinal) * 1000)], historico: [...s.historico, true] };
+    } else {
+      s = { ...s, antecipados: s.antecipados + 1 };
+    }
+  }
+  return { ...s, comSom: som };
+}
+
+/** Acertos sobre (sinais + antecipações): soltar som fora da hora também pesa. */
+export function pontuacaoAtaque(e: EstadoAtaque, totalSinais: number): number {
+  const base = totalSinais + e.antecipados;
+  return base > 0 ? Math.round((1000 * e.acertos) / base) / 10 : 0;
+}
+
+/** O sinal fica aceso a janela inteira, mesmo depois de respondido (o paciente vê que acertou). */
+export function sinalAtivo(sinais: number[], t: number, janela_s = 1.2): boolean {
+  return sinais.some((s) => t >= s && t <= s + janela_s);
 }
 
 // ---------------------------------------------------------------------------

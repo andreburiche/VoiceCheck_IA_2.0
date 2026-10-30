@@ -217,6 +217,9 @@ def test_jogo_salva_no_historico(client: httpx.Client) -> None:
     itens = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"]
     assert itens[0]["tipo"] == "jogo"
     assert itens[0]["resultado"]["detalhes"]["melhor_s"] == 8.0
+    ataque = {"paciente": paciente, "jogo": "som-silencio", "duracao_s": 30.0, "pontuacao_pct": 75.0,
+              "detalhes": {"sinais": 8, "acertos": 6, "perdidos": 1, "antecipados": 1, "reacao_media_ms": 420}}
+    assert client.post("/api/v1/voz-clinica/jogos", json=ataque).status_code == 200
 
 
 @pytest.mark.parametrize("ruim", [

@@ -15,19 +15,26 @@ import {
   JOGOS,
   alvoEm,
   classificarSom,
+  estadoAtaqueInicial,
   estadoDesafiosInicial,
   estadoPercursoInicial,
   estadoSoproInicial,
   gerarDesafios,
   gerarPercurso,
+  gerarSinais,
+  limiarDeRuido,
   normalizar,
+  passoAtaque,
   passoDesafios,
   passoPercurso,
   passoSopro,
+  pontuacaoAtaque,
   pontuacaoDesafios,
   pontuacaoPercurso,
+  sinalAtivo,
   type ClasseSom,
   type Desafio,
+  type EstadoAtaque,
   type EstadoDesafios,
   type EstadoPercurso,
   type EstadoSopro,
@@ -58,6 +65,11 @@ type Partida = {
   percursoE: EstadoPercurso;
   soproE: EstadoSopro;
   desafiosE: EstadoDesafios;
+  sinais: number[];
+  ataqueE: EstadoAtaque;
+  /** Níveis antes do primeiro sinal (ruído de fundo) e o limiar calculado a partir deles. */
+  ruido: number[];
+  limiar: number | null;
   rastro: { t: number; y: number | null }[];
   y: number | null;
   classe: ClasseSom;
@@ -161,7 +173,7 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
     desafios: 8,
   });
   const [jogando, setJogando] = useState(false);
-  const [placar, setPlacar] = useState<{ pct: number; texto: string; classe?: ClasseSom; desafio?: Desafio; indice?: number; historico?: boolean[]; sopro?: EstadoSopro }>({ pct: 0, texto: "" });
+  const [placar, setPlacar] = useState<{ pct: number; texto: string; classe?: ClasseSom; desafio?: Desafio; indice?: number; historico?: boolean[]; sopro?: EstadoSopro; aceso?: boolean; ataque?: EstadoAtaque }>({ pct: 0, texto: "" });
   const [resultado, setResultado] = useState<ResultadoJogo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState(false);
@@ -212,6 +224,13 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
     } else if (p.jogo === "sopro") {
       const melhor = Math.round(p.soproE.melhor_s * 10) / 10;
       r = { jogo: "sopro", duracao_s: duracao, pontuacao_pct: Math.min(100, Math.round((1000 * melhor) / c.meta_s) / 10), detalhes: { meta_s: c.meta_s, melhor_s: melhor } };
+    } else if (p.jogo === "som-silencio") {
+      const e = p.ataqueE;
+      const media = e.reacoes_ms.length ? Math.round(e.reacoes_ms.reduce((s, x) => s + x, 0) / e.reacoes_ms.length) : 0;
+      r = {
+        jogo: "som-silencio", duracao_s: duracao, pontuacao_pct: pontuacaoAtaque(e, p.sinais.length),
+        detalhes: { sinais: p.sinais.length, acertos: e.acertos, perdidos: e.perdidos, antecipados: e.antecipados, reacao_media_ms: media },
+      };
     } else {
       r = {
         jogo: "surdo-sonoro", duracao_s: duracao, pontuacao_pct: pontuacaoDesafios(p.desafiosE),
@@ -250,6 +269,10 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
       percursoE: estadoPercursoInicial(),
       soproE: estadoSoproInicial(),
       desafiosE: { ...estadoDesafiosInicial(), inicioDesafio: inicio + 1.5 },
+      sinais: jogo === "som-silencio" ? gerarSinais(c.desafios, semente) : [],
+      ataqueE: estadoAtaqueInicial(),
+      ruido: [],
+      limiar: null,
       rastro: [],
       y: null,
       classe: "silencio",
@@ -280,6 +303,12 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
       } else if (p.jogo === "sopro") {
         const r = pitchYin(buffer, a.ctx.sampleRate, 60, 1000);
         p.soproE = passoSopro(p.soproE, t, r !== null);
+      } else if (p.jogo === "som-silencio") {
+        const db = nivelDbfs(buffer);
+        // ruído de fundo medido de 0,5 s até 0,5 s antes do primeiro sinal (o paciente em silêncio)
+        if (p.limiar === null && t >= 0.5 && t < (p.sinais[0] ?? 3) - 0.5) p.ruido.push(db);
+        if (p.limiar === null && t >= (p.sinais[0] ?? 3) - 0.5) p.limiar = limiarDeRuido(p.ruido);
+        if (p.limiar !== null) p.ataqueE = passoAtaque(p.ataqueE, t, db, p.sinais, p.limiar);
       } else {
         p.classe = classificarSom(buffer, a.ctx.sampleRate);
         p.desafiosE = passoDesafios(p.desafiosE, t + p.inicio, p.classe, p.desafios);
@@ -298,6 +327,12 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
           setPlacar({ pct: pontuacaoPercurso(p.percursoE), texto: `${fixoBR(Math.max(0, conf.duracao_s - t), 0)} s restantes` });
         } else if (p.jogo === "sopro") {
           setPlacar({ pct: Math.min(100, (100 * p.soproE.atual_s) / conf.meta_s), texto: "", sopro: { ...p.soproE } });
+        } else if (p.jogo === "som-silencio") {
+          const e = p.ataqueE;
+          setPlacar({
+            pct: pontuacaoAtaque(e, p.sinais.length), texto: `${Math.min(e.indice + 1, p.sinais.length)} de ${p.sinais.length}`,
+            aceso: sinalAtivo(p.sinais, t), ataque: { ...e },
+          });
         } else {
           const e = p.desafiosE;
           setPlacar({
@@ -311,6 +346,7 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
         ((p.jogo === "altitude" || p.jogo === "trilha") && t >= conf.duracao_s) ||
         (p.jogo === "sopro" && p.soproE.atual_s >= conf.meta_s) ||
         (p.jogo === "surdo-sonoro" && p.desafiosE.indice >= p.desafios.length) ||
+        (p.jogo === "som-silencio" && t > (p.sinais[p.sinais.length - 1] ?? 0) + 1.5) ||
         t >= 600;
       if (acabou) { terminar(); return; }
       quadro.current = requestAnimationFrame(passo);
@@ -393,7 +429,9 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
           </>
         ) : null}
         {jogo === "sopro" ? <Campo id={`${id}-meta`} rotulo="Meta (s)" valor={config.meta_s} onChange={(v) => set({ meta_s: num(v) })} /> : null}
-        {jogo === "surdo-sonoro" ? <Campo id={`${id}-n`} rotulo="Desafios" valor={config.desafios} onChange={(v) => set({ desafios: num(v) })} /> : null}
+        {jogo === "surdo-sonoro" || jogo === "som-silencio" ? (
+          <Campo id={`${id}-n`} rotulo={jogo === "som-silencio" ? "Sinais" : "Desafios"} valor={config.desafios} onChange={(v) => set({ desafios: num(v) })} />
+        ) : null}
       </fieldset>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -429,6 +467,23 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
             </div>
           ) : null}
 
+          {jogo === "som-silencio" ? (
+            <div className="grid gap-3 sm:grid-cols-[auto_1fr] sm:items-center">
+              <div className={cn("flex h-36 w-36 items-center justify-center rounded-full ring-4 ring-inset transition-colors duration-75",
+                placar.aceso ? "bg-accent ring-accent" : "bg-canvas-raised/60 ring-ink/10")} data-testid="vc2-sinal" data-aceso={placar.aceso ? "sim" : "nao"}>
+                <span className={cn("font-display text-3xl font-semibold", placar.aceso ? "text-canvas" : "text-ink-faint")}>{placar.aceso ? "Agora!" : "Silêncio"}</span>
+              </div>
+              <div>
+                <p className="text-sm text-ink">Sinal {placar.texto}</p>
+                <p className="mt-1 text-sm text-ink-muted">
+                  Acertos {placar.ataque?.acertos ?? 0} · perdidos {placar.ataque?.perdidos ?? 0} · antecipados {placar.ataque?.antecipados ?? 0}
+                  {placar.ataque?.reacoes_ms.length ? ` · reação ${placar.ataque.reacoes_ms[placar.ataque.reacoes_ms.length - 1]} ms` : ""}
+                </p>
+                <p className="sr-only" role="status" aria-live="assertive">{placar.aceso ? "Agora" : ""}</p>
+              </div>
+            </div>
+          ) : null}
+
           {jogo === "surdo-sonoro" && placar.desafio ? (
             <div className="grid gap-3 sm:grid-cols-[auto_1fr] sm:items-center">
               <div className="flex h-36 w-36 items-center justify-center rounded-2xl bg-canvas-raised/60 ring-1 ring-inset ring-ink/10">
@@ -455,6 +510,8 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
           <p className="text-sm text-ink-muted">
             {resultado.jogo === "sopro"
               ? `Melhor emissão contínua: ${fixoBR(resultado.detalhes.melhor_s, 1)} s de ${fixoBR(resultado.detalhes.meta_s, 0)} s.`
+              : resultado.jogo === "som-silencio"
+                ? `${fixoBR(resultado.detalhes.acertos, 0)} de ${fixoBR(resultado.detalhes.sinais, 0)} sinais · ${fixoBR(resultado.detalhes.antecipados, 0)} antecipações · reação média ${fixoBR(resultado.detalhes.reacao_media_ms, 0)} ms.`
               : resultado.jogo === "surdo-sonoro"
                 ? `${fixoBR(resultado.detalhes.acertos, 0)} ${resultado.detalhes.acertos === 1 ? "acerto" : "acertos"} em ${fixoBR(resultado.detalhes.desafios, 0)} desafios.`
                 : `${fixoBR(resultado.detalhes.no_alvo_s, 1)} s no alvo de ${fixoBR(resultado.detalhes.com_alvo_s, 1)} s com alvo.`}

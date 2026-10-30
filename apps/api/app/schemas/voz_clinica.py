@@ -20,7 +20,7 @@ TipoAvaliacao = Literal[
     "acustica", "idv10", "qvv", "grbasi", "easebr", "anamnese", "biofeedback", "jogo", "fonetograma", "pratica",
     "dsi", "fala", "ddk", "cepstral", "carga",
 ]
-JogoId = Literal["altitude", "trilha", "sopro", "surdo-sonoro"]
+JogoId = Literal["altitude", "trilha", "sopro", "surdo-sonoro", "som-silencio"]
 
 
 class ProtocoloEntrada(BaseModel):

@@ -484,6 +484,7 @@ export function resumoAvaliacao(a: Avaliacao): string {
     const extra =
       r.jogo === "sopro" ? ` · melhor ${fixoBR(d.melhor_s, 1)} s de ${fixoBR(d.meta_s, 0)} s`
       : r.jogo === "surdo-sonoro" ? ` · ${fixoBR(d.acertos, 0)} de ${fixoBR(d.desafios, 0)} acertos`
+      : r.jogo === "som-silencio" ? ` · ${fixoBR(d.acertos, 0)} de ${fixoBR(d.sinais, 0)} sinais · reação ${fixoBR(d.reacao_media_ms, 0)} ms`
       : " no alvo";
     return `${JOGOS[r.jogo]?.titulo ?? r.jogo}: ${fixoBR(r.pontuacao_pct, 1)}%${extra}`;
   }

@@ -17,6 +17,11 @@ import {
   pontuacaoPercurso,
   taxaCruzamentosZero,
   type ClasseSom,
+  estadoAtaqueInicial,
+  gerarSinais,
+  limiarDeRuido,
+  passoAtaque,
+  pontuacaoAtaque,
 } from "@/lib/voz-clinica-jogos";
 
 const TAXA = 48000;
@@ -153,5 +158,45 @@ describe("surdo ou sonoro", () => {
     expect(e.erros).toBe(1);
     expect(e.historico).toEqual([true, false]);
     expect(pontuacaoDesafios(e)).toBe(50);
+  });
+});
+
+
+describe("som e silêncio (ataque vocal)", () => {
+  // janela de 1,2 s após cada sinal; amostras a cada 50 ms
+  function jogar(sinais: number[], sons: [number, number][], fim: number) {
+    let e = estadoAtaqueInicial();
+    for (let t = 0; t <= fim + 1e-9; t = Math.round((t + 0.05) * 100) / 100) {
+      const comSom = sons.some(([a, b]) => t >= a && t < b);
+      e = passoAtaque(e, t, comSom ? -20 : -60, sinais, -40);
+    }
+    return e;
+  }
+
+  it("acerto com tempo de reação, antecipação e sinal perdido", () => {
+    const e = jogar([3, 6, 9], [[3.3, 3.5], [5, 5.2], [6.5, 6.6]], 11);
+    expect(e.acertos).toBe(2);
+    expect(e.reacoes_ms).toEqual([300, 500]);
+    expect(e.antecipados).toBe(1);
+    expect(e.perdidos).toBe(1);
+    expect(e.historico).toEqual([true, true, false]);
+    expect(pontuacaoAtaque(e, 3)).toBe(50);
+  });
+
+  it("um som longo conta uma vez (histerese)", () => {
+    let e = estadoAtaqueInicial();
+    const dbs = [-60, -30, -44, -38, -45, -60];
+    dbs.forEach((db, i) => { e = passoAtaque(e, 3 + i * 0.05, db, [3], -40); });
+    expect(e.acertos).toBe(1);
+    expect(e.antecipados).toBe(0);
+  });
+
+  it("sinais imprevisíveis e limiar pelo ruído", () => {
+    const s = gerarSinais(5, 7);
+    expect(s[0]).toBe(3);
+    for (let i = 1; i < s.length; i++) expect(s[i]! - s[i - 1]! >= 1.8 && s[i]! - s[i - 1]! <= 3.5).toBe(true);
+    expect(limiarDeRuido([-62, -60, -58])).toBe(-45);
+    expect(limiarDeRuido([-90, -90])).toBe(-50);
+    expect(limiarDeRuido([])).toBe(-40);
   });
 });
