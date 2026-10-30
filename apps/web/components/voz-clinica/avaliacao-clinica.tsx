@@ -36,6 +36,7 @@ import {
   excluirAvaliacao,
   excluirPaciente,
   exportarPaciente,
+  exportarPacienteZip,
   linhasAcusticas,
   listarAvaliacoes,
   listarPacientes,
@@ -589,11 +590,13 @@ function DadosDoPaciente({ paciente, itens, aoExcluir }: { paciente: string; ite
     setMsg(`Planilha ${arquivo} gerada (${itens.length} ${itens.length === 1 ? "avaliação" : "avaliações"}). Ela contém dados de saúde: guarde e envie com cuidado.`);
   }
 
-  async function exportar() {
+  const comAudio = itens.filter((a) => a.audio).length;
+
+  async function exportar(zip = false) {
     setExportando(true);
     setErro(null);
     try {
-      const { arquivo, conteudo } = await exportarPaciente(paciente);
+      const { arquivo, conteudo } = zip ? await exportarPacienteZip(paciente) : await exportarPaciente(paciente);
       const url = URL.createObjectURL(conteudo);
       const a = document.createElement("a");
       a.href = url;
@@ -636,6 +639,11 @@ function DadosDoPaciente({ paciente, itens, aoExcluir }: { paciente: string; ite
         <Button type="button" variant="secondary" size="sm" onClick={() => void exportar()} disabled={exportando} data-testid="vc2-exportar">
           <Download className="h-4 w-4" aria-hidden /> {exportando ? "Exportando…" : "Exportar todos os dados"}
         </Button>
+        {comAudio ? (
+          <Button type="button" variant="secondary" size="sm" onClick={() => void exportar(true)} disabled={exportando} data-testid="vc2-exportar-zip">
+            <Download className="h-4 w-4" aria-hidden /> Com as gravações (ZIP, {comAudio})
+          </Button>
+        ) : null}
         <Button type="button" variant="secondary" size="sm" onClick={planilha} data-testid="vc2-planilha">
           <FileText className="h-4 w-4" aria-hidden /> Planilha (CSV)
         </Button>

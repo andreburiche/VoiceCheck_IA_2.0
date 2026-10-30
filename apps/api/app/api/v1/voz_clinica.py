@@ -18,7 +18,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 from sqlalchemy import delete, func, select
 
 from app.api.v1.voicecheck import _read_limited
@@ -26,7 +26,7 @@ from app.core.config import get_settings
 from app.core.deps import CurrentUser, DbSession, verify_csrf
 from app.core.rate_limit import enforce_rate_limit
 from app.api.v1.pratica_casa import plano_out, sessoes_por_plano
-from app.models import ClinicalEvaluation, HomePracticePlan, VoicePatient
+from app.models import ClinicalEvaluation, HomePracticePlan, User, VoicePatient
 from app.schemas.voz_clinica import (
     AnamneseEntrada,
     AnotacaoEntrada,
@@ -164,32 +164,55 @@ async def _salvar_com_audio(db: DbSession, user: CurrentUser, nome: str, tipo: s
                             dados: bytes, guardar_audio: bool) -> ResultadoSalvo:
     """Salva a avaliação e, se pedido e houver cota, a gravação no storage.
 
-    Cota cheia ou storage fora do ar não perdem a análise: ela é salva sem o áudio, com aviso.
+    A análise é gravada primeiro (commit próprio): cota cheia, storage fora do ar ou falha ao
+    ligar o áudio nunca a perdem. A gravação vem numa segunda transação que trava a linha do
+    usuário antes de conferir a cota, para que dois envios simultâneos não passem do limite.
     """
     row = ClinicalEvaluation(owner_id=user.id, patient_name=nome, kind=tipo, engine=resultado.get("motor"), result=resultado)
     db.add(row)
-    db.flush()  # gera o id, usado na chave do arquivo
+    db.flush()
+    row_id = row.id
+    db.commit()
     aviso = None
+    guardado = False
     if guardar_audio:
-        try:
-            assert_can_upload(db, user.id, len(dados))
-            chave = f"voz-clinica/{user.id}/{row.id}.wav"
-            await asyncio.to_thread(get_storage().put_bytes, chave, dados, "audio/wav")
-            row.audio_key, row.audio_bytes = chave, len(dados)
-        except QuotaExceeded as exc:
-            aviso = f"{exc.message}. A análise foi salva sem a gravação."
-        except Exception:  # noqa: BLE001 — storage fora do ar não pode perder a análise
-            logger.exception("Voz clínica: falha ao guardar a gravação")
-            aviso = "Não foi possível guardar a gravação; a análise foi salva sem ela."
+        aviso, guardado = await _guardar_audio(db, user.id, row_id, dados)
+    return ResultadoSalvo(avaliacao_id=row_id, resultado=resultado, audio_guardado=guardado, aviso_audio=aviso)
+
+
+def _travar_cota(db: DbSession, user_id: str) -> None:
+    """Primeiro comando da transação: SELECT ... FOR UPDATE na linha do usuário.
+
+    No InnoDB a leitura consistente (snapshot) só começa no primeiro SELECT comum; travando
+    antes, a soma da cota já enxerga o que outro envio do mesmo usuário acabou de gravar.
+    No SQLite o FOR UPDATE é ignorado (a escrita já é serializada pelo próprio banco).
+    """
+    db.execute(select(User.id).where(User.id == user_id).with_for_update())
+
+
+async def _guardar_audio(db: DbSession, user_id: str, row_id: str, dados: bytes) -> tuple[str | None, bool]:
+    chave = None
     try:
+        _travar_cota(db, user_id)
+        assert_can_upload(db, user_id, len(dados))
+        chave = f"voz-clinica/{user_id}/{row_id}.wav"
+        await asyncio.to_thread(get_storage().put_bytes, chave, dados, "audio/wav")
+        db.execute(
+            ClinicalEvaluation.__table__.update()
+            .where(ClinicalEvaluation.id == row_id)
+            .values(audio_key=chave, audio_bytes=len(dados))
+        )
         db.commit()
-    except Exception:
-        # o banco recusou: a gravação já enviada ao storage não pode ficar sem dono
+        return None, True
+    except QuotaExceeded as exc:
         db.rollback()
-        if row.audio_key:
-            _apagar_audios([row.audio_key])
-        raise
-    return ResultadoSalvo(avaliacao_id=row.id, resultado=resultado, audio_guardado=row.audio_key is not None, aviso_audio=aviso)
+        return f"{exc.message}. A análise foi salva sem a gravação.", False
+    except Exception:  # noqa: BLE001 — storage ou banco fora do ar não podem perder a análise
+        db.rollback()
+        logger.exception("Voz clínica: falha ao guardar a gravação")
+        if chave:
+            _apagar_audios([chave])  # arquivo enviado sem registro no banco não pode ficar sem dono
+        return "Não foi possível guardar a gravação; a análise foi salva sem ela.", False
 
 
 @router.post("/fala", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
@@ -541,15 +564,13 @@ def _rastro(user_id: str, nome: str) -> str:
     return hmac.new(settings.jwt_secret.encode("utf-8"), f"{user_id}:{nome}".encode("utf-8"), hashlib.sha256).hexdigest()[:16]
 
 
-@router.get("/pacientes/exportar")
-def exportar_paciente(request: Request, user: CurrentUser, db: DbSession, paciente: str | None = None) -> JSONResponse:
-    """LGPD art. 18 (acesso e portabilidade): tudo o que está guardado deste paciente, sem limite."""
-    nome = _nome_obrigatorio(paciente)
-    rows = db.scalars(
+def _dados_exportacao(db: DbSession, user: CurrentUser, nome: str) -> tuple[dict, list[ClinicalEvaluation], int]:
+    """Tudo o que está guardado do paciente (avaliações, planos, cadastro), no formato de exportação."""
+    rows = list(db.scalars(
         select(ClinicalEvaluation)
         .where(ClinicalEvaluation.owner_id == user.id, ClinicalEvaluation.patient_name == nome)
         .order_by(ClinicalEvaluation.created_at)
-    ).all()
+    ).all())
     planos = db.scalars(
         select(HomePracticePlan)
         .where(HomePracticePlan.owner_id == user.id, HomePracticePlan.patient_name == nome)
@@ -559,28 +580,118 @@ def exportar_paciente(request: Request, user: CurrentUser, db: DbSession, pacien
     if not rows and not planos and cadastro is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nada guardado para este paciente")
     total, ultima = sessoes_por_plano(db, user.id, [p.id for p in planos])
-    agora = datetime.now(timezone.utc)
     corpo = {
         "formato": "voicecheck-voz-clinica/1",
         "paciente": nome,
-        "exportado_em": agora.isoformat(),
+        "exportado_em": datetime.now(timezone.utc).isoformat(),
         "cadastro": _cadastro_out(cadastro).model_dump(mode="json") if cadastro else None,
         "avaliacoes": [_saida(r).model_dump(mode="json") for r in rows],
         # o segredo dos links nunca é exportado (só o hash existe no banco, e ele também fica fora)
         "planos_pratica": [plano_out(p, total, ultima).model_dump(mode="json") for p in planos],
-        # o áudio não vai dentro do JSON (pode passar de centenas de MB): cada avaliação com
-        # "audio": true tem a gravação em GET /api/v1/voz-clinica/avaliacoes/{id}/audio
         "gravacoes_guardadas": sum(1 for r in rows if r.audio_key),
     }
+    return corpo, rows, len(planos)
+
+
+def _nome_arquivo(nome: str) -> str:
+    ascii_ = unicodedata.normalize("NFKD", nome.lower()).encode("ascii", "ignore").decode("ascii")
+    return "voicecheck-" + ("".join(c if c.isalnum() else "-" for c in ascii_).strip("-")[:40] or "paciente")
+
+
+@router.get("/pacientes/exportar")
+def exportar_paciente(request: Request, user: CurrentUser, db: DbSession, paciente: str | None = None) -> JSONResponse:
+    """LGPD art. 18 (acesso e portabilidade): tudo o que está guardado deste paciente, sem limite.
+
+    Só os dados; com as gravações, use /pacientes/exportar-zip.
+    """
+    nome = _nome_obrigatorio(paciente)
+    corpo, rows, n_planos = _dados_exportacao(db, user, nome)
+    # o áudio não vai dentro do JSON: o ZIP (/pacientes/exportar-zip) leva as gravações
     write_audit(
         db, action="voz_clinica.paciente_exportado", resource_type="paciente", actor_id=user.id, request=request,
-        meta={"paciente": _rastro(user.id, nome), "avaliacoes": len(rows), "planos": len(planos)}, commit=True,
+        meta={"paciente": _rastro(user.id, nome), "avaliacoes": len(rows), "planos": n_planos}, commit=True,
     )
-    ascii_ = unicodedata.normalize("NFKD", nome.lower()).encode("ascii", "ignore").decode("ascii")
-    arquivo = "voicecheck-" + ("".join(c if c.isalnum() else "-" for c in ascii_).strip("-")[:40] or "paciente")
     return JSONResponse(
         corpo,
-        headers={"Content-Disposition": f'attachment; filename="{arquivo}-{agora:%Y%m%d}.json"', "Cache-Control": "no-store"},
+        headers={
+            "Content-Disposition": f'attachment; filename="{_nome_arquivo(nome)}-{datetime.now(timezone.utc):%Y%m%d}.json"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+LEIAME_ZIP = """VoiceCheck IA 2.0 - exportação dos dados do paciente (LGPD, art. 18)
+
+dados.json      cadastro, avaliações, protocolos, anotações e planos de prática em casa
+gravacoes/      as gravações guardadas, em WAV (abre no Praat, Audacity ou qualquer player)
+
+Cada gravação tem o nome data_tipo_código.wav; o código são os 8 primeiros caracteres
+do "id" da avaliação no dados.json (campo "arquivo_audio" de cada avaliação).
+Guarde este arquivo com o mesmo cuidado de um prontuário.
+"""
+
+
+def _montar_zip(corpo: dict, rows: list[ClinicalEvaluation]) -> tuple[object, int]:
+    """Escreve o ZIP num arquivo temporário (memória até 16 MB, depois disco). Roda fora do loop."""
+    import json
+    import tempfile
+    import zipfile
+
+    destino = tempfile.SpooledTemporaryFile(max_size=16 * 1024 * 1024)
+    faltando = 0
+    por_id = {a["id"]: a for a in corpo["avaliacoes"]}
+    with zipfile.ZipFile(destino, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for r in rows:
+            if not r.audio_key:
+                continue
+            arquivo = f"gravacoes/{r.created_at:%Y-%m-%d_%H%M%S}_{r.kind}_{r.id[:8]}.wav"
+            try:
+                dados = get_storage().get_bytes(r.audio_key)
+            except Exception:  # noqa: BLE001 — uma gravação faltando não impede a exportação
+                logger.exception("Voz clínica: gravação ausente na exportação")
+                faltando += 1
+                por_id[r.id]["arquivo_audio"] = None
+                continue
+            # WAV já é grande e pouco compressível: guardado sem compressão, mais rápido
+            zf.writestr(zipfile.ZipInfo(arquivo, date_time=r.created_at.timetuple()[:6]), dados, compress_type=zipfile.ZIP_STORED)
+            por_id[r.id]["arquivo_audio"] = arquivo
+        corpo["gravacoes_indisponiveis"] = faltando
+        zf.writestr("dados.json", json.dumps(corpo, ensure_ascii=False, indent=2))
+        zf.writestr("LEIAME.txt", LEIAME_ZIP)
+    tamanho = destino.tell()
+    destino.seek(0)
+    return destino, tamanho
+
+
+@router.get("/pacientes/exportar-zip")
+async def exportar_paciente_zip(request: Request, user: CurrentUser, db: DbSession, paciente: str | None = None) -> StreamingResponse:
+    """LGPD art. 18 (portabilidade): dados.json + todas as gravações em WAV, num ZIP."""
+    enforce_rate_limit(request, bucket="voz_clinica_zip", limit=10, window_sec=600)
+    nome = _nome_obrigatorio(paciente)
+    corpo, rows, n_planos = _dados_exportacao(db, user, nome)
+    arquivo, tamanho = await asyncio.to_thread(_montar_zip, corpo, rows)
+    write_audit(
+        db, action="voz_clinica.paciente_exportado", resource_type="paciente", actor_id=user.id, request=request,
+        meta={"paciente": _rastro(user.id, nome), "avaliacoes": len(rows), "planos": n_planos,
+              "formato": "zip", "gravacoes": corpo["gravacoes_guardadas"] - corpo["gravacoes_indisponiveis"]},
+        commit=True,
+    )
+
+    def blocos():
+        try:
+            while bloco := arquivo.read(1024 * 1024):
+                yield bloco
+        finally:
+            arquivo.close()
+
+    return StreamingResponse(
+        blocos(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{_nome_arquivo(nome)}-{datetime.now(timezone.utc):%Y%m%d}.zip"',
+            "Content-Length": str(tamanho),
+            "Cache-Control": "no-store",
+        },
     )
 
 

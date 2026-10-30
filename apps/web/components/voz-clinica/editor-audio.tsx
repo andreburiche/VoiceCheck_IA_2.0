@@ -1,17 +1,19 @@
 "use client";
 
-import { Play, Scissors, Square, Trash2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
+import { ClipboardPaste, Copy, Play, Scissors, Square, Trash2, Undo2, ZoomIn, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { lerWavPcm16 } from "@/lib/voz-clinica-espectrograma";
-import { apagarTrecho, colunasMinMax, normalizarSelecao, segTexto, textoSeg, zoom, type Intervalo } from "@/lib/voz-clinica-editor";
+import { apagarTrecho, colarTrecho, colunasMinMax, copiarTrecho, normalizarSelecao, segTexto, textoSeg, zoom, type Intervalo } from "@/lib/voz-clinica-editor";
 import type { GravacaoClinica } from "@/lib/voz-clinica-gravador";
 import { codificarWav, recortar } from "@/lib/voz-clinica-wav";
 
 const ALTURA = 120;
+/** A análise aceita até 60 s: a edição não deixa passar disso. */
+const MAX_S = 60;
 const COR = { onda: "#20D9D2", fundo: "rgba(148,163,184,0.06)", selecao: "rgba(32,217,210,0.18)", borda: "rgba(32,217,210,0.8)", eixo: "#94A3B8", cursor: "#F8FAFC" };
 
 function novaGravacao(amostras: Float32Array, taxa: number, avisos: string[]): GravacaoClinica {
@@ -33,6 +35,10 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
   const [tocando, setTocando] = useState<{ t0: number; ini: number; fim: number } | null>(null);
   const [cursor, setCursor] = useState<number | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  /** Trecho copiado (amostras) e ponto onde colar quando não há seleção (clique na onda). */
+  const [copiado, setCopiado] = useState<{ amostras: Float32Array; taxa: number } | null>(null);
+  const [ponto, setPonto] = useState<number | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
   const arrasto = useRef<number | null>(null);
   const som = useRef<{ ctx: AudioContext; fonte: AudioBufferSourceNode } | null>(null);
 
@@ -47,6 +53,7 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
         const d = a.amostras.length / a.taxa;
         setJanela({ ini: 0, fim: d });
         setSel(null);
+        setPonto(null);
         setCampos({ ini: "0,00", fim: segTexto(d) });
         setErro(null);
       } catch {
@@ -104,6 +111,11 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
       g.fillStyle = COR.cursor;
       g.fillRect(x(cursor), 0, 1.5, ih);
     }
+    if (ponto !== null && !sel) {
+      // ponto de colagem: linha tracejada
+      g.fillStyle = COR.eixo;
+      for (let y = 0; y < ih; y += 6) g.fillRect(x(ponto), y, 1, 3);
+    }
     g.font = "11px ui-monospace, Consolas, monospace";
     g.fillStyle = COR.eixo;
     g.textBaseline = "alphabetic";
@@ -111,7 +123,7 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
     g.fillText(`${segTexto(janela.ini)} s`, 2, ALTURA - 4);
     g.textAlign = "right";
     g.fillText(`${segTexto(janela.fim)} s`, w - 2, ALTURA - 4);
-  }, [audio, janela, sel, cursor]);
+  }, [audio, janela, sel, cursor, ponto]);
 
   // cursor de reprodução
   useEffect(() => {
@@ -162,6 +174,11 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
       setErro("O resultado precisa ter pelo menos 0,5 s.");
       return;
     }
+    if (novas.length > MAX_S * audio.taxa) {
+      setErro(`O resultado passaria de ${MAX_S} s, o limite da análise. Apague um trecho antes de colar.`);
+      return;
+    }
+    setErro(null);
     parar();
     setHistorico((h) => [...h.slice(-19), gravacao]); // guarda até 20 passos para desfazer
     aoMudar(novaGravacao(novas, audio.taxa, gravacao.avisos));
@@ -184,6 +201,20 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
     if (!audio || !s) { setErro("Selecione o trecho que quer apagar."); return; }
     editar(apagarTrecho(audio.amostras, audio.taxa, s));
   }
+  function copiar() {
+    const s = selecaoDosCampos();
+    if (!audio || !s) { setErro("Selecione o trecho que quer copiar."); return; }
+    setCopiado({ amostras: copiarTrecho(audio.amostras, audio.taxa, s), taxa: audio.taxa });
+    setErro(null);
+    setAviso(`Trecho de ${segTexto(s.fim - s.ini)} s copiado. Clique na onda onde quer colar (ou selecione o trecho a substituir).`);
+  }
+  function colar() {
+    if (!audio || !copiado) return;
+    if (copiado.taxa !== audio.taxa) { setErro("O trecho copiado é de outra gravação, com outra taxa de amostragem."); return; }
+    const alvo = sel ?? ponto ?? duracao;
+    editar(colarTrecho(audio.amostras, audio.taxa, copiado.amostras, alvo));
+    setAviso(sel ? "Seleção substituída pelo trecho copiado." : `Trecho colado em ${segTexto(typeof alvo === "number" ? alvo : alvo.ini)} s.`);
+  }
   function desfazer() {
     const anterior = historico[historico.length - 1];
     if (!anterior) return;
@@ -200,7 +231,7 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
         style={{ height: ALTURA }}
         role="img"
         aria-label={`Forma de onda de ${segTexto(janela.ini)} a ${segTexto(janela.fim)} s${sel ? `; seleção de ${segTexto(sel.ini)} a ${segTexto(sel.fim)} s` : ""}. Arraste para selecionar ou use os campos de início e fim.`}
-        onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); arrasto.current = tempoDoEvento(e); aplicarSel(null); }}
+        onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); arrasto.current = tempoDoEvento(e); setPonto(arrasto.current); aplicarSel(null); }}
         onPointerMove={(e) => { if (arrasto.current !== null) aplicarSel(normalizarSelecao(arrasto.current, tempoDoEvento(e), duracao)); }}
         onPointerUp={() => { arrasto.current = null; }}
         data-testid="vc2-editor-onda"
@@ -242,13 +273,21 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
         <Button type="button" size="sm" variant="secondary" onClick={apagarSelecao} disabled={!audio} data-testid="vc2-editor-apagar">
           <Trash2 className="h-4 w-4" aria-hidden /> Apagar a seleção
         </Button>
+        <Button type="button" size="sm" variant="secondary" onClick={copiar} disabled={!audio} data-testid="vc2-editor-copiar">
+          <Copy className="h-4 w-4" aria-hidden /> Copiar
+        </Button>
+        <Button type="button" size="sm" variant="secondary" onClick={colar} disabled={!audio || !copiado} data-testid="vc2-editor-colar"
+          title={sel ? "Substitui a seleção pelo trecho copiado" : "Cola no ponto clicado (ou no fim)"}>
+          <ClipboardPaste className="h-4 w-4" aria-hidden /> {sel ? "Colar no lugar" : "Colar"}
+        </Button>
         <Button type="button" size="sm" variant="ghost" onClick={desfazer} disabled={!historico.length} data-testid="vc2-editor-desfazer">
           <Undo2 className="h-4 w-4" aria-hidden /> Desfazer
         </Button>
       </div>
       <p className="mt-1 text-xs text-ink-faint">
-        Arraste sobre a onda para selecionar. Para a análise, deixe só o trecho estável da vogal (sem o início e o fim).
+        Arraste sobre a onda para selecionar; um clique marca onde colar. Para a análise, deixe só o trecho estável da vogal (sem o início e o fim).
       </p>
+      {aviso && !erro ? <p className="mt-1 text-xs text-ink-muted" role="status" data-testid="vc2-editor-aviso">{aviso}</p> : null}
       {erro ? <p className="mt-2 text-sm text-signal-err" role="alert">{erro}</p> : null}
     </div>
   );

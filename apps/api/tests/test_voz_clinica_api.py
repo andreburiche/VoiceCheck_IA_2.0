@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 import uuid
+import zipfile
 
 import httpx
 import pytest
@@ -434,6 +436,19 @@ def test_gravacao_guardada_ouvir_e_apagar(client: httpx.Client) -> None:
 
     exportado = client.get("/api/v1/voz-clinica/pacientes/exportar", params={"paciente": paciente}).json()
     assert exportado["gravacoes_guardadas"] == 1
+
+    # ZIP da LGPD: dados.json + a gravação em WAV, igual à guardada
+    z = client.get("/api/v1/voz-clinica/pacientes/exportar-zip", params={"paciente": paciente})
+    assert z.status_code == 200 and z.headers["content-type"] == "application/zip"
+    assert ".zip" in z.headers["content-disposition"] and "no-store" in z.headers["cache-control"]
+    with zipfile.ZipFile(io.BytesIO(z.content)) as zf:
+        nomes = zf.namelist()
+        dados = json.loads(zf.read("dados.json"))
+        assert "LEIAME.txt" in nomes and dados["paciente"] == paciente and dados["gravacoes_indisponiveis"] == 0
+        com_audio = [a for a in dados["avaliacoes"] if a.get("arquivo_audio")]
+        assert len(com_audio) == 1 and com_audio[0]["id"] == ident
+        assert zf.read(com_audio[0]["arquivo_audio"]) == wav
+    assert _cliente("intruso").get("/api/v1/voz-clinica/pacientes/exportar-zip", params={"paciente": paciente}).status_code == 404
 
     # excluir a avaliação apaga a gravação; excluir o paciente informa quantas foram
     c = client.post("/api/v1/voz-clinica/analisar", files={"file": ("v.wav", io.BytesIO(wav), "audio/wav")},

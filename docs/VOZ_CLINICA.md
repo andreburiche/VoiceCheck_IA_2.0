@@ -194,7 +194,13 @@ Revisão feita por um agente que não escreveu o código. Corrigido:
 - **Nome do paciente no log (média):** o log de acesso do servidor não grava mais a query string das rotas da voz clínica.
 - **Baixa:** rastro do paciente com HMAC (não dá para descobrir o nome por força bruta), nome do arquivo exportado em ASCII, datas sem fuso tratadas como UTC, planilha CSV protege só colunas de texto contra fórmulas (o AVQI negativo continua número).
 
-Fica para depois: trava de concorrência na cota de armazenamento; nova tentativa de apagar arquivos que falharem; exportação LGPD em ZIP com os WAV; se houver nginx/proxy na frente, desligar nele também o log de query string.
+Depois da revisão (30/10/2026, segunda rodada):
+
+- **Cota com trava:** a análise é gravada primeiro; a gravação vem numa segunda transação que começa com `SELECT ... FOR UPDATE` na linha do usuário, então dois envios simultâneos não passam do limite do plano (no InnoDB o snapshot só começa depois da trava).
+- **Exportação LGPD em ZIP:** `GET /api/v1/voz-clinica/pacientes/exportar-zip` devolve `dados.json`, `LEIAME.txt` e `gravacoes/*.wav` (cada avaliação aponta seu arquivo em `arquivo_audio`). Botão "Com as gravações (ZIP)" no Histórico. Limite de 10 exportações em 10 minutos.
+- **Editor de áudio:** copiar a seleção e colar no ponto clicado (ou no lugar da seleção), com emendas de 5 ms e o limite de 60 s da análise.
+
+Ainda fica para depois: nova tentativa de apagar arquivos que falharem; se houver nginx/proxy na frente, desligar nele também o log de query string.
 
 ## Rodar a v2 isolada no computador
 
@@ -236,6 +242,6 @@ Em desenvolvimento, a tela de login tem "Acesso rápido" com as contas de teste 
 10. ~~Protocolo de voz (DSI na tela, F0 da fala)~~ (feito).
 11. ~~DDK~~ (feito, na aba Protocolo de voz).
 12. ~~Gráficos da análise / LTAS~~ (feitos).
-13. ~~Análise cepstral com frase e AVQI~~, ~~anotações~~, ~~importar e recortar áudio~~, ~~F1×F2~~, ~~ganho do espectrograma~~ (feitos). ~~Cadastro completo do paciente~~ (feito). Pendência do VoxMetria: Diagrama de Desvio Fonatório (constantes). ~~Teste de carga vocal (lingWAVES)~~ (feito).
+13. ~~Análise cepstral com frase e AVQI~~, ~~anotações~~, ~~importar e recortar áudio~~, ~~F1×F2~~, ~~ganho do espectrograma~~ (feitos). ~~Cadastro completo do paciente~~ (feito). Pendência do VoxMetria: Diagrama de Desvio Fonatório (constantes). ~~Teste de carga vocal (lingWAVES)~~ (feito). ~~Copiar e colar no editor~~ (feito).
 
 Com isso, a tela cobre as funções dos seis programas levantados (VoxMetria, VoxGames, Praat, Voice Analyst, lingWAVES, iVox). Próximo passo: validação no Docker (rotas contra MySQL, motor Praat) e com pacientes reais.

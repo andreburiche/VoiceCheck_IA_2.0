@@ -1,6 +1,6 @@
 /**
  * VoiceCheck IA 2.0 — edição da gravação antes da análise (como a edição de áudio do VoxMetria):
- * selecionar com o mouse, zoom, ouvir o trecho, manter só a seleção, apagar a seleção, desfazer.
+ * selecionar com o mouse, zoom, ouvir o trecho, manter só a seleção, apagar, copiar e colar, desfazer.
  * Funções puras (testáveis); o desenho e o som ficam no componente.
  */
 
@@ -48,6 +48,46 @@ export function apagarTrecho(amostras: Float32Array, taxa: number, sel: Interval
     saida[a - r + k]! *= 1 - k / r; // desce antes do corte
     saida[a + k]! *= k / r; // sobe depois
   }
+  return saida;
+}
+
+/** Rampa de `r` amostras nas duas pontas de um trecho (entra e sai em 5 ms, sem estalo). */
+function suavizarPontas(x: Float32Array, r: number): Float32Array {
+  const y = x.slice();
+  const n = Math.min(r, Math.floor(y.length / 2));
+  for (let k = 0; k < n; k++) {
+    y[k]! *= k / n;
+    y[y.length - 1 - k]! *= k / n;
+  }
+  return y;
+}
+
+/** Cópia das amostras de [ini, fim) (s). */
+export function copiarTrecho(amostras: Float32Array, taxa: number, sel: Intervalo): Float32Array {
+  const a = Math.max(0, Math.round(sel.ini * taxa));
+  const b = Math.min(amostras.length, Math.round(sel.fim * taxa));
+  return amostras.slice(a, Math.max(a, b));
+}
+
+/**
+ * Cola `trecho` no ponto `em` (s) ou no lugar da seleção `em` (substitui o trecho).
+ * As emendas descem e sobem em 5 ms para não estalar.
+ */
+export function colarTrecho(amostras: Float32Array, taxa: number, trecho: Float32Array, em: number | Intervalo): Float32Array {
+  const ini = typeof em === "number" ? em : em.ini;
+  const fim = typeof em === "number" ? em : em.fim;
+  const a = Math.max(0, Math.min(amostras.length, Math.round(ini * taxa)));
+  const b = Math.max(a, Math.min(amostras.length, Math.round(fim * taxa)));
+  const r = Math.round(0.005 * taxa);
+  const antes = amostras.slice(0, a);
+  const depois = amostras.slice(b);
+  for (let k = 0; k < Math.min(r, antes.length); k++) antes[antes.length - 1 - k]! *= k / Math.min(r, antes.length);
+  for (let k = 0; k < Math.min(r, depois.length); k++) depois[k]! *= k / Math.min(r, depois.length);
+  const meio = suavizarPontas(trecho, r);
+  const saida = new Float32Array(antes.length + meio.length + depois.length);
+  saida.set(antes, 0);
+  saida.set(meio, antes.length);
+  saida.set(depois, antes.length + meio.length);
   return saida;
 }
 

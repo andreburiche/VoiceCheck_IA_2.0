@@ -369,6 +369,25 @@ export async function exportarPaciente(paciente: string): Promise<{ arquivo: str
   return { arquivo: `voicecheck-${base}-${dia}.json`, conteudo: new Blob([JSON.stringify(dados, null, 2)], { type: "application/json" }) };
 }
 
+/** LGPD (portabilidade) com as gravações: ZIP com dados.json, LEIAME.txt e gravacoes/*.wav. */
+export async function exportarPacienteZip(paciente: string): Promise<{ arquivo: string; conteudo: Blob }> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${BASE}/pacientes/exportar-zip?paciente=${encodeURIComponent(paciente)}`, { credentials: "include" });
+  } catch {
+    throw new Error("Não foi possível falar com o servidor para gerar o arquivo.");
+  }
+  if (!res.ok) {
+    throw new Error(
+      res.status === 404 ? "Nada guardado para este paciente."
+        : res.status === 429 ? "Muitas exportações seguidas. Aguarde alguns minutos e tente de novo."
+        : "Não foi possível gerar o arquivo ZIP.",
+    );
+  }
+  const nome = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "voicecheck-paciente.zip";
+  return { arquivo: nome, conteudo: await res.blob() };
+}
+
 /** LGPD (eliminação): apaga avaliações e links de prática do paciente. Irreversível. */
 export function excluirPaciente(paciente: string) {
   return apiFetch<{ avaliacoes_excluidas: number; planos_excluidos: number; gravacoes_excluidas?: number; cadastro_excluido?: boolean }>(
