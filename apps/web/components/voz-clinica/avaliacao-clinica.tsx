@@ -16,6 +16,7 @@ import { Fonetograma } from "@/components/voz-clinica/fonetograma";
 import { JogosTerapia } from "@/components/voz-clinica/jogos-terapia";
 import { PraticaCasa } from "@/components/voz-clinica/pratica-casa";
 import { ComparacaoAntesDepois } from "@/components/voz-clinica/comparacao";
+import { GraficosAnalise } from "@/components/voz-clinica/graficos-analise";
 import { ProtocoloVoz } from "@/components/voz-clinica/protocolo-voz";
 import { GraficoEvolucao } from "@/components/voz-clinica/grafico-evolucao";
 import { MAX_PONTOS, seriesEvolucao } from "@/lib/voz-clinica-evolucao";
@@ -291,6 +292,7 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
             Medido pelo motor {resultado?.motor === "praat" ? `Praat ${resultado.versao_praat ?? ""}` : "interno"}. Não é diagnóstico médico.
           </p>
           <Avisos itens={resultado?.avisos ?? []} />
+          {resultado?.graficos ? <GraficosAnalise dados={resultado.graficos} /> : null}
         </div>
       ) : null}
     </section>

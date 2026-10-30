@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from . import excitacao
+from . import excitacao, graficos
 from .audio import Audio, reamostrar
 
 PASSO = 0.01  # s entre quadros de pitch
@@ -459,6 +459,7 @@ def analisar(audio: Audio, f0_min=75.0, f0_max=600.0) -> dict:
         "ruido": {"hnr_db": round(float(np.mean(hnr)), 2)},
         "cpps_db": cpps(audio),
         "excitacao": exc,
+        "graficos": graficos.montar(audio, tempos, f0s),
         "formantes": formantes(audio, tempos, f0s),
         "fonacao": medidas_fonacao(tempos, f0s, f0_min),
         "avisos": avisos,

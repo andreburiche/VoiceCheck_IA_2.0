@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 
 from .audio import Audio
-from . import excitacao
+from . import excitacao, graficos
 from .motor_interno import _trechos_vozeados, estatisticas_f0, marcar_ciclos, medidas_fonacao
 
 try:  # importação opcional
@@ -118,6 +118,11 @@ def analisar(audio: Audio, f0_min=75.0, f0_max=600.0) -> dict:
     except Exception as erro:  # a análise principal não pode cair por causa de uma medida extra
         avisos.append(f"GNE/MWC: não calculado ({erro.__class__.__name__}).")
         exc = {}
+    try:
+        graf = graficos.montar(audio, tempos, f0s)
+    except Exception as erro:  # os gráficos nunca derrubam a análise
+        avisos.append(f"Gráficos: não calculados ({erro.__class__.__name__}).")
+        graf = None
 
     if np.max(np.abs(audio.amostras)) >= 0.999:
         avisos.append("A gravação saturou (clipping); afaste o microfone e grave de novo.")
@@ -136,6 +141,7 @@ def analisar(audio: Audio, f0_min=75.0, f0_max=600.0) -> dict:
         "ruido": {"hnr_db": _r(hnr, 2)},
         "cpps_db": _r(cpps, 2),
         "excitacao": exc,
+        **({"graficos": graf} if graf else {}),
         "formantes": {"f1_hz": mediana_formante(1), "f2_hz": mediana_formante(2), "f3_hz": mediana_formante(3)},
         "fonacao": medidas_fonacao(tempos, f0s, f0_min),
         "avisos": avisos,

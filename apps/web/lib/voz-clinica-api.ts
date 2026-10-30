@@ -56,7 +56,15 @@ export type AnaliseAcustica = {
   excitacao?: { gne?: number; gne_janelas?: number; mwc?: number };
   formantes?: { f1_hz: number | null; f2_hz: number | null; f3_hz: number | null };
   fonacao?: { tmf_s: number; fracao_surdos_pct: number; quebras_de_voz: number };
+  /** Dados reduzidos para os gráficos (onda, contorno de F0/intensidade, espectro FFT + LPC). */
+  graficos?: GraficosAnalise;
   avisos: string[];
+};
+
+export type GraficosAnalise = {
+  onda: { duracao_s: number; min: number[]; max: number[]; voz: boolean[] };
+  contorno: { passo_s: number; f0_hz: (number | null)[]; db: number[] };
+  espectro?: { freq_hz: number[]; fft_db: number[]; lpc_db: number[]; picos_lpc_hz: number[] };
 };
 
 /** F0 da fala (leitura, contagem ou fala espontânea), calculada no servidor. */
