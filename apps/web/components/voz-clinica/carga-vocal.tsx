@@ -4,6 +4,7 @@ import { Mic, Square } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { UnidadeIntensidade, useCalibracao } from "@/components/voz-clinica/calibracao-spl";
 import { Label } from "@/components/ui/label";
 import { friendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
@@ -28,20 +29,20 @@ function mmss(s: number) {
   return `${m}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 }
 
-/** Curvas por minuto: F0 (Hz) e intensidade (dBFS). */
-function GraficoMinutos({ r }: { r: ResumoCarga }) {
+/** Curvas por minuto: F0 (Hz) e intensidade (dBFS, ou dB SPL com `desloc`). */
+function GraficoMinutos({ r, desloc, unidade }: { r: ResumoCarga; desloc: number; unidade: string }) {
   const w = 560;
   const h = 110;
   const pe = 44;
   const ih = h - 30;
   const iw = w - pe - 10;
   const f0 = r.minutos.map((m) => m.f0_mediana_hz);
-  const db = r.minutos.map((m) => m.db_mediano);
+  const db = r.minutos.map((m) => (m.db_mediano === null ? null : m.db_mediano + desloc));
   if (r.minutos.length < 2) return null;
   const x = (i: number) => (i / (r.minutos.length - 1)) * iw;
   const linhas = [
     { rotulo: "F0 (Hz)", v: f0, dom: dominioArredondado(f0, 10, 30), cor: "var(--accent)" },
-    { rotulo: "Intensidade (dBFS)", v: db, dom: dominioArredondado(db, 5, 15), cor: "rgb(232 184 74)" },
+    { rotulo: `Intensidade (${unidade})`, v: db, dom: dominioArredondado(db, 5, 15), cor: "rgb(232 184 74)" },
   ];
   return (
     <div className="mt-3 space-y-2">
@@ -71,6 +72,8 @@ export function CargaVocal({ paciente, aoSalvar }: { paciente: string; aoSalvar:
   const [alvo, setAlvo] = useState<Faixa | null>(null);
   const [leitura, setLeitura] = useState<{ t: number; db: number; hz: number | null; dentro: number | null }>({ t: 0, db: -120, hz: null, dentro: null });
   const [resumo, setResumo] = useState<ResumoCarga | null>(null);
+  const { calibracao, usarSpl, setUsarSpl, desloc, unidade } = useCalibracao();
+  const emU = (dbfs: number | null) => (dbfs === null ? null : Math.round((dbfs + desloc) * 10) / 10);
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState<string | null>(null);
   const audio = useRef<MicrofoneAoVivo | null>(null);
@@ -183,7 +186,7 @@ export function CargaVocal({ paciente, aoSalvar }: { paciente: string; aoSalvar:
     if (!resumo || !paciente) return;
     setErro(null);
     try {
-      const r = await salvarCarga(paciente, resumo);
+      const r = await salvarCarga(paciente, resumo, desloc ? calibracao : null);
       setSalvo(r.avaliacao_id ? "Teste salvo no histórico." : null);
       aoSalvar();
     } catch (e) {
@@ -214,8 +217,9 @@ export function CargaVocal({ paciente, aoSalvar }: { paciente: string; aoSalvar:
         <div className="text-sm">
           <p className="text-ink-muted">Intensidade pedida</p>
           <p className="text-data mt-2 text-ink" data-testid="vc2-carga-alvo">
-            {alvo ? `${alvo.min} a ${alvo.max} dBFS (habitual + 6 a 14 dB)` : "Calibre com a voz habitual"}
+            {alvo ? `${fixoBR(emU(alvo.min), 0)} a ${fixoBR(emU(alvo.max), 0)} ${unidade} (habitual + 6 a 14 dB)` : "Calibre com a voz habitual"}
           </p>
+          <UnidadeIntensidade calibracao={calibracao} usarSpl={usarSpl} aoMudar={setUsarSpl} desativado={ocupado} testid="vc2-carga-unidade" />
         </div>
       </div>
 
@@ -247,7 +251,7 @@ export function CargaVocal({ paciente, aoSalvar }: { paciente: string; aoSalvar:
             {fase === "calibrando" ? `Calibrando… ${mmss(Math.max(0, CALIBRACAO_S - leitura.t))}` : `${mmss(leitura.t)} de ${mmss(minutos * 60)}`}
           </p>
           <div className="relative mt-3 h-4 overflow-hidden rounded-full bg-canvas-overlay ring-1 ring-inset ring-line" role="meter"
-            aria-label="Intensidade da voz" aria-valuemin={-60} aria-valuemax={0} aria-valuenow={Math.round(leitura.db)}>
+            aria-label={`Intensidade da voz (${unidade})`} aria-valuemin={-60 + desloc} aria-valuemax={desloc} aria-valuenow={Math.round(leitura.db + desloc)}>
             {alvo ? <div className="absolute inset-y-0 bg-signal-ok/25" style={{ left: `${pctBarra(alvo.min)}%`, width: `${pctBarra(alvo.max) - pctBarra(alvo.min)}%` }} /> : null}
             <div className={cn("absolute inset-y-0 left-0 transition-[width] duration-100", posicao === "dentro" ? "bg-signal-ok" : "bg-accent")} style={{ width: `${pctBarra(leitura.db)}%` }} />
           </div>
@@ -270,7 +274,7 @@ export function CargaVocal({ paciente, aoSalvar }: { paciente: string; aoSalvar:
                 ["Tempo com voz", `${fixoBR(resumo.fonacao_s, 0)} s`],
                 ["Na intensidade pedida", resumo.dentro_alvo_pct === null ? "—" : `${fixoBR(resumo.dentro_alvo_pct, 0)}% do tempo com voz`],
                 ["F0 no início → no fim", `${fixoBR(resumo.f0_inicio_hz, 0)} → ${fixoBR(resumo.f0_fim_hz, 0)} Hz` + (resumo.variacao_f0_st === null ? "" : ` (${resumo.variacao_f0_st > 0 ? "+" : ""}${fixoBR(resumo.variacao_f0_st, 1)} st)`)],
-                ["Intensidade no início → no fim", `${fixoBR(resumo.db_inicio, 1)} → ${fixoBR(resumo.db_fim, 1)} dBFS` + (resumo.variacao_db === null ? "" : ` (${resumo.variacao_db > 0 ? "+" : ""}${fixoBR(resumo.variacao_db, 1)} dB)`)],
+                ["Intensidade no início → no fim", `${fixoBR(emU(resumo.db_inicio), 1)} → ${fixoBR(emU(resumo.db_fim), 1)} ${unidade}` + (resumo.variacao_db === null ? "" : ` (${resumo.variacao_db > 0 ? "+" : ""}${fixoBR(resumo.variacao_db, 1)} dB)`)],
               ] as const).map(([m, v]) => (
                 <tr key={m} className="border-b border-ink/[0.06]">
                   <td className="py-2 text-ink-muted">{m}</td>
@@ -279,7 +283,7 @@ export function CargaVocal({ paciente, aoSalvar }: { paciente: string; aoSalvar:
               ))}
             </tbody>
           </table>
-          <GraficoMinutos r={resumo} />
+          <GraficoMinutos r={resumo} desloc={desloc} unidade={unidade} />
           <p className="mt-2 text-xs text-ink-faint">
             Subida da F0 e queda da intensidade ao longo do teste podem indicar esforço ou fadiga; compare com a percepção do paciente e com a vogal antes/depois. Não é diagnóstico médico.
           </p>

@@ -26,6 +26,16 @@ export type Calibracao = {
 };
 
 export const CHAVE_CALIBRACAO = "vc2-calibracao-spl";
+/** Avisado quando a calibração muda nesta página (as abas que mostram intensidade releem). */
+export const EVENTO_CALIBRACAO = "vc2-calibracao";
+
+function avisarMudanca(): void {
+  try {
+    if (typeof window !== "undefined") window.dispatchEvent(new Event(EVENTO_CALIBRACAO));
+  } catch {
+    /* sem window (testes): nada a avisar */
+  }
+}
 /** Mínimo de som estável para a medição valer. */
 export const MEDICAO_MINIMA_S = 2;
 /** Diferença máxima entre as leituras mais fracas e as mais fortes (10º e 90º percentis). */
@@ -109,6 +119,7 @@ export function carregarCalibracao(armazenamento: Pick<Storage, "getItem"> | nul
 export function guardarCalibracao(c: Calibracao, armazenamento: Pick<Storage, "setItem"> | null = guardaLocal()): boolean {
   try {
     armazenamento?.setItem(CHAVE_CALIBRACAO, JSON.stringify(c));
+    avisarMudanca();
     return Boolean(armazenamento);
   } catch {
     return false;
@@ -118,6 +129,7 @@ export function guardarCalibracao(c: Calibracao, armazenamento: Pick<Storage, "s
 export function apagarCalibracao(armazenamento: Pick<Storage, "removeItem"> | null = guardaLocal()): void {
   try {
     armazenamento?.removeItem(CHAVE_CALIBRACAO);
+    avisarMudanca();
   } catch {
     /* armazenamento bloqueado: nada a apagar */
   }

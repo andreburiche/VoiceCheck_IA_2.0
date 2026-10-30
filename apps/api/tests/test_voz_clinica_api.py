@@ -198,6 +198,28 @@ def test_biofeedback_salva_no_historico(client: httpx.Client) -> None:
     itens = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": corpo["paciente"]}).json()["items"]
     assert [i["tipo"] for i in itens] == ["biofeedback"]
     assert itens[0]["resultado"]["dentro_pitch_pct"] == 71.2
+    assert "spl" not in itens[0]["resultado"]
+
+
+_CAL = {"deslocamento_db": 100.0, "referencia_db_spl": 75, "ponderacao": "Z", "distancia_cm": 30,
+        "microfone": "USB Mic", "data": "2026-10-30T12:00:00Z"}
+
+
+def test_biofeedback_e_carga_calibrados_guardam_db_spl(client: httpx.Client) -> None:
+    corpo = _sessao(calibracao=_CAL)
+    res = client.post("/api/v1/voz-clinica/biofeedback", json=corpo).json()["resultado"]
+    assert res["calibracao"]["ponderacao"] == "Z" and res["calibracao"]["data"].startswith("2026-10-30T12:00:00")
+    assert res["spl"]["alvo_min"] == round(corpo["alvo_volume_dbfs"]["min"] + 100, 1)
+    assert res["alvo_volume_dbfs"] == corpo["alvo_volume_dbfs"]  # os valores originais seguem em dBFS
+    paciente = f"CargaSpl {uuid.uuid4().hex[:6]}"
+    carga = {"paciente": paciente, "duracao_s": 60, "duracao_planejada_s": 60, "fonacao_s": 50, "alvo_dbfs": {"min": -24, "max": -16},
+             "db_inicio": -18.5, "db_fim": None, "calibracao": _CAL}
+    r = client.post("/api/v1/voz-clinica/carga", json=carga)
+    assert r.status_code == 200, r.text
+    assert r.json()["resultado"]["spl"] == {"db_inicio": 81.5, "db_fim": None, "alvo_min": 76.0, "alvo_max": 84.0}
+    assert client.post("/api/v1/voz-clinica/carga", json={**carga, "calibracao": {**_CAL, "deslocamento_db": 10}}).status_code == 422
+    client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
+    client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": corpo["paciente"]})
 
 
 @pytest.mark.parametrize("ruim", [

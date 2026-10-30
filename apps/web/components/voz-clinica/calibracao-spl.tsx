@@ -7,7 +7,9 @@ import { friendlyError } from "@/lib/errors";
 import { fixoBR } from "@/lib/voz-clinica-api";
 import { nivelDbfs } from "@/lib/voz-clinica-biofeedback";
 import {
+  EVENTO_CALIBRACAO,
   apagarCalibracao,
+  carregarCalibracao,
   avisosDaCalibracao,
   criarCalibracao,
   erroDaCalibracao,
@@ -24,6 +26,53 @@ const CAMPO = "mt-1 w-full rounded-lg bg-canvas-raised px-3 py-2 text-sm text-in
 function dataBR(iso: string): string {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString("pt-BR");
+}
+
+/**
+ * Calibração guardada neste navegador, relida quando muda (em outra aba da tela ou outra janela).
+ * `desloc` é 0 sem calibração ou com "mostrar em dB SPL" desmarcado: some-o ao dBFS para exibir.
+ */
+export function useCalibracao() {
+  const [calibracao, setCalibracao] = useState<Calibracao | null>(null);
+  const [usarSpl, setUsarSpl] = useState(true);
+  useEffect(() => {
+    const ler = () => setCalibracao(carregarCalibracao());
+    ler();
+    window.addEventListener(EVENTO_CALIBRACAO, ler);
+    window.addEventListener("storage", ler);
+    return () => {
+      window.removeEventListener(EVENTO_CALIBRACAO, ler);
+      window.removeEventListener("storage", ler);
+    };
+  }, []);
+  const desloc = calibracao && usarSpl ? calibracao.deslocamento_db : 0;
+  return { calibracao, setCalibracao, usarSpl, setUsarSpl, desloc, unidade: desloc ? "dB SPL" : "dBFS" } as const;
+}
+
+/** Linha que diz em que unidade está a intensidade, com a opção de voltar a dBFS. */
+export function UnidadeIntensidade({ calibracao, usarSpl, aoMudar, desativado, testid }: {
+  calibracao: Calibracao | null;
+  usarSpl: boolean;
+  aoMudar: (v: boolean) => void;
+  desativado?: boolean;
+  testid: string;
+}) {
+  if (!calibracao) {
+    return (
+      <p className="mt-2 text-xs text-ink-faint" data-testid={testid}>
+        Intensidade relativa (dBFS). Para dB SPL, calibre o microfone com um decibelímetro na aba Fonetograma.
+      </p>
+    );
+  }
+  return (
+    <label className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-muted" data-testid={testid}>
+      <input type="checkbox" className="h-4 w-4 accent-[var(--accent)]" checked={usarSpl} disabled={desativado}
+        onChange={(e) => aoMudar(e.target.checked)} data-testid={`${testid}-spl`} />
+      {usarSpl
+        ? `Intensidade em dB SPL (calibrado em ${dataBR(calibracao.data)}, ${fixoBR(calibracao.distancia_cm, 0)} cm, ponderação ${calibracao.ponderacao})`
+        : "Mostrar em dB SPL (calibrado)"}
+    </label>
+  );
 }
 
 /**

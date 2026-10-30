@@ -3,13 +3,12 @@
 import { Mic, Pause, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
-import { CalibracaoSpl } from "@/components/voz-clinica/calibracao-spl";
+import { CalibracaoSpl, useCalibracao } from "@/components/voz-clinica/calibracao-spl";
 import { Button } from "@/components/ui/button";
 import { friendlyError } from "@/lib/errors";
 import { hzToMidiFloat, midiToNoteName } from "@/lib/pitch-math";
 import { fixoBR, salvarFonetograma } from "@/lib/voz-clinica-api";
 import { medianaDe3, nivelDbfs, pitchYin } from "@/lib/voz-clinica-biofeedback";
-import { carregarCalibracao, type Calibracao } from "@/lib/voz-clinica-calibracao";
 import { pontosDoCampo, registrar, resumirCampo, type MapaCampo, type PontoCampo } from "@/lib/voz-clinica-fonetograma";
 import { abrirMicrofoneAoVivo, gravadorSuportado } from "@/lib/voz-clinica-gravador";
 
@@ -88,12 +87,8 @@ export function Fonetograma({ paciente, aoSalvar }: { paciente: string; aoSalvar
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
   const [suportado, setSuportado] = useState(true);
-  const [calibracao, setCalibracao] = useState<Calibracao | null>(null);
-  const [usarSpl, setUsarSpl] = useState(true);
+  const { calibracao, setCalibracao, usarSpl, setUsarSpl, desloc, unidade } = useCalibracao();
   const [microfone, setMicrofone] = useState<string | null>(null);
-  useEffect(() => setCalibracao(carregarCalibracao()), []);
-  const desloc = calibracao && usarSpl ? calibracao.deslocamento_db : 0;
-  const unidade = desloc ? "dB SPL" : "dBFS";
   const emUnidade = (dbfs: number) => Math.round((dbfs + desloc) * 10) / 10;
 
   const canvas = useRef<HTMLCanvasElement>(null);

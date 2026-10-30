@@ -60,6 +60,25 @@ class FaixaDb(Faixa):
     max: float = Field(ge=-120, le=0)
 
 
+class CalibracaoSpl(BaseModel):
+    """Calibração do microfone com decibelímetro (feita no navegador): dB SPL = dBFS + deslocamento."""
+
+    deslocamento_db: float = Field(ge=40, le=160)
+    referencia_db_spl: float = Field(ge=40, le=130)
+    ponderacao: Literal["A", "C", "Z"]
+    distancia_cm: float = Field(ge=5, le=100)
+    microfone: str = Field(default="", max_length=120)
+    data: datetime
+
+    @model_validator(mode="after")
+    def _data(self) -> "CalibracaoSpl":
+        agora = datetime.now(timezone.utc)
+        quando = self.data if self.data.tzinfo else self.data.replace(tzinfo=timezone.utc)
+        if quando > agora + timedelta(days=1) or quando.year < 2000:
+            raise ValueError("Data da calibração inválida")
+        return self
+
+
 class BiofeedbackEntrada(BaseModel):
     """Resumo de uma sessão de biofeedback, medido no navegador (o áudio ao vivo não é enviado)."""
 
@@ -74,6 +93,8 @@ class BiofeedbackEntrada(BaseModel):
     f0_mediana_hz: float | None = Field(default=None, ge=30, le=2000)
     f0_p90_hz: float | None = Field(default=None, ge=30, le=2000)
     db_mediano: float | None = Field(default=None, ge=-120, le=0)
+    #: Microfone calibrado com decibelímetro: o servidor acrescenta os valores em dB SPL.
+    calibracao: CalibracaoSpl | None = None
 
     @model_validator(mode="after")
     def _coerente(self) -> "BiofeedbackEntrada":
@@ -105,6 +126,8 @@ class CargaEntrada(BaseModel):
     db_fim: float | None = Field(default=None, ge=-120, le=0)
     variacao_db: float | None = Field(default=None, ge=-120, le=120)
     minutos: list[MinutoCarga] = Field(default_factory=list, max_length=60)
+    #: Microfone calibrado com decibelímetro: o servidor acrescenta os valores em dB SPL.
+    calibracao: CalibracaoSpl | None = None
 
     @model_validator(mode="after")
     def _coerente(self) -> "CargaEntrada":
@@ -149,25 +172,6 @@ class PontoCampo(BaseModel):
     def _ordem(self) -> "PontoCampo":
         if self.min_db > self.max_db:
             raise ValueError("min_db maior que max_db")
-        return self
-
-
-class CalibracaoSpl(BaseModel):
-    """Calibração do microfone com decibelímetro (feita no navegador): dB SPL = dBFS + deslocamento."""
-
-    deslocamento_db: float = Field(ge=40, le=160)
-    referencia_db_spl: float = Field(ge=40, le=130)
-    ponderacao: Literal["A", "C", "Z"]
-    distancia_cm: float = Field(ge=5, le=100)
-    microfone: str = Field(default="", max_length=120)
-    data: datetime
-
-    @model_validator(mode="after")
-    def _data(self) -> "CalibracaoSpl":
-        agora = datetime.now(timezone.utc)
-        quando = self.data if self.data.tzinfo else self.data.replace(tzinfo=timezone.utc)
-        if quando > agora + timedelta(days=1) or quando.year < 2000:
-            raise ValueError("Data da calibração inválida")
         return self
 
 

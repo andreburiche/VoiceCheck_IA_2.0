@@ -97,6 +97,16 @@ def _salvar(db: DbSession, user: CurrentUser, paciente: str | None, tipo: str,
     return row.id
 
 
+def _com_spl(resultado: dict, calibracao, valores_dbfs: dict) -> None:
+    """Com o microfone calibrado (decibelímetro), guarda a calibração e os mesmos valores em dB SPL
+    (dB SPL = dBFS + deslocamento). Os campos originais continuam em dBFS."""
+    if calibracao is None:
+        return
+    d = calibracao.deslocamento_db
+    resultado["calibracao"] = calibracao.model_dump(mode="json")
+    resultado["spl"] = {k: (None if v is None else round(v + d, 1)) for k, v in valores_dbfs.items()}
+
+
 def _saida(row: ClinicalEvaluation) -> AvaliacaoOut:
     return AvaliacaoOut(
         id=row.id, paciente=row.patient_name, tipo=row.kind, motor=row.engine,
@@ -401,7 +411,11 @@ def salvar_biofeedback(entrada: BiofeedbackEntrada, user: CurrentUser, db: DbSes
     nome = _paciente(entrada.paciente)
     if nome is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente para salvar a sessão")
-    resultado = {**entrada.model_dump(exclude={"paciente"}), "fonte": "navegador"}
+    resultado = {**entrada.model_dump(mode="json", exclude={"paciente", "calibracao"}), "fonte": "navegador"}
+    _com_spl(resultado, entrada.calibracao, {
+        "db_mediano": resultado["db_mediano"],
+        "alvo_min": resultado["alvo_volume_dbfs"]["min"], "alvo_max": resultado["alvo_volume_dbfs"]["max"],
+    })
     salvo = _salvar(db, user, nome, "biofeedback", resultado)
     return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
 
@@ -474,7 +488,11 @@ def salvar_carga(entrada: CargaEntrada, user: CurrentUser, db: DbSession) -> Res
     nome = _paciente(entrada.paciente)
     if nome is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente para salvar o teste")
-    resultado = {**entrada.model_dump(exclude={"paciente"}), "fonte": "navegador"}
+    resultado = {**entrada.model_dump(mode="json", exclude={"paciente", "calibracao"}), "fonte": "navegador"}
+    _com_spl(resultado, entrada.calibracao, {
+        "db_inicio": resultado["db_inicio"], "db_fim": resultado["db_fim"],
+        "alvo_min": resultado["alvo_dbfs"]["min"], "alvo_max": resultado["alvo_dbfs"]["max"],
+    })
     return ResultadoSalvo(avaliacao_id=_salvar(db, user, nome, "carga", resultado), resultado=resultado)
 
 
@@ -504,9 +522,8 @@ def salvar_fonetograma(entrada: FonetogramaEntrada, user: CurrentUser, db: DbSes
         "fonte": "navegador",
     }
     if entrada.calibracao is not None:
-        cal = entrada.calibracao
-        resultado["calibracao"] = {**cal.model_dump(exclude={"data"}), "data": cal.data.isoformat()}
-        resultado["resumo_spl"] = resumo_em_spl(resultado["resumo"], cal.deslocamento_db)
+        resultado["calibracao"] = entrada.calibracao.model_dump(mode="json")
+        resultado["resumo_spl"] = resumo_em_spl(resultado["resumo"], entrada.calibracao.deslocamento_db)
     salvo = _salvar(db, user, nome, "fonetograma", resultado)
     return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
 

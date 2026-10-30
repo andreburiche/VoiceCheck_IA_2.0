@@ -105,6 +105,19 @@ describe("resumos", () => {
     expect(resumoAvaliacao(comCal)).toContain("· 65–93 dB SPL (calibrado, ponderação C)");
   });
 
+  it("carga vocal e biofeedback calibrados mostram dB SPL", () => {
+    const base = { id: "c1", paciente: "Ana", motor: null, criado_em: "2026-10-29T10:00:00Z" };
+    const carga = { duracao_s: 300, duracao_planejada_s: 300, fonacao_s: 270, alvo_dbfs: { min: -24, max: -16 }, dentro_alvo_pct: 66.7,
+      f0_inicio_hz: 201, f0_fim_hz: 224, variacao_f0_st: 1.9, db_inicio: -18.5, db_fim: -23.6, variacao_db: -5.1, minutos: [], fonte: "navegador" as const };
+    expect(resumoAvaliacao({ ...base, tipo: "carga", resultado: carga }).includes("SPL")).toBe(false);
+    expect(resumoAvaliacao({ ...base, tipo: "carga", resultado: { ...carga, spl: { db_inicio: 81.5, db_fim: 76.4, alvo_min: 76, alvo_max: 84 } } }))
+      .toContain("intensidade -5,1 dB · 82 → 76 dB SPL");
+    const bio = { duracao_s: 30, fonacao_s: 22.5, alvo_pitch_hz: { min: 180, max: 220 }, alvo_volume_dbfs: { min: -30, max: -12 },
+      dentro_pitch_pct: 71.2, dentro_volume_pct: 88, f0_p10_hz: 176, f0_mediana_hz: 201, f0_p90_hz: 228, db_mediano: -21, fonte: "navegador" as const };
+    expect(resumoAvaliacao({ ...base, tipo: "biofeedback", resultado: { ...bio, spl: { db_mediano: 79, alvo_min: 70, alvo_max: 88 } } }))
+      .toContain("alvo 180–220 Hz · volume 70–88 dB SPL");
+  });
+
   it("DSI e F0 da fala viram linhas curtas", () => {
     const dsi: Avaliacao = { id: "2", paciente: "Ana", tipo: "dsi", motor: null, criado_em: "2026-10-29T10:00:00Z",
       resultado: { dsi: 3.41, entradas: { tmf_s: 18.5, f0_alta_hz: 659, i_baixa_db_spl: 52, jitter_pct: 0.42 }, escala: "", referencia: "" } };

@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, Check, Mic, Square } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { UnidadeIntensidade, useCalibracao } from "@/components/voz-clinica/calibracao-spl";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { friendlyError } from "@/lib/errors";
@@ -107,6 +108,10 @@ export function BiofeedbackAoVivo({ paciente, aoSalvar }: { paciente: string; ao
   const id = useId();
   const [alvoPitch, setAlvoPitch] = useState<Faixa>({ min: 180, max: 220 });
   const [alvoVolume, setAlvoVolume] = useState<Faixa>({ min: -30, max: -12 });
+  // a faixa fica guardada em dBFS; com calibração, é mostrada e digitada em dB SPL
+  const { calibracao, usarSpl, setUsarSpl, desloc, unidade } = useCalibracao();
+  const emU = (dbfs: number) => Math.round((dbfs + desloc) * 10) / 10;
+  const deU = (v: number) => Math.round((v - desloc) * 10) / 10;
   const [ativo, setAtivo] = useState(false);
   const [leitura, setLeitura] = useState<{ hz: number | null; db: number; dentroPct: number | null }>({ hz: null, db: -120, dentroPct: null });
   const [anuncio, setAnuncio] = useState("");
@@ -224,7 +229,7 @@ export function BiofeedbackAoVivo({ paciente, aoSalvar }: { paciente: string; ao
     setSalvando(true);
     setErro(null);
     try {
-      await salvarBiofeedback(paciente, resumo);
+      await salvarBiofeedback(paciente, resumo, desloc ? calibracao : null);
       setSalvo(true);
       aoSalvar();
     } catch (e) {
@@ -253,13 +258,14 @@ export function BiofeedbackAoVivo({ paciente, aoSalvar }: { paciente: string; ao
           <CampoNumero id={`${id}-pmax`} rotulo="Pitch máximo (Hz)" valor={alvoPitch.max} min={40} max={1600} onChange={(v) => setAlvoPitch((f) => ({ ...f, max: v }))} />
         </div>
         <div className="flex items-end gap-2">
-          <CampoNumero id={`${id}-vmin`} rotulo="Volume mínimo (dBFS)" valor={alvoVolume.min} min={-90} max={0} onChange={(v) => setAlvoVolume((f) => ({ ...f, min: v }))} />
-          <CampoNumero id={`${id}-vmax`} rotulo="Volume máximo (dBFS)" valor={alvoVolume.max} min={-90} max={0} onChange={(v) => setAlvoVolume((f) => ({ ...f, max: v }))} />
+          <CampoNumero id={`${id}-vmin`} rotulo={`Volume mínimo (${unidade})`} valor={emU(alvoVolume.min)} min={emU(-90)} max={emU(0)} onChange={(v) => setAlvoVolume((f) => ({ ...f, min: deU(v) }))} />
+          <CampoNumero id={`${id}-vmax`} rotulo={`Volume máximo (${unidade})`} valor={emU(alvoVolume.max)} min={emU(-90)} max={emU(0)} onChange={(v) => setAlvoVolume((f) => ({ ...f, max: deU(v) }))} />
         </div>
         <p className="text-xs text-ink-faint">
           {faixaValida && alvoPitch.min >= 40 ? `${rotuloNota(alvoPitch.min)} a ${rotuloNota(alvoPitch.max)}` : "Confira as faixas: o mínimo precisa ser menor que o máximo."}
         </p>
       </fieldset>
+      <UnidadeIntensidade calibracao={calibracao} usarSpl={usarSpl} aoMudar={setUsarSpl} desativado={ativo} testid="vc2-bio-unidade" />
 
       <div className="mt-4">
         {ativo ? (
@@ -287,7 +293,7 @@ export function BiofeedbackAoVivo({ paciente, aoSalvar }: { paciente: string; ao
             </div>
             <div className="rounded-xl bg-canvas-raised/60 p-3 ring-1 ring-inset ring-ink/10">
               <p className="text-xs text-ink-muted">Volume agora</p>
-              <p className="text-data mt-1 text-2xl font-semibold text-ink">{leitura.db > -120 ? `${fixoBR(leitura.db, 0)} dBFS` : "—"}</p>
+              <p className="text-data mt-1 text-2xl font-semibold text-ink">{leitura.db > -120 ? `${fixoBR(emU(leitura.db), 0)} ${unidade}` : "—"}</p>
               <div className="relative mt-2 h-3 overflow-hidden rounded-full bg-canvas-overlay ring-1 ring-inset ring-line" aria-hidden>
                 <div className="absolute inset-y-0 bg-ink/[0.06]" style={{ left: `${pctDb(alvoVolume.min)}%`, width: `${pctDb(alvoVolume.max) - pctDb(alvoVolume.min)}%` }} />
                 <div className="absolute inset-y-0 left-0 bg-accent/80 transition-[width] duration-75" style={{ width: `${pctDb(leitura.db)}%` }} />

@@ -14,10 +14,19 @@ export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" |
 export type Protocolo = "idv10" | "qvv" | "grbasi" | "easebr" | "perceptiva";
 
 /** Resumo de sessão de biofeedback salvo (medido no navegador). */
-export type ResultadoBiofeedback = ResumoBiofeedback & { fonte: "navegador" };
+export type ResultadoBiofeedback = ResumoBiofeedback & {
+  fonte: "navegador";
+  /** Com o microfone calibrado: a calibração e os mesmos valores em dB SPL (os originais seguem em dBFS). */
+  calibracao?: Calibracao;
+  spl?: { db_mediano: number | null; alvo_min: number; alvo_max: number };
+};
 
 /** Teste de carga vocal salvo (medido no navegador). */
-export type ResultadoCarga = ResumoCarga & { fonte: "navegador" };
+export type ResultadoCarga = ResumoCarga & {
+  fonte: "navegador";
+  calibracao?: Calibracao;
+  spl?: { db_inicio: number | null; db_fim: number | null; alvo_min: number; alvo_max: number };
+};
 
 /** Resultado de partida salvo (medido no navegador). */
 export type ResultadoJogoSalvo = ResultadoJogo & { fonte: "navegador" };
@@ -420,10 +429,10 @@ export function revogarPlanoPratica(id: string) {
   return apiFetch<PlanoPratica>(`${BASE}/pratica/${encodeURIComponent(id)}/revogar`, { method: "POST" });
 }
 
-export function salvarBiofeedback(paciente: string, resumo: ResumoBiofeedback) {
+export function salvarBiofeedback(paciente: string, resumo: ResumoBiofeedback, calibracao: Calibracao | null = null) {
   return apiFetch<Salvo<ResultadoBiofeedback>>(`${BASE}/biofeedback`, {
     method: "POST",
-    json: { paciente, ...resumo },
+    json: { paciente, ...resumo, ...(calibracao ? { calibracao } : {}) },
   });
 }
 
@@ -431,8 +440,8 @@ export function registrarSessao(entrada: EntradaSessao) {
   return apiFetch<Salvo<ResultadoSessao>>(`${BASE}/sessoes`, { method: "POST", json: entrada });
 }
 
-export function salvarCarga(paciente: string, resumo: ResumoCarga) {
-  return apiFetch<Salvo<ResultadoCarga>>(`${BASE}/carga`, { method: "POST", json: { ...resumo, paciente } });
+export function salvarCarga(paciente: string, resumo: ResumoCarga, calibracao: Calibracao | null = null) {
+  return apiFetch<Salvo<ResultadoCarga>>(`${BASE}/carga`, { method: "POST", json: { ...resumo, paciente, ...(calibracao ? { calibracao } : {}) } });
 }
 
 export function salvarJogo(paciente: string, resultado: ResultadoJogo) {
@@ -726,7 +735,8 @@ export function resumoAvaliacao(a: Avaliacao): string {
       `pitch na faixa ${fixoBR(r.dentro_pitch_pct, 1)}%`,
       `volume na faixa ${fixoBR(r.dentro_volume_pct, 1)}%`,
       `alvo ${fixoBR(r.alvo_pitch_hz.min, 0)}–${fixoBR(r.alvo_pitch_hz.max, 0)} Hz`,
-    ].join(" · ");
+      r.spl ? `volume ${fixoBR(r.spl.alvo_min, 0)}–${fixoBR(r.spl.alvo_max, 0)} dB SPL` : null,
+    ].filter(Boolean).join(" · ");
   }
   if (a.tipo === "dsi") {
     const r = a.resultado as ResultadoDsi;
@@ -741,6 +751,7 @@ export function resumoAvaliacao(a: Avaliacao): string {
       `${fixoBR(r.dentro_alvo_pct, 0)}% na intensidade pedida`,
       r.variacao_f0_st === null ? null : `F0 ${sinal(r.variacao_f0_st)}${fixoBR(r.variacao_f0_st, 1)} st`,
       r.variacao_db === null ? null : `intensidade ${sinal(r.variacao_db)}${fixoBR(r.variacao_db, 1)} dB`,
+      r.spl?.db_inicio != null && r.spl.db_fim != null ? `${fixoBR(r.spl.db_inicio, 0)} → ${fixoBR(r.spl.db_fim, 0)} dB SPL` : null,
     ].filter(Boolean).join(" · ");
   }
   if (a.tipo === "cepstral") {
