@@ -124,3 +124,27 @@ def test_aviso_de_saturacao():
     voz = sintetizar().audio
     saturado = Audio(np.clip(voz.amostras * 10, -1, 1), voz.taxa)  # pico ~2,2 cortado em 1
     assert any("saturou" in a for a in motor_interno.analisar(saturado)["avisos"])
+
+
+VOGAL_F = [(700, 80), (1200, 90), (2600, 120)]
+
+
+@pytest.mark.parametrize("f0", [110.0, 220.0, 330.0])
+def test_jitter_de_vogal_aguda_nao_infla(f0):
+    """Vogal com formantes: a ressonância do ciclo anterior não pode inflar o jitter (antes 0,3–0,4 % em voz limpa aguda)."""
+    limpa = motor_interno.analisar(sintetizar(f0=f0, ruido=0.002, formantes=VOGAL_F, seed=7).audio)["perturbacao"]
+    assert limpa["jitter_local_pct"] < 0.05
+    voz = sintetizar(f0=f0, sj=0.01, sa=0.06, ruido=0.01, formantes=VOGAL_F, seed=7)
+    p = motor_interno.analisar(voz.audio)["perturbacao"]
+    assert p["jitter_local_pct"] == pytest.approx(voz.jitter_local_pct, rel=0.3)
+
+
+def test_shimmer_ignora_saltos_de_amplitude_acima_de_1_6():
+    """Como o Praat ("maximum amplitude factor" 1,6): um ciclo isolado muito mais forte não entra no shimmer."""
+    from app.services.voz_clinica.motor_interno import perturbacao
+
+    instantes = np.arange(0, 0.2, 0.01)
+    amps = np.full(len(instantes) - 1, 0.5)
+    amps[10] = 1.0  # salto de 2× (descartado)
+    p = perturbacao([(instantes, amps)])
+    assert p["shimmer_local_pct"] == pytest.approx(0.0, abs=1e-9)

@@ -202,6 +202,14 @@ Depois da revisão (30/10/2026, segunda rodada):
 
 Ainda fica para depois: nova tentativa de apagar arquivos que falharem; se houver nginx/proxy na frente, desligar nele também o log de query string.
 
+## Concordância entre os motores (30/10/2026)
+
+Estudo com vozes sintéticas de valor conhecido (`apps/api/scripts/concordancia_motores.py`, resultado em
+[CONCORDANCIA_MOTORES.md](CONCORDANCIA_MOTORES.md)). O motor interno (reserva quando o Praat não está instalado)
+inflava jitter e shimmer em vozes agudas; foi ajustado para seguir o Praat e agora difere em média 0,16 ponto no
+jitter e 0,57 no shimmer (antes 0,72 e 1,53). F0 igual; HNR e CPPS na mesma ordem, com desvio fixo de 1–2 dB.
+O teste `test_motor_interno_concorda_com_o_praat_em_jitter_e_shimmer` (Docker) mantém isso.
+
 ## Rodar a v2 isolada no computador
 
 `infra/docker-compose.v2-local.yml` sobe site (http://localhost:3100), API (http://localhost:8110), MySQL e Redis

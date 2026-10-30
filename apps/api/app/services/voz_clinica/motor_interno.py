@@ -16,6 +16,7 @@ from .audio import Audio, reamostrar
 PASSO = 0.01  # s entre quadros de pitch
 LIMIAR_VOZEAMENTO = 0.45  # correlação normalizada mínima
 LIMIAR_SILENCIO = 0.03  # fração do pico global
+FATOR_MAX_AMPLITUDE = 1.6  # Praat: "maximum amplitude factor" do shimmer
 FATOR_MAX_PERIODO = 1.3  # como no Praat
 PERIODO_MIN, PERIODO_MAX = 0.0001, 0.02  # s, como no Praat
 
@@ -146,39 +147,70 @@ def marcar_ciclos(audio: Audio, tempos, f0s):
 
     pico_global = float(np.max(np.abs(x)))
 
+    def _parabola(a: float, b: float, c: float) -> float:
+        """Deslocamento (−0,5..0,5) do máximo de uma parábola por três pontos vizinhos."""
+        den = a - 2 * b + c
+        return float(np.clip(0.5 * (a - c) / den, -0.5, 0.5)) if den != 0 else 0.0
+
     def seguir_ciclos(p: int, fim: int):
-        """Segue ciclo a ciclo a partir do pico p. Devolve (marcas, amps, onde_parou)."""
-        marcas, amps = [float(p)], []
+        """Segue ciclo a ciclo a partir do pico p. Devolve (marcas, amps, onde_parou).
+
+        Como o "To PointProcess (periodic, cc)" do Praat, o instante de cada ciclo vem da
+        correlação com o ciclo anterior (interpolada abaixo da amostra), não do pico da onda:
+        em voz aguda a ressonância do ciclo anterior ainda soa e desloca o pico, o que
+        inflava o jitter. A amplitude de cada ciclo segue o Praat (RMS com janela de Hann
+        em volta da marca).
+        """
+        marcas: list[float] = [float(p)]
+        pos = float(p)
         while True:
-            T = periodo_em(p)
+            q = int(round(pos))
+            T = periodo_em(q)
             meio = int(round(T / 2))
-            if p - meio < 0 or p + int(1.25 * T) + meio >= fim:
-                return marcas, amps, p
-            molde = x[p - meio : p + meio]
+            if q - meio < 0 or q + int(1.25 * T) + meio + 1 >= fim:
+                break
+            molde = x[q - meio : q + meio]
             norma_m = np.linalg.norm(molde)
             if norma_m < 1e-9:  # silêncio: nada a seguir aqui
-                return marcas, amps, p
+                break
             dmin, dmax = int(0.75 * T), int(np.ceil(1.25 * T))
             corr = np.empty(dmax - dmin + 1)
             for k, d in enumerate(range(dmin, dmax + 1)):
-                alvo = x[p + d - meio : p + d + meio]
+                alvo = x[q + d - meio : q + d + meio]
                 corr[k] = np.dot(molde, alvo) / (norma_m * np.linalg.norm(alvo) + 1e-12)
             k = int(np.argmax(corr))
             if corr[k] < 0.3:
-                return marcas, amps, p
-            # a correlação acha o próximo ciclo; o instante exato vem do pico
-            # da forma de onda perto dali, com interpolação parabólica
-            aprox = p + dmin + k
-            raio = max(2, int(0.1 * T))
-            if aprox + raio + 1 >= fim:
-                return marcas, amps, p
-            novo = aprox - raio + int(np.argmax(x[aprox - raio : aprox + raio + 1]))
-            a, b, c = x[novo - 1], x[novo], x[novo + 1]
-            den = a - 2 * b + c
-            desloc = 0.5 * (a - c) / den if den != 0 else 0.0
-            amps.append(float(np.max(x[p - meio : p + meio])))  # pico do ciclo atual
-            marcas.append(novo + float(np.clip(desloc, -0.5, 0.5)))
-            p = novo
+                break
+            frac = _parabola(corr[k - 1], corr[k], corr[k + 1]) if 0 < k < len(corr) - 1 else 0.0
+            # a marca anda pelo deslocamento medido a partir da posição arredondada
+            pos = pos + (q - pos) + dmin + k + frac
+            marcas.append(pos)
+        # amplitude de cada ciclo como o Praat (PointProcess_Sound_to_AmplitudeTier_period):
+        # RMS com janela de Hann em volta do pulso, de 20 % do período anterior a 20 % do
+        # seguinte. O pulso é o maior valor absoluto do ciclo (até meio período da marca da
+        # correlação, que pode estar noutra fase da onda). Conferido contra o Praat com vozes
+        # sintéticas (scripts/concordancia_motores.py). Só marcas com vizinhas dos dois lados.
+        amps = []
+        for i in range(1, len(marcas) - 1):
+            m = marcas[i]
+            r = max(1, int(0.25 * (marcas[i + 1] - marcas[i - 1])))
+            c0 = int(round(m))
+            if c0 - r - 1 >= 0 and c0 + r + 2 <= len(x):
+                jan = np.abs(x[c0 - r : c0 + r + 1])
+                j = int(np.argmax(jan))
+                m = c0 - r + j + (_parabola(jan[j - 1], jan[j], jan[j + 1]) if 0 < j < len(jan) - 1 else 0.0)
+            esq, dir_ = 0.2 * (m - marcas[i - 1]), 0.2 * (marcas[i + 1] - m)
+            if esq <= 0 or dir_ <= 0:
+                amps.append(float(abs(x[c0])))
+                continue
+            i0, i1 = max(0, int(np.ceil(m - esq))), min(len(x), int(np.floor(m + dir_)) + 1)
+            s = np.arange(i0, i1, dtype=float)
+            u = np.where(s < m, (s - (m - esq)) / esq, (m + dir_ - s) / dir_)  # 0 nas pontas, 1 no pulso
+            w = np.sin(0.5 * np.pi * np.clip(u, 0, 1)) ** 2  # Hann
+            amps.append(float(np.sqrt(np.sum((w * x[i0:i1]) ** 2) / max(np.sum(w * w), 1e-12))))
+        parou = int(round(marcas[-1]))
+        # a primeira marca sai da série: o período i (marca i → i+1) fica com a amplitude da marca i
+        return marcas[1:], amps, parou
 
     resultado = []
     for ini_s, fim_s in _trechos_vozeados(tempos, f0s):
@@ -231,8 +263,8 @@ def perturbacao(trechos) -> dict:
         for i in range(1, len(per)):
             if ok[i] and ok[i - 1] and max(per[i], per[i - 1]) / min(per[i], per[i - 1]) <= FATOR_MAX_PERIODO:
                 dif_per.append(abs(per[i] - per[i - 1]))
-                dif_amp.append(abs(amps[i] - amps[i - 1]))
-                if amps[i] > 0 and amps[i - 1] > 0:
+                if amps[i] > 0 and amps[i - 1] > 0 and max(amps[i], amps[i - 1]) / min(amps[i], amps[i - 1]) <= FATOR_MAX_AMPLITUDE:
+                    dif_amp.append(abs(amps[i] - amps[i - 1]))
                     db_amp.append(abs(20 * np.log10(amps[i] / amps[i - 1])))
         for i in range(1, len(per) - 1):
             if ok[i - 1 : i + 2].all():
