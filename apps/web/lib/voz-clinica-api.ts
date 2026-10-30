@@ -8,7 +8,7 @@ import { JOGOS, type ResultadoJogo } from "@/lib/voz-clinica-jogos";
 import { resumoPratica, type ExercicioPratica, type ResultadoPratica } from "@/lib/voz-clinica-pratica";
 
 
-export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica" | "dsi" | "fala" | "ddk";
+export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica" | "dsi" | "fala" | "ddk" | "cepstral";
 export type Protocolo = "idv10" | "qvv" | "grbasi" | "easebr";
 
 /** Resumo de sessão de biofeedback salvo (medido no navegador). */
@@ -106,6 +106,21 @@ export type ResultadoDdk = {
   avisos: string[];
 };
 
+/** Análise cepstral (VoxMetria 5): CPP/CPPS da vogal /ɛ/ e da frase, e AVQI 03.01 (só com Praat). */
+export type MedidasCepstrais = { duracao_s: number; cpp_db: number | null; cpps_db: number | null };
+export type ResultadoCepstral = {
+  motor: "praat" | "interno";
+  vogal: MedidasCepstrais;
+  frase: MedidasCepstrais;
+  avqi?: {
+    valor: number;
+    versao: string;
+    componentes: { cpps_db: number; hnr_db: number; shimmer_pct: number; shimmer_db: number; slope_db: number; tilt_db: number };
+    duracao_analisada_s: number;
+  };
+  avisos: string[];
+};
+
 /** DSI (Wuyts et al., 2000) com as quatro medidas usadas. */
 export type ResultadoDsi = {
   dsi: number;
@@ -162,7 +177,7 @@ export type Avaliacao = {
   paciente: string;
   tipo: TipoAvaliacao;
   motor: string | null;
-  resultado: AnaliseAcustica | ResultadoProtocolo | Anamnese | ResultadoPratica | ResultadoBiofeedback | ResultadoJogoSalvo | ResultadoFonetograma | ResultadoDsi | AnaliseFala | ResultadoDdk;
+  resultado: AnaliseAcustica | ResultadoProtocolo | Anamnese | ResultadoPratica | ResultadoBiofeedback | ResultadoJogoSalvo | ResultadoFonetograma | ResultadoDsi | AnaliseFala | ResultadoDdk | ResultadoCepstral;
   criado_em: string;
   /** Há gravação guardada (análise acústica). */
   audio?: boolean;
@@ -214,6 +229,15 @@ export function analisarDdk(wav: Blob, opcoes: { tarefa: TarefaDdk; paciente?: s
   if (opcoes.paciente) dados.append("paciente", opcoes.paciente);
   if (opcoes.guardarAudio === false) dados.append("guardar_audio", "false");
   return apiFetch<Salvo<ResultadoDdk>>(`${BASE}/ddk`, { method: "POST", body: dados, timeoutMs: 60_000 });
+}
+
+export function analisarCepstral(vogal: Blob, frase: Blob, opcoes: { paciente?: string | null; guardarAudio?: boolean } = {}) {
+  const dados = new FormData();
+  dados.append("vogal", vogal, "vogal.wav");
+  dados.append("frase", frase, "frase.wav");
+  if (opcoes.paciente) dados.append("paciente", opcoes.paciente);
+  if (opcoes.guardarAudio === false) dados.append("guardar_audio", "false");
+  return apiFetch<Salvo<ResultadoCepstral>>(`${BASE}/cepstral`, { method: "POST", body: dados, timeoutMs: 90_000 });
 }
 
 export function calcularDsi(entrada: ResultadoDsi["entradas"], paciente?: string | null) {
@@ -423,6 +447,15 @@ export function resumoAvaliacao(a: Avaliacao): string {
     const e = r.entradas;
     return `DSI ${fixoBR(r.dsi, 2)} · TMF ${fixoBR(e?.tmf_s, 1)} s · F0-alta ${fixoBR(e?.f0_alta_hz, 0)} Hz · I-baixa ${fixoBR(e?.i_baixa_db_spl, 0)} dB SPL · jitter ${fixoBR(e?.jitter_pct, 2)}%`;
   }
+  if (a.tipo === "cepstral") {
+    const r = a.resultado as ResultadoCepstral;
+    return [
+      `CPPS vogal ${fixoBR(r.vogal?.cpps_db, 1)} dB`,
+      `frase ${fixoBR(r.frase?.cpps_db, 1)} dB`,
+      `CPP vogal ${fixoBR(r.vogal?.cpp_db, 1)} dB`,
+      ...(r.avqi ? [`AVQI ${fixoBR(r.avqi.valor, 2)}`] : []),
+    ].join(" · ");
+  }
   if (a.tipo === "ddk") {
     const r = a.resultado as ResultadoDdk;
     return `${ROTULO_DDK[r.tarefa] ?? r.tarefa}: ${fixoBR(r.taxa_silabas_s, 1)} sílabas/s · ${r.silabas ?? 0} sílabas · ritmo (CV) ${fixoBR(r.intervalo_cv_pct, 1)}%`;
@@ -458,6 +491,7 @@ export const ROTULO_TIPO: Record<TipoAvaliacao, string> = {
   dsi: "DSI",
   fala: "F0 da fala",
   ddk: "Diadococinesia",
+  cepstral: "Análise cepstral",
 };
 
 export const ROTULO_DDK: Record<TarefaDdk, string> = { pa: "/pa/", ta: "/ta/", ka: "/ka/", pataka: "/pataka/" };

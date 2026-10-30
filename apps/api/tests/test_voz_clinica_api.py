@@ -456,3 +456,27 @@ def test_ddk_salva_taxa_e_ritmo(client: httpx.Client) -> None:
     ruim = client.post("/api/v1/voz-clinica/ddk", files={"file": ("ddk.wav", io.BytesIO(wav), "audio/wav")}, data={"tarefa": "la"})
     assert ruim.status_code == 400
     client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
+
+
+def test_cepstral_vogal_e_frase(client: httpx.Client) -> None:
+    from test_voz_clinica_cepstral import _frase, _vogal
+
+    paciente = f"Cep {uuid.uuid4().hex[:6]}"
+    r = client.post(
+        "/api/v1/voz-clinica/cepstral",
+        files={"vogal": ("v.wav", io.BytesIO(para_wav(_vogal())), "audio/wav"),
+               "frase": ("f.wav", io.BytesIO(para_wav(_frase())), "audio/wav")},
+        data={"paciente": paciente},
+    )
+    assert r.status_code == 200, r.text
+    res = r.json()["resultado"]
+    assert res["vogal"]["cpps_db"] > res["frase"]["cpps_db"] and res["frase"]["cpp_db"] is not None
+    if res["motor"] == "praat":
+        assert "valor" in res["avqi"]
+    item = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"][0]
+    assert item["tipo"] == "cepstral" and item["audio"] is True
+    wav = client.get(f"/api/v1/voz-clinica/avaliacoes/{item['id']}/audio").content
+    assert wav[:4] == b"RIFF" and len(wav) > 44100 * 2 * 4  # vogal + silêncio + frase
+    sem_frase = client.post("/api/v1/voz-clinica/cepstral", files={"vogal": ("v.wav", io.BytesIO(para_wav(_vogal())), "audio/wav")})
+    assert sem_frase.status_code == 422
+    client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})

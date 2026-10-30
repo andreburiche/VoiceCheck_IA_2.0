@@ -268,7 +268,8 @@ def perturbacao(trechos) -> dict:
 # CPPS (Hillenbrand et al., 1994; parâmetros próximos aos do Praat)
 # --------------------------------------------------------------------------
 
-def cpps(audio: Audio, f0_min=60.0, f0_max=330.0) -> float | None:
+def cpps(audio: Audio, f0_min=60.0, f0_max=330.0, suavizar: bool = True) -> float | None:
+    """CPPS (suavizado, Hillenbrand) ou, com suavizar=False, CPP: pico cepstral de cada quadro sem média."""
     taxa = 10000
     x = reamostrar(audio.amostras, audio.taxa, taxa)
     janela = int(0.04 * taxa)
@@ -291,8 +292,8 @@ def cpps(audio: Audio, f0_min=60.0, f0_max=330.0) -> float | None:
 
     # suavização na escala linear (antes do dB): 10 ms no tempo, 1 ms na quefrência
     dq = 1.0 / taxa  # passo de quefrência (s)
-    k_t = 5
-    k_q = max(1, int(round(0.001 / dq)))
+    k_t = 5 if suavizar else 1
+    k_q = max(1, int(round(0.001 / dq))) if suavizar else 1
     nucleo_t = np.ones(k_t) / k_t
     nucleo_q = np.ones(k_q) / k_q
     cg = np.apply_along_axis(lambda c: np.convolve(c, nucleo_t, mode="same"), 0, cg)

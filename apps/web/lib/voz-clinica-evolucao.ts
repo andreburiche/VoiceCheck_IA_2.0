@@ -3,7 +3,7 @@
  * Uma série por medida; cada uma vira um gráfico próprio (escalas diferentes
  * nunca dividem o mesmo eixo).
  */
-import { ROTULO_DDK, type AnaliseAcustica, type AnaliseFala, type Avaliacao, type ResultadoDdk, type ResultadoDsi, type TarefaDdk, type ResultadoBiofeedback, type ResultadoEaseBr, type ResultadoGrbasi, type ResultadoIdv10, type ResultadoFonetograma, type ResultadoJogoSalvo, type ResultadoQvv } from "@/lib/voz-clinica-api";
+import { ROTULO_DDK, type AnaliseAcustica, type AnaliseFala, type Avaliacao, type ResultadoCepstral, type ResultadoDdk, type ResultadoDsi, type TarefaDdk, type ResultadoBiofeedback, type ResultadoEaseBr, type ResultadoGrbasi, type ResultadoIdv10, type ResultadoFonetograma, type ResultadoJogoSalvo, type ResultadoQvv } from "@/lib/voz-clinica-api";
 import { JOGOS, type JogoId } from "@/lib/voz-clinica-jogos";
 import type { ResultadoPratica } from "@/lib/voz-clinica-pratica";
 
@@ -79,6 +79,16 @@ const EXTRATORES: Extrator[] = [
     chave: "fala_faixa", titulo: "F0 da fala — faixa (p5–p95)", unidade: "st", casas: 1, tipo: "fala", dominio: null,
     leitura: "Variação de altura na fala (entonação); faixas muito estreitas soam monótonas.",
     valor: (a) => (a.resultado as AnaliseFala).f0?.faixa_semitons,
+  },
+  {
+    chave: "cep_frase", titulo: "CPPS da frase", unidade: "dB", casas: 1, tipo: "cepstral", dominio: null,
+    leitura: "Proeminência cepstral na fala encadeada; valores maiores indicam voz mais periódica.",
+    valor: (a) => (a.resultado as ResultadoCepstral).frase?.cpps_db,
+  },
+  {
+    chave: "avqi", titulo: "AVQI", unidade: "", casas: 2, tipo: "cepstral", dominio: null,
+    leitura: "Índice acústico de qualidade vocal (0 a 10); valores menores indicam voz menos desviada.",
+    valor: (a) => (a.resultado as ResultadoCepstral).avqi?.valor,
   },
   {
     chave: "dsi", titulo: "DSI", unidade: "", casas: 2, tipo: "dsi", dominio: null,

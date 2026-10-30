@@ -44,6 +44,7 @@ from app.schemas.voz_clinica import (
     StatusOut,
 )
 from app.services import voz_clinica
+from app.services.voz_clinica.cepstral import analisar_cepstral
 from app.services.voz_clinica.ddk import analisar_ddk
 from app.services.voz_clinica.fala import analisar_fala
 from app.services.voz_clinica.fonetograma import resumir_campo
@@ -375,6 +376,59 @@ async def analisar_ddk_rota(
     if nome is None or "silabas" not in resultado:
         return ResultadoSalvo(avaliacao_id=None, resultado=resultado)
     return await _salvar_com_audio(db, user, nome, "ddk", resultado, dados, guardar_audio)
+
+
+def _juntar_wav(vogal: "voz_clinica.Audio", frase: "voz_clinica.Audio") -> bytes:
+    """Um só arquivo para guardar: vogal, 0,5 s de silêncio e frase (16 bits, taxa da vogal)."""
+    import io
+
+    import numpy as np
+    from scipy.io import wavfile
+    from scipy.signal import resample_poly
+
+    f = frase.amostras if frase.taxa == vogal.taxa else resample_poly(frase.amostras, vogal.taxa, frase.taxa)
+    x = np.concatenate((vogal.amostras, np.zeros(int(0.5 * vogal.taxa)), f))
+    buf = io.BytesIO()
+    wavfile.write(buf, vogal.taxa, (np.clip(x, -1, 1) * 32767).astype(np.int16))
+    return buf.getvalue()
+
+
+@router.post("/cepstral", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
+async def analisar_cepstral_rota(
+    request: Request,
+    user: CurrentUser,
+    db: DbSession,
+    vogal: UploadFile = File(...),
+    frase: UploadFile = File(...),
+    motor: str = Form("auto"),
+    paciente: str | None = Form(None),
+    guardar_audio: bool = Form(True),
+) -> ResultadoSalvo:
+    """Análise cepstral: CPP e CPPS da vogal e da frase, e AVQI (Praat). Dois WAV."""
+    enforce_rate_limit(
+        request,
+        bucket="voz_clinica",
+        limit=max(5, settings.rate_limit_upload // 2),
+        window_sec=settings.rate_limit_upload_window_sec,
+    )
+    nome = _paciente(paciente)
+    dados_v = await _read_limited(vogal, MAX_WAV_BYTES)
+    dados_f = await _read_limited(frase, MAX_WAV_BYTES)
+
+    def _rodar() -> tuple[dict, bytes]:
+        a_v, a_f = voz_clinica.ler_wav(dados_v), voz_clinica.ler_wav(dados_f)
+        return analisar_cepstral(a_v, a_f, motor=motor), _juntar_wav(a_v, a_f)
+
+    try:
+        resultado, junto = await asyncio.to_thread(_rodar)
+    except (voz_clinica.ErroAudio, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Voz clínica: falha na análise cepstral")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Não foi possível analisar as gravações") from exc
+    if nome is None or resultado["vogal"].get("cpps_db") is None:
+        return ResultadoSalvo(avaliacao_id=None, resultado=resultado)
+    return await _salvar_com_audio(db, user, nome, "cepstral", resultado, junto, guardar_audio)
 
 
 @router.post("/dsi", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])

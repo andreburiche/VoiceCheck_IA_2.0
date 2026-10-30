@@ -67,6 +67,7 @@ describe("linhasProtocolo", () => {
     expect(valor("DSI")).toBe("3,46");
     expect(valor("IDV-10")).toBe("—");
     expect(valor("Taxa e ritmo")).toBe("—");
+    expect(valor("AVQI")).toBe("—");
     expect(linhas.find((l) => l.medida === "IDV-10")?.data).toBeNull();
   });
 });
@@ -78,5 +79,17 @@ describe("linhasProtocolo — diadococinesia", () => {
     const linhas = linhasProtocolo([ddk("pa", "2026-10-01T10:00:00Z", 5.1), ddk("pa", "2026-10-29T10:00:00Z", 6.33), ddk("pataka", "2026-10-29T10:00:00Z", 5.5)]);
     const d = linhas.filter((l) => l.grupo === "Diadococinesia");
     expect(d.map((l) => [l.medida, l.valor])).toEqual([["/pa/", "6,3 síl/s · CV 4,2%"], ["/pataka/", "5,5 síl/s · CV 4,2%"]]);
+  });
+});
+
+describe("linhasProtocolo — cepstral", () => {
+  it("CPPS da vogal e da frase e AVQI", () => {
+    const linhas = linhasProtocolo([av("cepstral", "2026-10-29T10:00:00Z", {
+      motor: "praat", avisos: [], vogal: { duracao_s: 4, cpp_db: 20.1, cpps_db: 14.26 }, frase: { duracao_s: 2, cpp_db: 15, cpps_db: 9.04 },
+      avqi: { valor: 1.876, versao: "03.01", componentes: {}, duracao_analisada_s: 4.2 },
+    })]);
+    const valor = (m: string) => linhas.find((l) => l.medida === m)?.valor;
+    expect(valor("CPPS vogal / frase")).toBe("14,3 dB / 9,0 dB");
+    expect(valor("AVQI")).toBe("1,88");
   });
 });

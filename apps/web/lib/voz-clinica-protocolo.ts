@@ -5,6 +5,7 @@
 import {
   ROTULO_DDK,
   fixoBR,
+  type ResultadoCepstral,
   type ResultadoDdk,
   type TarefaDdk,
   type AnaliseAcustica,
@@ -113,6 +114,10 @@ export function linhasProtocolo(itens: Avaliacao[]): LinhaProtocolo[] {
     });
   }
 
+  const cep = maisRecente(itens, "cepstral", (a) => (a.resultado as ResultadoCepstral).vogal?.cpps_db != null);
+  const cr = (a: Avaliacao) => a.resultado as ResultadoCepstral;
+  add("Cepstral", "CPPS vogal / frase", cep, (a) => `${fixoBR(cr(a).vogal.cpps_db, 1)} dB / ${fixoBR(cr(a).frase.cpps_db, 1)} dB`);
+  add("Índice", "AVQI", cep && cr(cep).avqi ? cep : undefined, (a) => fixoBR(cr(a).avqi?.valor, 2));
   add("Índice", "DSI", maisRecente(itens, "dsi"), (a) => fixoBR((a.resultado as ResultadoDsi).dsi, 2));
 
   add("Autoavaliação", "IDV-10", maisRecente(itens, "idv10"), (a) => `${(a.resultado as ResultadoIdv10).total} de 40`);

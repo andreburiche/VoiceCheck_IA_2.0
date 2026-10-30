@@ -12,6 +12,7 @@ import {
   FAIXAS_F0,
   ROTULO_DDK,
   ROTULO_TAREFA,
+  analisarCepstral,
   analisarDdk,
   analisarFala,
   calcularDsi,
@@ -19,6 +20,7 @@ import {
   listarAvaliacoes,
   type AnaliseFala,
   type Avaliacao,
+  type ResultadoCepstral,
   type ResultadoDdk,
   type ResultadoDsi,
   type TarefaDdk,
@@ -407,6 +409,133 @@ function PainelDdk({ paciente, aoSalvar }: { paciente: string; aoSalvar: () => v
 }
 
 // ---------------------------------------------------------------------------
+// Análise cepstral (VoxMetria 5) e AVQI
+// ---------------------------------------------------------------------------
+
+const FRASE_CEPSTRAL = "Olha lá o avião azul.";
+
+function PainelCepstral({ paciente, aoSalvar }: { paciente: string; aoSalvar: () => void }) {
+  const gv = useGravacao(15);
+  const gf = useGravacao(15);
+  const [analisando, setAnalisando] = useState(false);
+  const [resultado, setResultado] = useState<ResultadoCepstral | null>(null);
+  const [situacao, setSituacao] = useState<string | null>(null);
+  const [guardar, setGuardar] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
+  const idGuardar = useId();
+  const ocupado = gv.gravando || gf.gravando;
+
+  async function analisar() {
+    if (!gv.gravacao || !gf.gravacao) return;
+    setAnalisando(true);
+    setErro(null);
+    setSituacao(null);
+    try {
+      const r = await analisarCepstral(gv.gravacao.wav, gf.gravacao.wav, { paciente, guardarAudio: guardar });
+      setResultado(r.resultado);
+      setSituacao(r.aviso_audio ?? (r.audio_guardado ? "Gravações guardadas no histórico (vogal e frase num só arquivo)." : null));
+      if (r.avaliacao_id) aoSalvar();
+    } catch (e) {
+      setErro(friendlyError(e, "Não foi possível analisar as gravações."));
+    } finally {
+      setAnalisando(false);
+    }
+  }
+
+  const r = resultado;
+  const avqi = r?.avqi;
+  return (
+    <section className={PAINEL} aria-labelledby="vc2-cepstral">
+      <h2 id="vc2-cepstral" className={TITULO}>Análise cepstral</h2>
+      <p className={cn(NOTA, "mt-1")}>
+        CPP e CPPS da vogal e da frase, como no VoxMetria, e o AVQI (índice acústico de qualidade vocal), que junta as duas.
+      </p>
+      <ol className="mt-4 space-y-5">
+        <li>
+          <p className="text-sm font-medium text-ink">1. Vogal /ɛ/ (&ldquo;é&rdquo;) sustentada, 3 a 5 s, em altura e intensidade habituais</p>
+          <ControlesGravacao g={gv} onIniciar={() => { setResultado(null); void gv.iniciar(); }} prefixo="vc2-cep-vogal" rotuloAudio="Ouvir a vogal" />
+        </li>
+        <li>
+          <p className="text-sm font-medium text-ink">2. Frase, em voz habitual:</p>
+          <blockquote className="mt-1 rounded-xl bg-canvas-raised/60 px-4 py-2 text-base text-ink ring-1 ring-inset ring-ink/10">{FRASE_CEPSTRAL}</blockquote>
+          <ControlesGravacao g={gf} onIniciar={() => { setResultado(null); void gf.iniciar(); }} prefixo="vc2-cep-frase" rotuloAudio="Ouvir a frase" />
+        </li>
+      </ol>
+      <div className="mt-4">
+        <Button type="button" onClick={() => void analisar()} disabled={!gv.gravacao || !gf.gravacao || analisando || ocupado} data-testid="vc2-cep-analisar">
+          {analisando ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden /> : null}
+          {analisando ? "Analisando…" : "Analisar vogal e frase"}
+        </Button>
+        {paciente ? (
+          <label htmlFor={idGuardar} className="mt-3 flex items-start gap-2 text-sm text-ink-muted">
+            <input id={idGuardar} type="checkbox" className="mt-0.5 h-4 w-4 accent-[var(--accent)]" checked={guardar} onChange={(e) => setGuardar(e.target.checked)} />
+            <span>Guardar as gravações no histórico (conta no espaço de armazenamento do plano)</span>
+          </label>
+        ) : (
+          <p className="mt-2 text-xs text-ink-faint">Sem nome de paciente, o resultado aparece aqui mas não fica salvo.</p>
+        )}
+      </div>
+      {situacao ? <p className="mt-2 text-xs text-ink-muted" role="status">{situacao}</p> : null}
+      <Erro texto={gv.erro ?? gf.erro ?? erro} />
+      {r ? (
+        <div className="mt-4" aria-live="polite">
+          <table className="w-full text-sm" data-testid="vc2-cep-tabela">
+            <thead>
+              <tr className="border-b border-line text-left text-xs text-ink-faint">
+                <th className="py-2 font-medium">Medida</th>
+                <th className="py-2 text-right font-medium">Vogal</th>
+                <th className="py-2 text-right font-medium">Frase</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-ink/[0.06]">
+                <td className="py-2 text-ink-muted">CPP</td>
+                <td className="text-data py-2 text-right text-ink">{fixoBR(r.vogal.cpp_db, 1)} dB</td>
+                <td className="text-data py-2 text-right text-ink">{fixoBR(r.frase.cpp_db, 1)} dB</td>
+              </tr>
+              <tr className="border-b border-ink/[0.06]">
+                <td className="py-2 text-ink-muted">CPPS</td>
+                <td className="text-data py-2 text-right text-ink">{fixoBR(r.vogal.cpps_db, 1)} dB</td>
+                <td className="text-data py-2 text-right text-ink">{fixoBR(r.frase.cpps_db, 1)} dB</td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="mt-2 text-xs text-ink-faint">Valores maiores indicam voz mais periódica. Na frase o CPPS é naturalmente menor: compare vogal com vogal e frase com frase, entre sessões.</p>
+          {avqi ? (
+            <div className="mt-4" data-testid="vc2-avqi">
+              <p className="text-sm text-ink">
+                AVQI <strong className="text-data text-lg">{fixoBR(avqi.valor, 2)}</strong>
+                <span className="ml-2 text-xs text-ink-muted">versão {avqi.versao}</span>
+              </p>
+              <div className="relative mt-3 h-2.5 rounded-full bg-gradient-to-r from-signal-ok/70 via-signal-warn/70 to-signal-err/70" aria-hidden>
+                <span className="absolute top-1/2 h-4 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink ring-2 ring-canvas"
+                  style={{ left: `${Math.max(0, Math.min(100, avqi.valor * 10))}%` }} />
+              </div>
+              <div className="mt-1 flex justify-between text-xs text-ink-faint">
+                <span>0 menos desvio</span>
+                <span>10 mais desvio</span>
+              </div>
+              <details className="mt-2 text-xs text-ink-muted">
+                <summary className="cursor-pointer">Medidas usadas no AVQI</summary>
+                <p className="text-data mt-1">
+                  CPPS {fixoBR(avqi.componentes.cpps_db, 2)} dB · HNR {fixoBR(avqi.componentes.hnr_db, 2)} dB · shimmer {fixoBR(avqi.componentes.shimmer_pct, 2)}% / {fixoBR(avqi.componentes.shimmer_db, 3)} dB · slope {fixoBR(avqi.componentes.slope_db, 2)} dB · tilt {fixoBR(avqi.componentes.tilt_db, 2)} dB · {fixoBR(avqi.duracao_analisada_s, 1)} s analisados
+                </p>
+              </details>
+              <p className="mt-2 text-xs text-ink-faint">
+                O ponto de corte do AVQI depende da língua e do protocolo de gravação; use-o para acompanhar o mesmo paciente. Não é o DAI do VoxMetria, cuja fórmula não é publicada. Não é diagnóstico médico.
+              </p>
+            </div>
+          ) : null}
+          <ul className="mt-3 space-y-1" role="status">
+            {r.avisos.map((a) => <li key={a} className="text-xs text-signal-warn">{a}</li>)}
+          </ul>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // DSI
 // ---------------------------------------------------------------------------
 
@@ -591,6 +720,7 @@ export function ProtocoloVoz({ paciente, versao, aoSalvar }: { paciente: string;
         <PainelFala paciente={paciente} aoSalvar={aoSalvar} />
         <FormDsi paciente={paciente} sugestoes={sugestoes} aoSalvar={aoSalvar} />
         <PainelDdk paciente={paciente} aoSalvar={aoSalvar} />
+        <PainelCepstral paciente={paciente} aoSalvar={aoSalvar} />
       </div>
     </div>
   );
