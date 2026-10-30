@@ -22,9 +22,12 @@ function num(v: number | null | undefined, casas = 3): string {
   return v === null || v === undefined || !Number.isFinite(v) ? "" : String(Number(v.toFixed(casas))).replace(".", ",");
 }
 
-function celula(v: string): string {
-  // aspas quando há separador, aspas ou quebra de linha; "=+-@" no início viram texto (evita fórmula)
-  const s = /^[=+\-@]/.test(v) ? `'${v}` : v;
+/** Colunas de texto livre: só nelas o início "=+-@", tab ou CR vira texto (evita fórmula). */
+const TEXTO = new Set<string>(["data", "tipo", "resumo", "anotacao"]);
+
+function celula(v: string, texto: boolean): string {
+  // números (ex.: AVQI "-1,2") ficam como número; texto que começa como fórmula ganha apóstrofo
+  const s = texto && /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
   return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
@@ -63,7 +66,7 @@ export function historicoCsv(itens: Avaliacao[]): string {
       } else if (a.tipo === "dsi") {
         v.dsi = num((a.resultado as ResultadoDsi).dsi, 2);
       }
-      return COLUNAS.map((c) => celula(v[c])).join(";");
+      return COLUNAS.map((c) => celula(v[c], TEXTO.has(c))).join(";");
     });
   return "﻿" + [COLUNAS.join(";"), ...linhas].join("\r\n") + "\r\n";
 }

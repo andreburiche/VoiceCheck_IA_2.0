@@ -27,4 +27,15 @@ describe("historicoCsv", () => {
     expect(ac.slice(3, 12)).toEqual(["210", "0,12", "0,412", "2,5", "21,46", "13,3", "0,95", "0,98", "12,3"]);
     expect(linhas[2]!.endsWith(`;3,46;"'=SOMA(A1); ""teste"""`)).toBe(true);
   });
+
+  it("número negativo continua número; texto com tab vira texto", () => {
+    const itens: Avaliacao[] = [
+      { id: "3", paciente: "Ana", tipo: "cepstral", motor: "praat", criado_em: "2026-10-29T13:00:00Z",
+        resultado: { vogal: { cpps_db: 10 }, frase: { cpps_db: 8 }, avqi: { valor: -1.234 } } as never,
+        anotacao: "\t=1+1" },
+    ];
+    const cel = historicoCsv(itens).trim().split("\r\n")[1]!.split(";");
+    expect(cel[14]).toBe("-1,23");
+    expect(cel[16]).toBe("'\t=1+1");
+  });
 });

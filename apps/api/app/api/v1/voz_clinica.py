@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
+import unicodedata
 import logging
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -48,6 +50,7 @@ from app.schemas.voz_clinica import (
     StatusOut,
 )
 from app.services import voz_clinica
+from app.services.voz_clinica.audio import limitar_duracao
 from app.services.voz_clinica.cepstral import analisar_cepstral
 from app.services.voz_clinica.ddk import analisar_ddk
 from app.services.voz_clinica.fala import analisar_fala
@@ -70,7 +73,8 @@ MAX_WAV_BYTES = 30 * 1024 * 1024
 def _paciente(valor: str | None) -> str | None:
     if valor is None:
         return None
-    valor = " ".join(valor.split())
+    # NFC: "Lúcia" digitado em sistemas diferentes vira os mesmos bytes (o banco compara bytes)
+    valor = unicodedata.normalize("NFC", " ".join(valor.split()))
     if len(valor) > 120:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nome do paciente com mais de 120 caracteres")
     return valor or None
@@ -139,7 +143,7 @@ async def analisar(
     nome = _paciente(paciente)
     dados = await _read_limited(file, MAX_WAV_BYTES)
     def _rodar() -> dict:
-        audio = voz_clinica.ler_wav(dados)
+        audio = limitar_duracao(voz_clinica.ler_wav(dados), 60)
         return voz_clinica.analisar(audio, motor=motor, f0_min=f0_min, f0_max=f0_max)
 
     try:
@@ -177,7 +181,14 @@ async def _salvar_com_audio(db: DbSession, user: CurrentUser, nome: str, tipo: s
         except Exception:  # noqa: BLE001 — storage fora do ar não pode perder a análise
             logger.exception("Voz clínica: falha ao guardar a gravação")
             aviso = "Não foi possível guardar a gravação; a análise foi salva sem ela."
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        # o banco recusou: a gravação já enviada ao storage não pode ficar sem dono
+        db.rollback()
+        if row.audio_key:
+            _apagar_audios([row.audio_key])
+        raise
     return ResultadoSalvo(avaliacao_id=row.id, resultado=resultado, audio_guardado=row.audio_key is not None, aviso_audio=aviso)
 
 
@@ -205,7 +216,7 @@ async def analisar_fala_rota(
     dados = await _read_limited(file, MAX_WAV_BYTES)
 
     def _rodar() -> dict:
-        return analisar_fala(voz_clinica.ler_wav(dados), motor=motor, f0_min=f0_min, f0_max=f0_max, tarefa=tarefa)
+        return analisar_fala(limitar_duracao(voz_clinica.ler_wav(dados), 120), motor=motor, f0_min=f0_min, f0_max=f0_max, tarefa=tarefa)
 
     try:
         resultado = await asyncio.to_thread(_rodar)
@@ -381,7 +392,7 @@ async def analisar_ddk_rota(
     nome = _paciente(paciente)
     dados = await _read_limited(file, MAX_WAV_BYTES)
     try:
-        resultado = await asyncio.to_thread(lambda: analisar_ddk(voz_clinica.ler_wav(dados), tarefa=tarefa))
+        resultado = await asyncio.to_thread(lambda: analisar_ddk(limitar_duracao(voz_clinica.ler_wav(dados), 30), tarefa=tarefa))
     except (voz_clinica.ErroAudio, ValueError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
@@ -430,7 +441,8 @@ async def analisar_cepstral_rota(
     dados_f = await _read_limited(frase, MAX_WAV_BYTES)
 
     def _rodar() -> tuple[dict, bytes]:
-        a_v, a_f = voz_clinica.ler_wav(dados_v), voz_clinica.ler_wav(dados_f)
+        a_v = limitar_duracao(voz_clinica.ler_wav(dados_v), 30, "A vogal")
+        a_f = limitar_duracao(voz_clinica.ler_wav(dados_f), 30, "A frase")
         return analisar_cepstral(a_v, a_f, motor=motor), _juntar_wav(a_v, a_f)
 
     try:
@@ -525,7 +537,8 @@ def _nome_obrigatorio(paciente: str | None) -> str:
 
 def _rastro(user_id: str, nome: str) -> str:
     """Identifica o paciente no log de auditoria sem gravar o nome (minimização)."""
-    return hashlib.sha256(f"{user_id}:{nome}".encode("utf-8")).hexdigest()[:16]
+    # HMAC com segredo do servidor: sem o segredo, não dá para testar nomes num dicionário
+    return hmac.new(settings.jwt_secret.encode("utf-8"), f"{user_id}:{nome}".encode("utf-8"), hashlib.sha256).hexdigest()[:16]
 
 
 @router.get("/pacientes/exportar")
@@ -563,7 +576,8 @@ def exportar_paciente(request: Request, user: CurrentUser, db: DbSession, pacien
         db, action="voz_clinica.paciente_exportado", resource_type="paciente", actor_id=user.id, request=request,
         meta={"paciente": _rastro(user.id, nome), "avaliacoes": len(rows), "planos": len(planos)}, commit=True,
     )
-    arquivo = "voicecheck-" + ("".join(c if c.isalnum() else "-" for c in nome.lower()).strip("-")[:40] or "paciente")
+    ascii_ = unicodedata.normalize("NFKD", nome.lower()).encode("ascii", "ignore").decode("ascii")
+    arquivo = "voicecheck-" + ("".join(c if c.isalnum() else "-" for c in ascii_).strip("-")[:40] or "paciente")
     return JSONResponse(
         corpo,
         headers={"Content-Disposition": f'attachment; filename="{arquivo}-{agora:%Y%m%d}.json"', "Cache-Control": "no-store"},

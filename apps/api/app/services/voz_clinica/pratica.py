@@ -30,7 +30,8 @@ def hash_token(token: str) -> str:
 
 
 def _utc(d: datetime) -> datetime:
-    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+    # com fuso (ex.: -03:00 do celular) converte para UTC: o banco grava sem fuso
+    return d.astimezone(timezone.utc) if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
 def plano_ativo(expira_em: datetime, revogado_em: datetime | None, agora: datetime) -> bool:

@@ -181,6 +181,21 @@ Praat 6.1.38 —, protocolos, fonetograma, anamnese, prática em casa e as 33 ro
 MySQL mostra: o `DATETIME` guarda só segundos, e duas avaliações salvas no mesmo segundo saíam em ordem aleatória no histórico e
 no relatório. `clinical_evaluations.created_at` agora é `DATETIME(6)` com padrão `CURRENT_TIMESTAMP(6)`.
 
+## Segunda revisão independente (30/10/2026) — segurança, LGPD e defeitos
+
+Revisão feita por um agente que não escreveu o código. Corrigido:
+
+- **Prontuários misturados (alta):** no MySQL a collation `utf8mb4_unicode_ci` tratava "Ana Lúcia" e "Ana Lucia" (ou "P01" e "p01") como o mesmo paciente. A migração 0014 passa os nomes de paciente para `utf8mb4_bin`, e a API normaliza o nome em NFC (o mesmo nome digitado no Mac e no Windows fica igual).
+- **Histórico de outro paciente na tela (alta):** ao trocar de paciente rápido, uma resposta atrasada do anterior aparecia por um instante. O pedido antigo agora é descartado na hora da troca (teste e2e com rede lenta).
+- **Microfone ligado depois de sair da tela (média):** o gravador pode ser cancelado enquanto o navegador pede permissão e desliga tudo se a abertura falhar; clique duplo em "Gravar" não abre dois microfones.
+- **Dados do paciente anterior no formulário (média):** formulários (acústica, protocolos, anamnese, protocolo de voz, DSI) recomeçam ao trocar de paciente.
+- **Gravação órfã (média):** se o banco falhar ao salvar, o arquivo de áudio já gravado é apagado.
+- **Áudio inválido ou longo demais (média):** amostras NaN/infinito são recusadas; limites de duração (vogal 60 s, fala 120 s, DDK 30 s, cepstral 30 s por arquivo) evitam travar o servidor.
+- **Nome do paciente no log (média):** o log de acesso do servidor não grava mais a query string das rotas da voz clínica.
+- **Baixa:** rastro do paciente com HMAC (não dá para descobrir o nome por força bruta), nome do arquivo exportado em ASCII, datas sem fuso tratadas como UTC, planilha CSV protege só colunas de texto contra fórmulas (o AVQI negativo continua número).
+
+Fica para depois: trava de concorrência na cota de armazenamento; nova tentativa de apagar arquivos que falharem; exportação LGPD em ZIP com os WAV; se houver nginx/proxy na frente, desligar nele também o log de query string.
+
 ## Rodar a v2 isolada no computador
 
 `infra/docker-compose.v2-local.yml` sobe site (http://localhost:3100), API (http://localhost:8110), MySQL e Redis

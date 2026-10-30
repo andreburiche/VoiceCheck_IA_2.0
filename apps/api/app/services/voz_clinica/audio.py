@@ -54,8 +54,17 @@ def validar(audio: Audio) -> None:
         raise ErroAudio("A taxa de amostragem precisa ser de pelo menos 8000 Hz.")
     if audio.duracao < 0.5:
         raise ErroAudio("A gravação precisa ter pelo menos 0,5 segundo.")
+    if not np.isfinite(audio.amostras).all():
+        raise ErroAudio("O arquivo tem amostras inválidas (NaN ou infinito).")
     if not np.any(np.abs(audio.amostras) > 1e-4):
         raise ErroAudio("A gravação está em silêncio.")
+
+
+def limitar_duracao(audio: Audio, max_s: float, o_que: str = "A gravação") -> Audio:
+    """Recusa gravações longas: o cálculo é por quadro e prenderia o servidor (e o resultado salvo cresceria)."""
+    if audio.duracao > max_s:
+        raise ErroAudio(f"{o_que} tem {audio.duracao:.0f} s; o limite é {max_s:.0f} s. Recorte o trecho antes de enviar.")
+    return audio
 
 
 def reamostrar(sinal: np.ndarray, taxa: int, nova_taxa: int) -> np.ndarray:

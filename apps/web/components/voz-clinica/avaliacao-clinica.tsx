@@ -102,6 +102,7 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
   const [situacaoAudio, setSituacaoAudio] = useState<string | null>(null);
   const [suportado, setSuportado] = useState(true);
   const gravador = useRef<GravadorClinico | null>(null);
+  const abrindo = useRef(false);
   const relogio = useRef<number | null>(null);
   const idTipo = useId();
   const idGuardar = useId();
@@ -152,6 +153,7 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
   }, []);
 
   async function iniciar() {
+    if (gravador.current?.gravando || abrindo.current) return; // clique duplo não abre dois microfones
     setErro(null);
     setResultado(null);
     setGravacao(null);
@@ -161,17 +163,22 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
       aoLimite: () => void parar(),
       limiteSegundos: 30,
     });
+    // guardado antes de abrir: se a tela sair durante o pedido de permissão, a limpeza o descarta
+    gravador.current = g;
+    abrindo.current = true;
     try {
       await g.iniciar();
     } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setErro(
         e instanceof DOMException && e.name === "NotAllowedError"
           ? "Permita o uso do microfone no navegador para gravar."
           : friendlyError(e, "Não foi possível abrir o microfone."),
       );
       return;
+    } finally {
+      abrindo.current = false;
     }
-    gravador.current = g;
     setGravando(true);
     const inicio = performance.now();
     setTempo(0);
@@ -733,6 +740,7 @@ function Historico({ paciente, versao, aoExcluirPaciente }: { paciente: string; 
     // "Carregando…" só ao trocar de paciente; um novo resultado só atualiza a lista
     if (ultimoPaciente.current !== paciente) {
       ultimoPaciente.current = paciente;
+      pedido.current++; // resposta ainda pendente do paciente anterior é descartada
       setItens(null);
     }
     const t = window.setTimeout(() => void carregar(), 300); // espera parar de digitar
@@ -925,13 +933,13 @@ export function AvaliacaoClinica() {
       {/* Avaliação fica montada (preserva respostas já marcadas); biofeedback e jogos só quando abertos (liberam o microfone) */}
       <div role="tabpanel" id={`${idPaciente}-painel-avaliacao`} aria-labelledby={`${idPaciente}-aba-avaliacao`} hidden={aba !== "avaliacao"}>
       <div className="grid gap-5 xl:grid-cols-2">
-        <PainelAcustico paciente={nome} aoSalvar={aoSalvar} />
+        <PainelAcustico key={nome} paciente={nome} aoSalvar={aoSalvar} />
         <section className={cn(PAINEL, "space-y-6")} aria-labelledby="vc2-protocolos">
           <h2 id="vc2-protocolos" className={TITULO}>
             Protocolos
           </h2>
           {PROTOCOLOS.map((def) => (
-            <FormProtocolo key={def.nome} def={def} paciente={nome} aoSalvar={aoSalvar} />
+            <FormProtocolo key={`${def.nome}|${nome}`} def={def} paciente={nome} aoSalvar={aoSalvar} />
           ))}
         </section>
       </div>
@@ -939,12 +947,12 @@ export function AvaliacaoClinica() {
 
       {/* anamnese também fica montada: trocar de aba não apaga o que foi digitado */}
       <div role="tabpanel" id={`${idPaciente}-painel-anamnese`} aria-labelledby={`${idPaciente}-aba-anamnese`} hidden={aba !== "anamnese"}>
-        <AnamneseVocal paciente={nome} aoSalvar={aoSalvar} />
+        <AnamneseVocal key={nome} paciente={nome} aoSalvar={aoSalvar} />
       </div>
       {/* só montada quando aberta: a gravação da fala libera o microfone ao sair */}
       {aba === "protocolo" ? (
         <div role="tabpanel" id={`${idPaciente}-painel-protocolo`} aria-labelledby={`${idPaciente}-aba-protocolo`}>
-          <ProtocoloVoz paciente={nome} versao={versao} aoSalvar={aoSalvar} />
+          <ProtocoloVoz key={nome} paciente={nome} versao={versao} aoSalvar={aoSalvar} />
         </div>
       ) : null}
       {aba === "comparar" ? (

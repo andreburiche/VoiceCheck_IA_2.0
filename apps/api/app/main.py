@@ -4,6 +4,8 @@ from pathlib import Path
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import logging
+
 import structlog
 import hmac
 
@@ -25,6 +27,20 @@ from app.models import Plan, ProcessingModel, Subscription, User
 from app.models.entities import SubscriptionStatus, UserRole
 
 logger = structlog.get_logger()
+
+
+class _SemConsultaNoLogDeAcesso(logging.Filter):
+    """Tira a query string das rotas da avaliação clínica do log de acesso do uvicorn:
+    ?paciente=<nome> junto de /voz-clinica é dado de saúde (LGPD) e não deve ir para logs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) >= 3 and isinstance(args[2], str) and "/voz-clinica" in args[2] and "?" in args[2]:
+            record.args = (*args[:2], args[2].split("?", 1)[0] + "?…", *args[3:])
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_SemConsultaNoLogDeAcesso())
 settings = get_settings()
 
 # Contas de teste (seed só com APP_ENV em development/dev/local/test). Senha única documentada na UI de login.

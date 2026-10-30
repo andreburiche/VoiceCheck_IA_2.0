@@ -127,6 +127,10 @@ class UsageUnit(str, enum.Enum):
     count = "count"
 
 
+#: Nome/código do paciente: comparação exata no MySQL ("Lúcia" ≠ "Lucia", "P01" ≠ "p01").
+NOME_PACIENTE = String(120).with_variant(mysql.VARCHAR(120, charset="utf8mb4", collation="utf8mb4_bin"), "mysql")
+
+
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
@@ -531,7 +535,7 @@ class ClinicalEvaluation(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(CHAR(36), primary_key=True, default=_uuid)
     owner_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     #: Como o profissional identifica o paciente (nome ou código).
-    patient_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    patient_name: Mapped[str] = mapped_column(NOME_PACIENTE, nullable=False)
     #: acustica | idv10 | qvv | grbasi | easebr | anamnese | biofeedback | jogo | fonetograma | pratica
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     #: Motor da análise acústica (praat | interno); vazio nos protocolos.
@@ -573,7 +577,7 @@ class VoicePatient(Base, TimestampMixin):
 
     id: Mapped[str] = mapped_column(CHAR(36), primary_key=True, default=_uuid)
     owner_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    name: Mapped[str] = mapped_column(NOME_PACIENTE, nullable=False)
     birth_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     #: feminino | masculino | outro
     sex: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
@@ -597,7 +601,7 @@ class HomePracticePlan(Base, TimestampMixin):
 
     id: Mapped[str] = mapped_column(CHAR(36), primary_key=True, default=_uuid)
     owner_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    patient_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    patient_name: Mapped[str] = mapped_column(NOME_PACIENTE, nullable=False)
     #: Como a página do celular chama o paciente (opcional; o nome completo não vai ao celular).
     greeting: Mapped[Optional[str]] = mapped_column(String(60), nullable=True)
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)

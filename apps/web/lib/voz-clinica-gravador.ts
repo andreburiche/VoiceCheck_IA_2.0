@@ -96,6 +96,8 @@ export class GravadorClinico {
   private blocos: Float32Array[] = [];
   private pico = 0;
   private avisosConfig: string[] = [];
+  /** descartar() chamado enquanto o microfone abria (tela fechada, troca de aba). */
+  private cancelado = false;
   gravando = false;
 
   constructor(private readonly opcoes: OpcoesGravador = {}) {}
@@ -108,16 +110,31 @@ export class GravadorClinico {
     if (!window.isSecureContext) {
       throw new Error("O microfone só funciona em https:// ou em http://localhost.");
     }
+    // nada pode ficar ligado se a abertura falhar ou se a tela sair no meio (descartar)
+    const abortar = async (erro?: unknown): Promise<never> => {
+      this.stream?.getTracks().forEach((t) => t.stop());
+      await this.ctx?.close().catch(() => undefined);
+      this.stream = null;
+      this.ctx = null;
+      throw erro ?? new DOMException("Gravação cancelada.", "AbortError");
+    };
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: RESTRICOES_CLINICAS, video: false });
-    const ctx = new AudioContext();
-    this.ctx = ctx;
-    if (ctx.state === "suspended") await ctx.resume();
-    const url = URL.createObjectURL(new Blob([WORKLET_CAPTURA], { type: "application/javascript" }));
+    if (this.cancelado) return abortar();
+    let ctx: AudioContext;
     try {
-      await ctx.audioWorklet.addModule(url);
-    } finally {
-      URL.revokeObjectURL(url);
+      ctx = new AudioContext();
+      this.ctx = ctx;
+      if (ctx.state === "suspended") await ctx.resume();
+      const url = URL.createObjectURL(new Blob([WORKLET_CAPTURA], { type: "application/javascript" }));
+      try {
+        await ctx.audioWorklet.addModule(url);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    } catch (e) {
+      return abortar(e);
     }
+    if (this.cancelado) return abortar();
 
     this.blocos = [];
     this.pico = 0;
@@ -181,6 +198,7 @@ export class GravadorClinico {
 
   /** Cancela sem gerar arquivo (ex.: ao sair da página). */
   async descartar(): Promise<void> {
+    this.cancelado = true;
     this.gravando = false;
     this.fonte?.disconnect();
     this.no?.disconnect();

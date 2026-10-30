@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { abrirMicrofoneAoVivo } from "@/lib/voz-clinica-gravador";
+import { GravadorClinico, abrirMicrofoneAoVivo } from "@/lib/voz-clinica-gravador";
 
 /** Microfone e AudioContext falsos: contam o que ficou aberto. */
-function ambiente(opcoes: { falhaContexto?: boolean } = {}) {
+function ambiente(opcoes: { falhaContexto?: boolean; falhaWorklet?: boolean } = {}) {
   const estado = { trilhasParadas: 0, contextosFechados: 0 };
   const stream = { getTracks: () => [{ stop: () => void estado.trilhasParadas++ }] };
   // o Node 22 já tem um navigator global só de leitura
@@ -27,7 +27,15 @@ function ambiente(opcoes: { falhaContexto?: boolean } = {}) {
     createMediaStreamSource() {
       return { connect: () => undefined };
     }
+    audioWorklet = {
+      addModule: async () => {
+        if (opcoes.falhaWorklet) throw new Error("sem worklet");
+      },
+    };
   };
+  (globalThis as Record<string, unknown>).window = { isSecureContext: true };
+  (globalThis as Record<string, unknown>).AudioWorkletNode = class {};
+  (globalThis as Record<string, unknown>).URL = Object.assign(URL, { createObjectURL: () => "blob:x", revokeObjectURL: () => undefined });
   return estado;
 }
 
@@ -53,5 +61,36 @@ describe("abrirMicrofoneAoVivo", () => {
     }
     expect(erro instanceof Error).toBe(true);
     expect(e.trilhasParadas).toBe(1);
+  });
+});
+
+describe("GravadorClinico", () => {
+  it("descartado enquanto pedia permissão: microfone e contexto ficam desligados", async () => {
+    const e = ambiente();
+    const g = new GravadorClinico({});
+    const abrindo = g.iniciar();
+    void g.descartar();
+    let erro: unknown = null;
+    try {
+      await abrindo;
+    } catch (x) {
+      erro = x;
+    }
+    expect(erro instanceof DOMException && erro.name === "AbortError").toBe(true);
+    expect(e.trilhasParadas).toBe(1);
+    expect(g.gravando).toBe(false);
+  });
+  it("falha ao carregar o worklet: microfone desligado e contexto fechado", async () => {
+    const e = ambiente({ falhaWorklet: true });
+    const g = new GravadorClinico({});
+    let erro: unknown = null;
+    try {
+      await g.iniciar();
+    } catch (x) {
+      erro = x;
+    }
+    expect((erro as Error).message).toBe("sem worklet");
+    expect(e.trilhasParadas).toBe(1);
+    expect(e.contextosFechados).toBe(1);
   });
 });

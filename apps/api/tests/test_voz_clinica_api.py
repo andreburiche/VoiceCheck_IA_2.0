@@ -550,3 +550,33 @@ def test_cadastro_do_paciente(client: httpx.Client) -> None:
     r = client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
     assert r.json() == {"avaliacoes_excluidas": 0, "planos_excluidos": 0, "gravacoes_excluidas": 0, "cadastro_excluido": True}
     assert client.get("/api/v1/voz-clinica/pacientes/cadastro", params={"paciente": paciente}).status_code == 404
+
+
+def test_nomes_parecidos_sao_pacientes_diferentes(client: httpx.Client) -> None:
+    """Revisão LGPD: no MySQL a comparação padrão ignora acento e caixa; excluir um não pode apagar o outro."""
+    sufixo = uuid.uuid4().hex[:5]
+    nomes = [f"Ana Lúcia {sufixo}", f"Ana Lucia {sufixo}", f"P01-{sufixo}", f"p01-{sufixo}"]
+    for n in nomes:
+        assert client.post("/api/v1/voz-clinica/protocolos/idv10", json={"respostas": [1] * 10, "paciente": n}).status_code == 200
+    # NFD (acento separado) é o mesmo paciente que NFC
+    nfd = "Ana Lu\u0301cia " + sufixo
+    assert len(client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": nfd}).json()["items"]) == 1
+    assert client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": nomes[0]}).json()["avaliacoes_excluidas"] == 1
+    assert client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": nomes[2]}).json()["avaliacoes_excluidas"] == 1
+    for n in (nomes[1], nomes[3]):
+        assert len(client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": n}).json()["items"]) == 1, n
+        client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": n})
+
+
+def test_exportar_nome_fora_do_latin1(client: httpx.Client) -> None:
+    paciente = f"Łucja Nguyễn {uuid.uuid4().hex[:4]}"
+    client.post("/api/v1/voz-clinica/protocolos/idv10", json={"respostas": [1] * 10, "paciente": paciente})
+    r = client.get("/api/v1/voz-clinica/pacientes/exportar", params={"paciente": paciente})
+    assert r.status_code == 200 and "ucja-nguyen" in r.headers["content-disposition"]  # Ł não tem forma ASCII
+    client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
+
+
+def test_gravacao_longa_recusada(client: httpx.Client) -> None:
+    longa = para_wav(sintetizar(f0=150, dur=61, taxa=8000).audio)
+    r = client.post("/api/v1/voz-clinica/analisar", files={"file": ("v.wav", io.BytesIO(longa), "audio/wav")})
+    assert r.status_code == 400 and "limite" in r.json()["message"]

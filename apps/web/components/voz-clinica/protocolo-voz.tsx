@@ -61,6 +61,7 @@ function useGravacao(limiteSegundos: number) {
   const [erro, setErro] = useState<string | null>(null);
   const [suportado, setSuportado] = useState(true);
   const gravador = useRef<GravadorClinico | null>(null);
+  const abrindo = useRef(false);
   const relogio = useRef<number | null>(null);
 
   useEffect(() => setSuportado(gravadorSuportado()), []);
@@ -89,21 +90,26 @@ function useGravacao(limiteSegundos: number) {
   }, []);
 
   const iniciar = useCallback(async () => {
+    if (gravador.current?.gravando || abrindo.current) return; // clique duplo não abre dois microfones
     setErro(null);
     setGravacao(null);
     setUrl(null);
     const g = new GravadorClinico({ aoNivel: setNivel, aoLimite: () => void parar(), limiteSegundos });
+    gravador.current = g; // a limpeza descarta mesmo durante o pedido de permissão
+    abrindo.current = true;
     try {
       await g.iniciar();
     } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setErro(
         e instanceof DOMException && e.name === "NotAllowedError"
           ? "Permita o uso do microfone no navegador para gravar."
           : friendlyError(e, "Não foi possível abrir o microfone."),
       );
       return;
+    } finally {
+      abrindo.current = false;
     }
-    gravador.current = g;
     setGravando(true);
     const inicio = performance.now();
     setTempo(0);
@@ -718,7 +724,7 @@ export function ProtocoloVoz({ paciente, versao, aoSalvar }: { paciente: string;
       </section>
       <div className="grid gap-5 xl:grid-cols-2">
         <PainelFala paciente={paciente} aoSalvar={aoSalvar} />
-        <FormDsi paciente={paciente} sugestoes={sugestoes} aoSalvar={aoSalvar} />
+        <FormDsi key={paciente} paciente={paciente} sugestoes={sugestoes} aoSalvar={aoSalvar} />
         <PainelDdk paciente={paciente} aoSalvar={aoSalvar} />
         <PainelCepstral paciente={paciente} aoSalvar={aoSalvar} />
       </div>
