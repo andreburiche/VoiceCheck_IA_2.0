@@ -18,7 +18,9 @@ const FMAX = 5000;
 
 type Modo = "larga" | "estreita";
 
-function desenhar(c: HTMLCanvasElement, e: Dados, duracao: number, f0: { t: number; hz: number | null }[] | null, faixaDb = FAIXA_PADRAO_DB, ganhoDb = 0) {
+/** `eixoS`: duração do eixo de tempo (≥ a da gravação); comparações usam o mesmo eixo nos dois lados. */
+function desenhar(c: HTMLCanvasElement, e: Dados, duracaoAudio: number, f0: { t: number; hz: number | null }[] | null, faixaDb = FAIXA_PADRAO_DB, ganhoDb = 0, eixoS?: number) {
+  const duracao = Math.max(duracaoAudio, eixoS ?? 0) || 1;
   const dpr = window.devicePixelRatio || 1;
   const w = c.clientWidth;
   const h = c.clientHeight;
@@ -48,7 +50,7 @@ function desenhar(c: HTMLCanvasElement, e: Dados, duracao: number, f0: { t: numb
   off.getContext("2d")?.putImageData(img, 0, 0);
   g.imageSmoothingEnabled = true;
   const fTopo = e.faixas * e.df;
-  g.drawImage(off, PE, PT, aw, ah);
+  g.drawImage(off, PE, PT, aw * (duracaoAudio / duracao), ah);
 
   const x = (t: number) => PE + (t / duracao) * aw;
   const y = (hz: number) => PT + (1 - hz / fTopo) * ah;
@@ -86,7 +88,13 @@ function contornoF0(amostras: Float32Array, taxa: number): { t: number; hz: numb
   return saida;
 }
 
-export function Espectrograma({ wav }: { wav: Blob }) {
+export function Espectrograma({ wav, eixoS, aoDuracao }: {
+  wav: Blob;
+  /** Eixo de tempo comum (s) para comparar gravações de durações diferentes. */
+  eixoS?: number;
+  /** Informa a duração da gravação quando ela é lida. */
+  aoDuracao?: (s: number) => void;
+}) {
   const id = useId();
   const [modo, setModo] = useState<Modo>("estreita");
   const [comF0, setComF0] = useState(true);
@@ -97,6 +105,8 @@ export function Espectrograma({ wav }: { wav: Blob }) {
   const audio = useRef<{ amostras: Float32Array; taxa: number } | null>(null);
   const f0 = useRef<{ t: number; hz: number | null }[] | null>(null);
 
+  const avisarDuracao = useRef(aoDuracao);
+  avisarDuracao.current = aoDuracao;
   useEffect(() => {
     let vivo = true;
     audio.current = null;
@@ -106,6 +116,7 @@ export function Espectrograma({ wav }: { wav: Blob }) {
       if (!vivo) return;
       try {
         audio.current = lerWavPcm16(buf);
+        avisarDuracao.current?.(audio.current.amostras.length / audio.current.taxa);
         setEstado("pronto");
       } catch {
         setEstado("erro");
@@ -122,10 +133,10 @@ export function Espectrograma({ wav }: { wav: Blob }) {
     const t = window.setTimeout(() => {
       const e = calcularEspectrograma(a.amostras, a.taxa, { ...(modo === "larga" ? BANDA_LARGA : BANDA_ESTREITA), fmax: FMAX });
       if (comF0 && !f0.current) f0.current = contornoF0(a.amostras, a.taxa);
-      desenhar(c, e, a.amostras.length / a.taxa, comF0 ? f0.current : null, faixa, ganho);
+      desenhar(c, e, a.amostras.length / a.taxa, comF0 ? f0.current : null, faixa, ganho, eixoS);
     }, 0);
     return () => window.clearTimeout(t);
-  }, [estado, modo, comF0, ganho, faixa]);
+  }, [estado, modo, comF0, ganho, faixa, eixoS]);
 
   return (
     <figure className="mt-4" aria-labelledby={`${id}-t`} data-testid="vc2-espectro">

@@ -34,7 +34,9 @@ function rotuloSessao(a: Avaliacao, n: number): string {
 }
 
 /** Player de uma sessão: busca o WAV guardado só quando a sessão é escolhida. */
-function Gravacao({ avaliacao, rotulo, espectro }: { avaliacao: Avaliacao; rotulo: string; espectro: boolean }) {
+function Gravacao({ avaliacao, rotulo, espectro, eixoS, aoDuracao }: {
+  avaliacao: Avaliacao; rotulo: string; espectro: boolean; eixoS?: number; aoDuracao?: (s: number) => void;
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [blob, setBlob] = useState<Blob | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -71,7 +73,7 @@ function Gravacao({ avaliacao, rotulo, espectro }: { avaliacao: Avaliacao; rotul
       <a href={url} download={arquivo} className="inline-flex items-center gap-1 text-xs text-ink-muted underline-offset-2 hover:text-ink hover:underline">
         <Download className="h-3.5 w-3.5" aria-hidden /> Baixar WAV
       </a>
-      {espectro && blob ? <div className="min-w-0" data-testid="vc2-comparar-espectro"><Espectrograma wav={blob} /></div> : null}
+      {espectro && blob ? <div className="min-w-0" data-testid="vc2-comparar-espectro"><Espectrograma wav={blob} eixoS={eixoS} aoDuracao={aoDuracao} /></div> : null}
     </div>
   );
 }
@@ -87,6 +89,10 @@ export function ComparacaoAntesDepois({ paciente, versao }: { paciente: string; 
   const pedido = useRef(0);
   // espectrogramas lado a lado (como no VoxMetria); calculados só quando pedidos
   const [espectro, setEspectro] = useState(false);
+  // mesmo eixo de tempo nos dois espectrogramas (o da gravação mais longa)
+  const [duracoes, setDuracoes] = useState<Record<string, number>>({});
+  const eixoS = Math.max(0, ...[idAntes, idDepois].map((i) => (i ? duracoes[i] ?? 0 : 0))) || undefined;
+  const guardarDuracao = (id: string) => (s: number) => setDuracoes((d) => (d[id] === s ? d : { ...d, [id]: s }));
 
   useEffect(() => {
     if (!paciente) return;
@@ -153,7 +159,7 @@ export function ComparacaoAntesDepois({ paciente, versao }: { paciente: string; 
                     <option key={a.id} value={a.id}>{rotuloSessao(a, i + 1)}</option>
                   ))}
                 </select>
-                {lado.sessao ? <Gravacao avaliacao={lado.sessao} rotulo={`${lado.rotulo.toLowerCase()} (${dataHora(lado.sessao.criado_em)})`} espectro={espectro} /> : null}
+                {lado.sessao ? <Gravacao avaliacao={lado.sessao} rotulo={`${lado.rotulo.toLowerCase()} (${dataHora(lado.sessao.criado_em)})`} espectro={espectro} eixoS={eixoS} aoDuracao={guardarDuracao(lado.sessao.id)} /> : null}
               </div>
             ))}
           </div>
