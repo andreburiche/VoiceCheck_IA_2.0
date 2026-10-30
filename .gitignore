@@ -67,3 +67,6 @@ data/
 .agents/
 .cursor/
 .claude/
+
+# relatório gerado pelo teste do Docker (o oficial fica em docs/CONCORDANCIA_MOTORES.md)
+apps/api/concordancia-motores.md
