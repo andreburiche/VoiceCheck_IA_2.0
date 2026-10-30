@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { RevisorVideo } from "@/components/voz-clinica/revisor-video";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +26,9 @@ function dataHora(iso: string): string {
 }
 
 /** Cartão de uma mídia: imagem carrega sozinha; vídeo só quando pedido (pode ser grande). */
-function CartaoMidia({ item, aoExcluir }: { item: Avaliacao; aoExcluir: (a: Avaliacao) => void }) {
+function CartaoMidia({ item, aoExcluir, paciente, aoCapturar }: {
+  item: Avaliacao; aoExcluir: (a: Avaliacao) => void; paciente: string; aoCapturar: () => void;
+}) {
   const r = item.resultado as ResultadoMidia;
   const [url, setUrl] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -63,17 +66,19 @@ function CartaoMidia({ item, aoExcluir }: { item: Avaliacao; aoExcluir: (a: Aval
   const legenda = r.descricao || r.nome_original || (r.categoria === "video" ? "Vídeo" : "Imagem");
   return (
     <li className="overflow-hidden rounded-xl ring-1 ring-inset ring-ink/10" data-testid="vc2-midia">
+      {r.categoria === "video" && url ? (
+        <RevisorVideo url={url} legenda={legenda} paciente={paciente} aoCapturar={aoCapturar} />
+      ) : (
       <div className="flex aspect-video items-center justify-center bg-canvas-raised/60">
         {r.categoria === "imagem" ? (
           url ? <img src={url} alt={legenda} className="h-full w-full object-contain" /> : <span className="text-xs text-ink-muted">{carregando ? "Carregando…" : erro ?? ""}</span>
-        ) : url ? (
-          <video src={url} controls className="h-full w-full" aria-label={legenda} data-testid="vc2-midia-video" />
         ) : (
           <Button type="button" size="sm" variant="secondary" onClick={() => void carregar()} disabled={carregando} data-testid="vc2-midia-abrir-video">
             {carregando ? "Carregando…" : `Abrir vídeo (${tamanhoBR(r.bytes)})`}
           </Button>
         )}
       </div>
+      )}
       <div className="p-3">
         <p className="truncate text-sm font-medium text-ink" title={legenda}>{legenda}</p>
         <p className="text-xs text-ink-muted">{r.categoria === "video" ? "Vídeo" : "Imagem"} · {tamanhoBR(r.bytes)} · {dataHora(item.criado_em)}</p>
@@ -208,7 +213,7 @@ export function MidiasPaciente({ paciente, versao, aoSalvar }: { paciente: strin
       {itens?.length === 0 ? <p className="mt-4 text-sm text-ink-muted">Nenhuma imagem ou vídeo guardado.</p> : null}
       {itens?.length ? (
         <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-testid="vc2-midias-lista">
-          {itens.map((a) => <CartaoMidia key={a.id} item={a} aoExcluir={setExcluir} />)}
+          {itens.map((a) => <CartaoMidia key={a.id} item={a} aoExcluir={setExcluir} paciente={paciente} aoCapturar={() => { void carregar(); aoSalvar(); }} />)}
         </ul>
       ) : null}
       <ConfirmDialog
