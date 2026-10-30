@@ -150,7 +150,11 @@ Erros que só a execução revelou, corrigidos:
 - **Testes de rota**: criavam um usuário por teste e passavam do limite de 20 cadastros/minuto (429); esperavam `detail` em vez do
   formato do projeto (`message`); um helper com nome repetido sobrescrevia outro.
 
-Ainda não executado: MySQL de verdade e o motor Praat (Parselmouth) — rodam no Docker.
+**Docker com MySQL 8.4 e Praat (29/10/2026, `testar-v2-docker.bat`, isolado do projeto original):** migrações do zero até a
+0010, reversão até a 0008 e reaplicação sem erro; **119 testes passam** (motor interno e **Praat** — Parselmouth 0.4.7 /
+Praat 6.1.38 —, protocolos, fonetograma, anamnese, prática em casa e as 33 rotas). A primeira rodada achou mais um erro, que só o
+MySQL mostra: o `DATETIME` guarda só segundos, e duas avaliações salvas no mesmo segundo saíam em ordem aleatória no histórico e
+no relatório. `clinical_evaluations.created_at` agora é `DATETIME(6)` com padrão `CURRENT_TIMESTAMP(6)`.
 
 ## Pontos a conferir antes do uso clínico
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -21,6 +21,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects import mysql
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -535,6 +536,14 @@ class ClinicalEvaluation(Base, TimestampMixin):
     #: Motor da análise acústica (praat | interno); vazio nos protocolos.
     engine: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     result: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    #: Com microssegundos: o DATETIME do MySQL guarda só segundos, e duas avaliações salvas no
+    #: mesmo segundo (análise + protocolo) ficavam em ordem aleatória no histórico e no relatório.
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True).with_variant(mysql.DATETIME(fsp=6), "mysql"),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
     #: Id gerado no celular (prática em casa): reenviar a mesma sessão não duplica.
     client_ref: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     #: Plano de prática em casa de onde veio a sessão (conta sessões por plano e por dia).

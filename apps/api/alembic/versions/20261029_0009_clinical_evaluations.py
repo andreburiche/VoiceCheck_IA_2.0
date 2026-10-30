@@ -10,6 +10,7 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import mysql
 
 revision: str = "20261029_0009"
 down_revision: Union[str, None] = "20261028_0008"
@@ -26,7 +27,13 @@ def upgrade() -> None:
         sa.Column("kind", sa.String(16), nullable=False),
         sa.Column("engine", sa.String(16), nullable=True),
         sa.Column("result", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        # microssegundos no MySQL: avaliações salvas no mesmo segundo mantêm a ordem
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True).with_variant(mysql.DATETIME(fsp=6), "mysql"),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.Column(
             "updated_at",
             sa.DateTime(timezone=True),
