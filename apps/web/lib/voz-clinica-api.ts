@@ -485,6 +485,49 @@ export async function baixarMidia(id: string): Promise<Blob> {
   return res.blob();
 }
 
+function csrfDoCookie(): string | null {
+  if (typeof document === "undefined") return null;
+  const m = document.cookie.match(/(?:^|;\s*)em_csrf=([^;]+)/);
+  return m?.[1] ? decodeURIComponent(m[1]) : null;
+}
+
+export type ItemLote = { arquivo: string; ok: boolean; resultado?: AnaliseAcustica; erro?: string };
+
+/** Análise em lote (como um script do Praat): até 20 WAV; nada é salvo no prontuário. */
+export function analisarLote(arquivos: { nome: string; wav: Blob }[], opcoes: { f0Min: number; f0Max: number }) {
+  const dados = new FormData();
+  for (const a of arquivos) dados.append("files", a.wav, a.nome);
+  dados.append("f0_min", String(opcoes.f0Min));
+  dados.append("f0_max", String(opcoes.f0Max));
+  return apiFetch<{ itens: ItemLote[] }>(`${BASE}/analisar-lote`, { method: "POST", body: dados, timeoutMs: 300_000 });
+}
+
+/** Manipulação de pitch e duração (PSOLA do Praat). Devolve o WAV resultante; nada é salvo. */
+export async function manipularGravacao(wav: Blob, opcoes: { semitons: number; fatorDuracao: number; f0Min: number; f0Max: number }): Promise<Blob> {
+  const dados = new FormData();
+  dados.append("file", wav, "gravacao.wav");
+  dados.append("semitons", String(opcoes.semitons));
+  dados.append("fator_duracao", String(opcoes.fatorDuracao));
+  dados.append("f0_min", String(opcoes.f0Min));
+  dados.append("f0_max", String(opcoes.f0Max));
+  const csrf = csrfDoCookie();
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${BASE}/manipular`, { method: "POST", body: dados, credentials: "include", headers: csrf ? { "X-CSRF-Token": csrf } : undefined });
+  } catch {
+    throw new Error("Não foi possível falar com o servidor.");
+  }
+  if (!res.ok) {
+    let msg = res.status === 503 ? "A manipulação precisa do Praat instalado no servidor." : "Não foi possível manipular a gravação.";
+    try {
+      const corpo = (await res.json()) as { detail?: unknown; message?: string };
+      msg = corpo.message ?? (typeof corpo.detail === "string" ? corpo.detail : msg);
+    } catch { /* corpo sem JSON */ }
+    throw new Error(msg);
+  }
+  return res.blob();
+}
+
 /** Gravação guardada de uma análise (WAV). Vem como Blob: o elemento <audio> não manda o
  * cookie de sessão quando a API está em outro domínio, então o arquivo passa pelo fetch. */
 export async function baixarAudioAvaliacao(id: string): Promise<Blob> {

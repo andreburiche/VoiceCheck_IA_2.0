@@ -54,7 +54,7 @@ from app.services import voz_clinica
 from app.services.voz_clinica.audio import limitar_duracao
 from app.services.voz_clinica.cepstral import analisar_cepstral
 from app.services.voz_clinica.ddk import analisar_ddk
-from app.services.voz_clinica import midias
+from app.services.voz_clinica import manipulacao, midias
 from app.services.voz_clinica.exclusao import apagar_ou_agendar, tentar_pendentes
 from app.services.voz_clinica.fala import analisar_fala
 from app.services.voz_clinica.fonetograma import resumir_campo
@@ -212,6 +212,76 @@ async def _guardar_audio(db: DbSession, user_id: str, row_id: str, dados: bytes)
         if chave:
             _apagar_audios(db, [chave])  # arquivo enviado sem registro no banco não pode ficar sem dono
         return "Não foi possível guardar a gravação; a análise foi salva sem ela.", False
+
+
+LOTE_MAX_ARQUIVOS = 20
+
+
+@router.post("/analisar-lote", dependencies=[Depends(verify_csrf)])
+async def analisar_lote(
+    request: Request,
+    user: CurrentUser,
+    files: list[UploadFile] = File(...),
+    f0_min: float = Form(75.0),
+    f0_max: float = Form(600.0),
+    motor: str = Form("auto"),
+) -> dict:
+    """Várias gravações de uma vez (como um script de análise do Praat): uma linha de medidas
+    por arquivo. Nada é salvo no prontuário. Um arquivo com problema não derruba os outros."""
+    enforce_rate_limit(request, bucket="voz_clinica_lote", limit=6, window_sec=600)
+    if not files or len(files) > LOTE_MAX_ARQUIVOS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Envie de 1 a {LOTE_MAX_ARQUIVOS} arquivos WAV")
+    lidos = [(f.filename or f"arquivo {i + 1}", await _read_limited(f, MAX_WAV_BYTES)) for i, f in enumerate(files)]
+
+    def _um(dados: bytes) -> dict:
+        audio = limitar_duracao(voz_clinica.ler_wav(dados), 60)
+        r = voz_clinica.analisar(audio, motor=motor, f0_min=f0_min, f0_max=f0_max)
+        r.pop("graficos", None)  # a tabela não precisa das curvas (deixa a resposta leve)
+        return r
+
+    itens = []
+    for nome, dados in lidos:
+        try:
+            itens.append({"arquivo": nome[:200], "ok": True, "resultado": await asyncio.to_thread(_um, dados)})
+        except (voz_clinica.ErroAudio, ValueError) as exc:
+            itens.append({"arquivo": nome[:200], "ok": False, "erro": str(exc)})
+        except Exception:  # noqa: BLE001
+            logger.exception("Voz clínica: falha na análise em lote")
+            itens.append({"arquivo": nome[:200], "ok": False, "erro": "Não foi possível analisar este arquivo"})
+    return {"itens": itens}
+
+
+@router.post("/manipular", dependencies=[Depends(verify_csrf)])
+async def manipular_gravacao(
+    request: Request,
+    user: CurrentUser,
+    file: UploadFile = File(...),
+    semitons: float = Form(0.0),
+    fator_duracao: float = Form(1.0),
+    f0_min: float = Form(75.0),
+    f0_max: float = Form(600.0),
+) -> Response:
+    """Devolve a gravação com a F0 deslocada e/ou a duração mudada (PSOLA do Praat), em WAV.
+    Nada é salvo."""
+    enforce_rate_limit(request, bucket="voz_clinica_manip", limit=20, window_sec=600)
+    if not manipulacao.disponivel():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="A manipulação de pitch e duração precisa do Praat instalado no servidor")
+    dados = await _read_limited(file, MAX_WAV_BYTES)
+
+    def _rodar() -> bytes:
+        audio = limitar_duracao(voz_clinica.ler_wav(dados), 60)
+        return manipulacao.para_wav(manipulacao.manipular(audio, semitons, fator_duracao, f0_min, f0_max))
+
+    try:
+        wav = await asyncio.to_thread(_rodar)
+    except (voz_clinica.ErroAudio, ValueError) as exc:  # ErroManipulacao é ValueError
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Voz clínica: falha na manipulação")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Não foi possível manipular a gravação") from exc
+    return Response(wav, media_type="audio/wav", headers={"Cache-Control": "private, no-store",
+                                                          "Content-Disposition": 'inline; filename="voicecheck-manipulada.wav"'})
 
 
 @router.post("/fala", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])

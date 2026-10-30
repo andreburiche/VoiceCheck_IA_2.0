@@ -680,3 +680,40 @@ def test_midias_do_paciente(client: httpx.Client) -> None:
     r = client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
     assert r.json()["avaliacoes_excluidas"] == 2 and r.json()["gravacoes_excluidas"] == 2
     assert client.get(f"/api/v1/voz-clinica/midias/{ident}").status_code == 404
+
+
+def test_analise_em_lote(client: httpx.Client) -> None:
+    """Como um script do Praat: várias gravações, uma linha por arquivo; o arquivo ruim não derruba os outros."""
+    arquivos = [
+        ("files", ("grave.wav", io.BytesIO(_wav(f0=120)), "audio/wav")),
+        ("files", ("aguda.wav", io.BytesIO(_wav(f0=240)), "audio/wav")),
+        ("files", ("quebrado.wav", io.BytesIO(b"isto nao e wav" * 10), "audio/wav")),
+    ]
+    r = client.post("/api/v1/voz-clinica/analisar-lote", files=arquivos, data={"f0_min": "75", "f0_max": "600"})
+    assert r.status_code == 200, r.text
+    itens = r.json()["itens"]
+    assert [i["arquivo"] for i in itens] == ["grave.wav", "aguda.wav", "quebrado.wav"]
+    assert itens[0]["ok"] and itens[0]["resultado"]["f0"]["media_hz"] == pytest.approx(120, rel=0.03)
+    assert itens[1]["ok"] and itens[1]["resultado"]["f0"]["media_hz"] == pytest.approx(240, rel=0.03)
+    assert "graficos" not in itens[0]["resultado"]
+    assert itens[2]["ok"] is False and itens[2]["erro"]
+    muitos = [("files", (f"{i}.wav", io.BytesIO(b"x"), "audio/wav")) for i in range(21)]
+    assert client.post("/api/v1/voz-clinica/analisar-lote", files=muitos).status_code == 400
+
+
+def test_manipular_pitch_e_duracao(client: httpx.Client) -> None:
+    """PSOLA do Praat: +3 semitons multiplica a F0 por 2^(3/12); fator 1,5 deixa 1,5× mais longo."""
+    motores = client.get("/api/v1/voz-clinica/status").json()["motores"]
+    wav = _wav(f0=150, dur=2.0)
+    r = client.post("/api/v1/voz-clinica/manipular", files={"file": ("v.wav", io.BytesIO(wav), "audio/wav")},
+                    data={"semitons": "3", "fator_duracao": "1.5"})
+    if "praat" not in motores:
+        assert r.status_code == 503
+        return
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "audio/wav"
+    a = client.post("/api/v1/voz-clinica/analisar", files={"file": ("m.wav", io.BytesIO(r.content), "audio/wav")}).json()["resultado"]
+    assert a["f0"]["media_hz"] == pytest.approx(150 * 2 ** (3 / 12), rel=0.03)
+    assert a["duracao_s"] == pytest.approx(3.0, rel=0.08)
+    fora = client.post("/api/v1/voz-clinica/manipular", files={"file": ("v.wav", io.BytesIO(wav), "audio/wav")}, data={"semitons": "20"})
+    assert fora.status_code == 400

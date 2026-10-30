@@ -17,6 +17,7 @@ import { JogosTerapia } from "@/components/voz-clinica/jogos-terapia";
 import { PraticaCasa } from "@/components/voz-clinica/pratica-casa";
 import { CadastroPacienteForm } from "@/components/voz-clinica/cadastro-paciente";
 import { DiagramaDesvio } from "@/components/voz-clinica/diagrama-desvio";
+import { FerramentasPraat } from "@/components/voz-clinica/ferramentas-praat";
 import { MidiasPaciente } from "@/components/voz-clinica/midias-paciente";
 import { SessoesTerapia } from "@/components/voz-clinica/sessoes-terapia";
 import { montarDocxClinico, nomeArquivoDocx } from "@/lib/voz-clinica-docx";
@@ -929,6 +930,7 @@ const ABAS = [
   { id: "jogos", rotulo: "Jogos" },
   { id: "sessoes", rotulo: "Sessões" },
   { id: "midias", rotulo: "Mídias" },
+  { id: "ferramentas", rotulo: "Ferramentas" },
   { id: "pratica", rotulo: "Prática em casa" },
 ] as const;
 type Aba = (typeof ABAS)[number]["id"];
@@ -1100,6 +1102,11 @@ export function AvaliacaoClinica() {
       {aba === "midias" ? (
         <div role="tabpanel" id={`${idPaciente}-painel-midias`} aria-labelledby={`${idPaciente}-aba-midias`}>
           <MidiasPaciente key={nome} paciente={nome} versao={versao} aoSalvar={aoSalvar} />
+        </div>
+      ) : null}
+      {aba === "ferramentas" ? (
+        <div role="tabpanel" id={`${idPaciente}-painel-ferramentas`} aria-labelledby={`${idPaciente}-aba-ferramentas`}>
+          <FerramentasPraat />
         </div>
       ) : null}
       {aba === "jogos" ? (
