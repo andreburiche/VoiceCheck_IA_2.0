@@ -3,7 +3,7 @@
  * Uma série por medida; cada uma vira um gráfico próprio (escalas diferentes
  * nunca dividem o mesmo eixo).
  */
-import { ROTULO_DDK, type AnaliseAcustica, type AnaliseFala, type Avaliacao, type ResultadoCepstral, type ResultadoDdk, type ResultadoDsi, type TarefaDdk, type ResultadoBiofeedback, type ResultadoEaseBr, type ResultadoGrbasi, type ResultadoIdv10, type ResultadoFonetograma, type ResultadoJogoSalvo, type ResultadoQvv } from "@/lib/voz-clinica-api";
+import { ROTULO_DDK, type AnaliseAcustica, type AnaliseFala, type Avaliacao, type ResultadoCarga, type ResultadoCepstral, type ResultadoDdk, type ResultadoDsi, type TarefaDdk, type ResultadoBiofeedback, type ResultadoEaseBr, type ResultadoGrbasi, type ResultadoIdv10, type ResultadoFonetograma, type ResultadoJogoSalvo, type ResultadoQvv } from "@/lib/voz-clinica-api";
 import { JOGOS, type JogoId } from "@/lib/voz-clinica-jogos";
 import type { ResultadoPratica } from "@/lib/voz-clinica-pratica";
 
@@ -89,6 +89,16 @@ const EXTRATORES: Extrator[] = [
     chave: "avqi", titulo: "AVQI", unidade: "", casas: 2, tipo: "cepstral", dominio: null,
     leitura: "Índice acústico de qualidade vocal (0 a 10); valores menores indicam voz menos desviada.",
     valor: (a) => (a.resultado as ResultadoCepstral).avqi?.valor,
+  },
+  {
+    chave: "carga_f0", titulo: "Carga vocal — mudança da F0", unidade: "st", casas: 1, tipo: "carga", dominio: null,
+    leitura: "Diferença da F0 entre o fim e o início do teste em voz forte; subidas grandes sugerem esforço.",
+    valor: (a) => (a.resultado as ResultadoCarga).variacao_f0_st,
+  },
+  {
+    chave: "carga_alvo", titulo: "Carga vocal — na intensidade pedida", unidade: "%", casas: 0, tipo: "carga", dominio: [0, 100],
+    leitura: "Parte do tempo com voz em que a intensidade pedida foi mantida.",
+    valor: (a) => (a.resultado as ResultadoCarga).dentro_alvo_pct,
   },
   {
     chave: "dsi", titulo: "DSI", unidade: "", casas: 2, tipo: "dsi", dominio: null,

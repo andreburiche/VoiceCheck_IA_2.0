@@ -18,7 +18,7 @@ DataUtc = Annotated[datetime, AfterValidator(_com_fuso)]
 
 TipoAvaliacao = Literal[
     "acustica", "idv10", "qvv", "grbasi", "easebr", "anamnese", "biofeedback", "jogo", "fonetograma", "pratica",
-    "dsi", "fala", "ddk", "cepstral",
+    "dsi", "fala", "ddk", "cepstral", "carga",
 ]
 JogoId = Literal["altitude", "trilha", "sopro", "surdo-sonoro"]
 
@@ -79,6 +79,39 @@ class BiofeedbackEntrada(BaseModel):
     def _coerente(self) -> "BiofeedbackEntrada":
         if self.fonacao_s > self.duracao_s + 0.5:
             raise ValueError("tempo com voz maior que a duração da sessão")
+        return self
+
+
+class MinutoCarga(BaseModel):
+    minuto: int = Field(ge=1, le=60)
+    fonacao_pct: float = Field(ge=0, le=100)
+    f0_mediana_hz: float | None = Field(default=None, ge=30, le=2000)
+    db_mediano: float | None = Field(default=None, ge=-120, le=0)
+
+
+class CargaEntrada(BaseModel):
+    """Teste de carga vocal (lingWAVES): resumo medido no navegador; o áudio ao vivo não é enviado."""
+
+    paciente: str = Field(min_length=1, max_length=120)
+    duracao_s: float = Field(ge=0, le=3600)
+    duracao_planejada_s: float = Field(ge=30, le=3600)
+    fonacao_s: float = Field(ge=0, le=3600)
+    alvo_dbfs: FaixaDb
+    dentro_alvo_pct: float | None = Field(default=None, ge=0, le=100)
+    f0_inicio_hz: float | None = Field(default=None, ge=30, le=2000)
+    f0_fim_hz: float | None = Field(default=None, ge=30, le=2000)
+    variacao_f0_st: float | None = Field(default=None, ge=-48, le=48)
+    db_inicio: float | None = Field(default=None, ge=-120, le=0)
+    db_fim: float | None = Field(default=None, ge=-120, le=0)
+    variacao_db: float | None = Field(default=None, ge=-120, le=120)
+    minutos: list[MinutoCarga] = Field(default_factory=list, max_length=60)
+
+    @model_validator(mode="after")
+    def _coerente(self) -> "CargaEntrada":
+        if self.fonacao_s > self.duracao_s + 0.5:
+            raise ValueError("tempo com voz maior que a duração do teste")
+        if [m.minuto for m in self.minutos] != list(range(1, len(self.minutos) + 1)):
+            raise ValueError("minutos fora de ordem")
         return self
 
 

@@ -30,6 +30,7 @@ from app.schemas.voz_clinica import (
     AnotacaoEntrada,
     AvaliacaoLista,
     BiofeedbackEntrada,
+    CargaEntrada,
     FonetogramaEntrada,
     JogoEntrada,
     AvaliacaoOut,
@@ -238,6 +239,16 @@ def salvar_biofeedback(entrada: BiofeedbackEntrada, user: CurrentUser, db: DbSes
     resultado = {**entrada.model_dump(exclude={"paciente"}), "fonte": "navegador"}
     salvo = _salvar(db, user, nome, "biofeedback", resultado)
     return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
+
+
+@router.post("/carga", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
+def salvar_carga(entrada: CargaEntrada, user: CurrentUser, db: DbSession) -> ResultadoSalvo:
+    """Guarda o resumo do teste de carga vocal no histórico do paciente."""
+    nome = _paciente(entrada.paciente)
+    if nome is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente para salvar o teste")
+    resultado = {**entrada.model_dump(exclude={"paciente"}), "fonte": "navegador"}
+    return ResultadoSalvo(avaliacao_id=_salvar(db, user, nome, "carga", resultado), resultado=resultado)
 
 
 @router.post("/jogos", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])

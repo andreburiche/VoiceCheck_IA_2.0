@@ -498,3 +498,22 @@ def test_anotacao_por_avaliacao(client: httpx.Client) -> None:
     sem_csrf = httpx.Client(base_url=BASE, cookies=client.cookies)
     assert sem_csrf.put(f"/api/v1/voz-clinica/avaliacoes/{ident}/anotacao", json={"texto": "a"}).status_code == 403
     client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
+
+
+def test_carga_vocal_salva_resumo(client: httpx.Client) -> None:
+    paciente = f"Carga {uuid.uuid4().hex[:6]}"
+    corpo = {
+        "paciente": paciente, "duracao_s": 300, "duracao_planejada_s": 300, "fonacao_s": 270,
+        "alvo_dbfs": {"min": -24, "max": -16}, "dentro_alvo_pct": 66.7, "f0_inicio_hz": 201, "f0_fim_hz": 224,
+        "variacao_f0_st": 1.87, "db_inicio": -18.5, "db_fim": -23.6, "variacao_db": -5.1,
+        "minutos": [{"minuto": i, "fonacao_pct": 90, "f0_mediana_hz": 200 + i, "db_mediano": -18 - i} for i in range(1, 6)],
+    }
+    r = client.post("/api/v1/voz-clinica/carga", json=corpo)
+    assert r.status_code == 200, r.text
+    assert r.json()["resultado"]["fonte"] == "navegador" and r.json()["avaliacao_id"]
+    assert client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"][0]["tipo"] == "carga"
+    ruim = {**corpo, "fonacao_s": 400}
+    assert client.post("/api/v1/voz-clinica/carga", json=ruim).status_code == 422
+    fora = {**corpo, "minutos": [{"minuto": 2, "fonacao_pct": 90}]}
+    assert client.post("/api/v1/voz-clinica/carga", json=fora).status_code == 422
+    client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})

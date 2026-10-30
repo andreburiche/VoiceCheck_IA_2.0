@@ -211,7 +211,7 @@ function PlanoVogal({ formantes, w }: { formantes: Formantes; w: number }) {
           <Texto x={iw / 2} y={ih - 4} ancora="middle">aberta (/a/)</Texto>
         </g>
         {[200, 400, 600, 800, 1000].map((v) => <Texto key={v} x={PE - 6} y={PT + y(v) + 4} ancora="end">{v}</Texto>)}
-        {[3000, 2000, 1000, 500].map((v) => <Texto key={v} x={PE + x(v)} y={h - 6} ancora="middle">{v}</Texto>)}
+        {[3000, 2000, 1000, 500].map((v) => <Texto key={v} x={PE + x(v)} y={h - 6} ancora={v === 500 ? "end" : v === 3000 ? "start" : "middle"}>{v}</Texto>)}
       </svg>
       <p className="mt-1 text-xs text-ink-faint">Eixo horizontal: F2 (Hz, de 3000 a 500). Vertical: F1 (Hz, de 200 a 1100). Compare a mesma vogal entre sessões.</p>
     </div>

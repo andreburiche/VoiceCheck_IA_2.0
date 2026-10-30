@@ -3,16 +3,20 @@ import { API_URL, apiFetch } from "@/lib/api";
 import type { Anamnese } from "@/lib/voz-clinica-anamnese";
 import { resumoAnamnese } from "@/lib/voz-clinica-anamnese";
 import type { ResumoBiofeedback } from "@/lib/voz-clinica-biofeedback";
+import type { ResumoCarga } from "@/lib/voz-clinica-carga";
 import type { PontoCampo, ResumoCampo } from "@/lib/voz-clinica-fonetograma";
 import { JOGOS, type ResultadoJogo } from "@/lib/voz-clinica-jogos";
 import { resumoPratica, type ExercicioPratica, type ResultadoPratica } from "@/lib/voz-clinica-pratica";
 
 
-export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica" | "dsi" | "fala" | "ddk" | "cepstral";
+export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica" | "dsi" | "fala" | "ddk" | "cepstral" | "carga";
 export type Protocolo = "idv10" | "qvv" | "grbasi" | "easebr";
 
 /** Resumo de sessão de biofeedback salvo (medido no navegador). */
 export type ResultadoBiofeedback = ResumoBiofeedback & { fonte: "navegador" };
+
+/** Teste de carga vocal salvo (medido no navegador). */
+export type ResultadoCarga = ResumoCarga & { fonte: "navegador" };
 
 /** Resultado de partida salvo (medido no navegador). */
 export type ResultadoJogoSalvo = ResultadoJogo & { fonte: "navegador" };
@@ -177,7 +181,7 @@ export type Avaliacao = {
   paciente: string;
   tipo: TipoAvaliacao;
   motor: string | null;
-  resultado: AnaliseAcustica | ResultadoProtocolo | Anamnese | ResultadoPratica | ResultadoBiofeedback | ResultadoJogoSalvo | ResultadoFonetograma | ResultadoDsi | AnaliseFala | ResultadoDdk | ResultadoCepstral;
+  resultado: AnaliseAcustica | ResultadoProtocolo | Anamnese | ResultadoPratica | ResultadoBiofeedback | ResultadoJogoSalvo | ResultadoFonetograma | ResultadoDsi | AnaliseFala | ResultadoDdk | ResultadoCepstral | ResultadoCarga;
   criado_em: string;
   /** Há gravação guardada (análise acústica). */
   audio?: boolean;
@@ -294,6 +298,10 @@ export function salvarBiofeedback(paciente: string, resumo: ResumoBiofeedback) {
     method: "POST",
     json: { paciente, ...resumo },
   });
+}
+
+export function salvarCarga(paciente: string, resumo: ResumoCarga) {
+  return apiFetch<Salvo<ResultadoCarga>>(`${BASE}/carga`, { method: "POST", json: { ...resumo, paciente } });
 }
 
 export function salvarJogo(paciente: string, resultado: ResultadoJogo) {
@@ -454,6 +462,16 @@ export function resumoAvaliacao(a: Avaliacao): string {
     const e = r.entradas;
     return `DSI ${fixoBR(r.dsi, 2)} · TMF ${fixoBR(e?.tmf_s, 1)} s · F0-alta ${fixoBR(e?.f0_alta_hz, 0)} Hz · I-baixa ${fixoBR(e?.i_baixa_db_spl, 0)} dB SPL · jitter ${fixoBR(e?.jitter_pct, 2)}%`;
   }
+  if (a.tipo === "carga") {
+    const r = a.resultado as ResultadoCarga;
+    const sinal = (v: number) => (v > 0 ? "+" : "");
+    return [
+      `${Math.round(r.duracao_s / 60)} min em voz forte`,
+      `${fixoBR(r.dentro_alvo_pct, 0)}% na intensidade pedida`,
+      r.variacao_f0_st === null ? null : `F0 ${sinal(r.variacao_f0_st)}${fixoBR(r.variacao_f0_st, 1)} st`,
+      r.variacao_db === null ? null : `intensidade ${sinal(r.variacao_db)}${fixoBR(r.variacao_db, 1)} dB`,
+    ].filter(Boolean).join(" · ");
+  }
   if (a.tipo === "cepstral") {
     const r = a.resultado as ResultadoCepstral;
     return [
@@ -499,6 +517,7 @@ export const ROTULO_TIPO: Record<TipoAvaliacao, string> = {
   fala: "F0 da fala",
   ddk: "Diadococinesia",
   cepstral: "Análise cepstral",
+  carga: "Carga vocal",
 };
 
 export const ROTULO_DDK: Record<TarefaDdk, string> = { pa: "/pa/", ta: "/ta/", ka: "/ka/", pataka: "/pataka/" };

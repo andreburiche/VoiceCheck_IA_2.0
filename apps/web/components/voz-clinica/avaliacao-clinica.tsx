@@ -15,6 +15,7 @@ import { Espectrograma } from "@/components/voz-clinica/espectrograma";
 import { Fonetograma } from "@/components/voz-clinica/fonetograma";
 import { JogosTerapia } from "@/components/voz-clinica/jogos-terapia";
 import { PraticaCasa } from "@/components/voz-clinica/pratica-casa";
+import { CargaVocal } from "@/components/voz-clinica/carga-vocal";
 import { ComparacaoAntesDepois } from "@/components/voz-clinica/comparacao";
 import { GraficosAnalise } from "@/components/voz-clinica/graficos-analise";
 import { ProtocoloVoz } from "@/components/voz-clinica/protocolo-voz";
@@ -825,6 +826,7 @@ const ABAS = [
   { id: "comparar", rotulo: "Comparar" },
   { id: "fonetograma", rotulo: "Fonetograma" },
   { id: "biofeedback", rotulo: "Biofeedback" },
+  { id: "carga", rotulo: "Carga vocal" },
   { id: "jogos", rotulo: "Jogos" },
   { id: "pratica", rotulo: "Prática em casa" },
 ] as const;
@@ -962,6 +964,11 @@ export function AvaliacaoClinica() {
       {aba === "biofeedback" ? (
         <div role="tabpanel" id={`${idPaciente}-painel-biofeedback`} aria-labelledby={`${idPaciente}-aba-biofeedback`}>
           <BiofeedbackAoVivo paciente={nome} aoSalvar={aoSalvar} />
+        </div>
+      ) : null}
+      {aba === "carga" ? (
+        <div role="tabpanel" id={`${idPaciente}-painel-carga`} aria-labelledby={`${idPaciente}-aba-carga`}>
+          <CargaVocal paciente={nome} aoSalvar={aoSalvar} />
         </div>
       ) : null}
       {aba === "jogos" ? (
