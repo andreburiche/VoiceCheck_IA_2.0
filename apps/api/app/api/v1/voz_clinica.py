@@ -16,9 +16,11 @@ import hmac
 import unicodedata
 import logging
 import uuid
+from urllib.parse import unquote
 from datetime import date, datetime, timedelta, timezone
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from sqlalchemy import delete, func, select
 
@@ -85,6 +87,25 @@ def _paciente(valor: str | None) -> str | None:
     if len(valor) > 120:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nome do paciente com mais de 120 caracteres")
     return valor or None
+
+
+def _paciente_consulta(
+    paciente: str | None = Query(default=None, description="Obsoleto: prefira o cabeçalho X-Paciente"),
+    x_paciente: str | None = Header(default=None, alias="X-Paciente",
+                                    description="Nome do paciente codificado como em encodeURIComponent"),
+) -> str | None:
+    """Nome do paciente nas consultas (GET/DELETE). O navegador manda no cabeçalho X-Paciente, e não
+    na URL: endereços vão parar em logs de proxies, servidores web e monitoramento (LGPD). A query
+    `?paciente=` continua aceita por compatibilidade."""
+    if x_paciente is not None:
+        try:
+            return unquote(x_paciente, errors="strict")
+        except UnicodeDecodeError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cabeçalho X-Paciente inválido") from exc
+    return paciente
+
+
+PacienteConsulta = Annotated[str | None, Depends(_paciente_consulta)]
 
 
 def _salvar(db: DbSession, user: CurrentUser, paciente: str | None, tipo: str,
@@ -580,7 +601,7 @@ def criar_plano(entrada: PlanoEntrada, user: CurrentUser, db: DbSession) -> Plan
 
 
 @router.get("/pratica", response_model=PlanoLista)
-def listar_planos(user: CurrentUser, db: DbSession, paciente: str) -> PlanoLista:
+def listar_planos(user: CurrentUser, db: DbSession, paciente: PacienteConsulta) -> PlanoLista:
     nome = _paciente(paciente)
     if nome is None:
         return PlanoLista(items=[])
@@ -742,7 +763,7 @@ def _cadastro(db: DbSession, user: CurrentUser, nome: str) -> VoicePatient | Non
 
 
 @router.get("/pacientes/cadastro", response_model=CadastroOut)
-def obter_cadastro(user: CurrentUser, db: DbSession, paciente: str | None = None) -> CadastroOut:
+def obter_cadastro(user: CurrentUser, db: DbSession, paciente: PacienteConsulta) -> CadastroOut:
     p = _cadastro(db, user, _nome_obrigatorio(paciente))
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente sem cadastro")
@@ -812,7 +833,7 @@ def _nome_arquivo(nome: str) -> str:
 
 
 @router.get("/pacientes/exportar")
-def exportar_paciente(request: Request, user: CurrentUser, db: DbSession, paciente: str | None = None) -> JSONResponse:
+def exportar_paciente(request: Request, user: CurrentUser, db: DbSession, paciente: PacienteConsulta) -> JSONResponse:
     """LGPD art. 18 (acesso e portabilidade): tudo o que está guardado deste paciente, sem limite.
 
     Só os dados; com as gravações, use /pacientes/exportar-zip.
@@ -881,7 +902,7 @@ def _montar_zip(corpo: dict, rows: list[ClinicalEvaluation]) -> tuple[object, in
 
 
 @router.get("/pacientes/exportar-zip")
-async def exportar_paciente_zip(request: Request, user: CurrentUser, db: DbSession, paciente: str | None = None) -> StreamingResponse:
+async def exportar_paciente_zip(request: Request, user: CurrentUser, db: DbSession, paciente: PacienteConsulta) -> StreamingResponse:
     """LGPD art. 18 (portabilidade): dados.json + todas as gravações em WAV, num ZIP."""
     enforce_rate_limit(request, bucket="voz_clinica_zip", limit=10, window_sec=600)
     nome = _nome_obrigatorio(paciente)
@@ -913,7 +934,7 @@ async def exportar_paciente_zip(request: Request, user: CurrentUser, db: DbSessi
 
 
 @router.delete("/pacientes", dependencies=[Depends(verify_csrf)])
-def excluir_paciente(request: Request, user: CurrentUser, db: DbSession, paciente: str | None = None) -> dict:
+def excluir_paciente(request: Request, user: CurrentUser, db: DbSession, paciente: PacienteConsulta) -> dict:
     """LGPD art. 18 (eliminação): apaga todas as avaliações e links de prática do paciente.
 
     Os links ativos param na hora (o plano deixa de existir). Irreversível.
@@ -939,7 +960,7 @@ def excluir_paciente(request: Request, user: CurrentUser, db: DbSession, pacient
 
 
 @router.get("/avaliacoes", response_model=AvaliacaoLista)
-def listar_avaliacoes(user: CurrentUser, db: DbSession, paciente: str | None = None,
+def listar_avaliacoes(user: CurrentUser, db: DbSession, paciente: PacienteConsulta,
                       tipo: TipoAvaliacao | None = None) -> AvaliacaoLista:
     """As 500 mais recentes; `tipo` filtra (p. ex. todos os fonetogramas, mesmo num histórico longo)."""
     stmt = select(ClinicalEvaluation).where(ClinicalEvaluation.owner_id == user.id)

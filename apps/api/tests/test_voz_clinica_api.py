@@ -810,3 +810,27 @@ def test_egg_salva_no_historico(client: httpx.Client) -> None:
                  {"cq_dp_pct": 70}, {"ciclos": 100_000}):
         assert client.post("/api/v1/voz-clinica/egg", json={**base, **ruim}).status_code == 422
     client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
+
+
+def test_paciente_no_cabecalho_e_nao_na_url(client: httpx.Client) -> None:
+    """O navegador manda o nome no cabeçalho X-Paciente (URLs vão para logs de proxies); a query segue aceita."""
+    from urllib.parse import quote
+
+    paciente = f"Joana D'Ávila Ção {uuid.uuid4().hex[:4]}"
+    cab = {"X-Paciente": quote(paciente, safe="")}
+    assert client.post("/api/v1/voz-clinica/protocolos/idv10", json={"respostas": [1] * 10, "paciente": paciente}).status_code == 200
+    # as seis rotas de consulta leem o cabeçalho
+    itens = client.get("/api/v1/voz-clinica/avaliacoes", headers=cab).json()["items"]
+    assert [i["paciente"] for i in itens] == [paciente]
+    assert client.get("/api/v1/voz-clinica/avaliacoes", headers=cab, params={"tipo": "idv10"}).json()["items"][0]["tipo"] == "idv10"
+    assert client.get("/api/v1/voz-clinica/pacientes/cadastro", headers=cab).status_code == 404  # sem cadastro, mas achou o nome
+    assert client.get("/api/v1/voz-clinica/pratica", headers=cab).json()["items"] == []
+    assert client.get("/api/v1/voz-clinica/pacientes/exportar", headers=cab).json()["avaliacoes"][0]["tipo"] == "idv10"
+    assert client.get("/api/v1/voz-clinica/pacientes/exportar-zip", headers=cab).status_code == 200
+    # o cabeçalho vale mais que a query (e a query sozinha continua funcionando)
+    outro = client.get("/api/v1/voz-clinica/avaliacoes", headers=cab, params={"paciente": "Outro"}).json()["items"]
+    assert len(outro) == 1
+    assert len(client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"]) == 1
+    # codificação inválida: 400, não 500
+    assert client.get("/api/v1/voz-clinica/avaliacoes", headers={"X-Paciente": "%E9%"}).status_code == 400
+    assert client.delete("/api/v1/voz-clinica/pacientes", headers=cab).json()["avaliacoes_excluidas"] == 1

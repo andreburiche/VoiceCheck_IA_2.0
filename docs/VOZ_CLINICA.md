@@ -206,7 +206,7 @@ Depois da revisão (30/10/2026, segunda rodada):
 
 - **Nova tentativa de apagar gravações:** se o storage falhar ao apagar (rede, S3 fora do ar), a chave do arquivo fica em `storage_pending_deletes` (migração 0015; só ids, sem nome de paciente) e é apagada numa nova tentativa — a cada nova exclusão e quando a API inicia.
 
-Ainda fica para depois: se houver nginx/proxy na frente, desligar nele também o log de query string.
+Resolvido em 30/10/2026: o nome do paciente não vai mais na URL. Nas consultas (`GET /avaliacoes`, `/pacientes/cadastro`, `/pacientes/exportar`, `/pacientes/exportar-zip`, `/pratica` e `DELETE /pacientes`) o navegador manda o nome no cabeçalho `X-Paciente` (codificado como em `encodeURIComponent`), que proxies, servidores web e ferramentas de monitoramento não registram por padrão. A query `?paciente=` continua aceita por compatibilidade; o filtro do log de acesso do uvicorn continua valendo para ela.
 
 ## Concordância entre os motores (30/10/2026)
 

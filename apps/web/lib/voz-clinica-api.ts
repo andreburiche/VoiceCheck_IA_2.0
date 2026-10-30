@@ -421,8 +421,16 @@ export function criarPlanoPratica(entrada: { paciente: string; saudacao: string;
   return apiFetch<PlanoPratica & { token: string }>(`${BASE}/pratica`, { method: "POST", json: entrada });
 }
 
+/**
+ * O nome do paciente vai no cabeçalho X-Paciente, nunca na URL: endereços ficam em logs de
+ * proxies, servidores web e ferramentas de monitoramento (LGPD).
+ */
+export function cabecalhoPaciente(paciente: string): Record<string, string> {
+  return { "X-Paciente": encodeURIComponent(paciente) };
+}
+
 export function listarPlanosPratica(paciente: string) {
-  return apiFetch<{ items: PlanoPratica[] }>(`${BASE}/pratica?paciente=${encodeURIComponent(paciente)}`);
+  return apiFetch<{ items: PlanoPratica[] }>(`${BASE}/pratica`, { headers: cabecalhoPaciente(paciente) });
 }
 
 export function revogarPlanoPratica(id: string) {
@@ -465,7 +473,7 @@ export function salvarFonetograma(paciente: string, duracao_s: number, pontos: P
 /** Cadastro do paciente; null quando ainda não há cadastro. */
 export async function obterCadastro(paciente: string): Promise<CadastroPaciente | null> {
   try {
-    return await apiFetch<CadastroPaciente>(`${BASE}/pacientes/cadastro?paciente=${encodeURIComponent(paciente)}`);
+    return await apiFetch<CadastroPaciente>(`${BASE}/pacientes/cadastro`, { headers: cabecalhoPaciente(paciente) });
   } catch (e) {
     if ((e as { status?: number }).status === 404) return null;
     throw e;
@@ -492,7 +500,7 @@ export function listarPacientes() {
 
 /** LGPD (acesso e portabilidade): tudo o que está guardado do paciente, num arquivo JSON. */
 export async function exportarPaciente(paciente: string): Promise<{ arquivo: string; conteudo: Blob }> {
-  const dados = await apiFetch<unknown>(`${BASE}/pacientes/exportar?paciente=${encodeURIComponent(paciente)}`, { timeoutMs: 60_000 });
+  const dados = await apiFetch<unknown>(`${BASE}/pacientes/exportar`, { timeoutMs: 60_000, headers: cabecalhoPaciente(paciente) });
   const base = paciente.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "paciente";
   const dia = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   return { arquivo: `voicecheck-${base}-${dia}.json`, conteudo: new Blob([JSON.stringify(dados, null, 2)], { type: "application/json" }) };
@@ -502,7 +510,7 @@ export async function exportarPaciente(paciente: string): Promise<{ arquivo: str
 export async function exportarPacienteZip(paciente: string): Promise<{ arquivo: string; conteudo: Blob }> {
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${BASE}/pacientes/exportar-zip?paciente=${encodeURIComponent(paciente)}`, { credentials: "include" });
+    res = await fetch(`${API_URL}${BASE}/pacientes/exportar-zip`, { credentials: "include", headers: cabecalhoPaciente(paciente) });
   } catch {
     throw new Error("Não foi possível falar com o servidor para gerar o arquivo.");
   }
@@ -520,15 +528,15 @@ export async function exportarPacienteZip(paciente: string): Promise<{ arquivo: 
 /** LGPD (eliminação): apaga avaliações e links de prática do paciente. Irreversível. */
 export function excluirPaciente(paciente: string) {
   return apiFetch<{ avaliacoes_excluidas: number; planos_excluidos: number; gravacoes_excluidas?: number; cadastro_excluido?: boolean }>(
-    `${BASE}/pacientes?paciente=${encodeURIComponent(paciente)}`,
-    { method: "DELETE" },
+    `${BASE}/pacientes`,
+    { method: "DELETE", headers: cabecalhoPaciente(paciente) },
   );
 }
 
 /** As 500 mais recentes do paciente; `tipo` traz só as daquele tipo (p. ex. todos os fonetogramas). */
 export function listarAvaliacoes(paciente: string, tipo?: TipoAvaliacao) {
-  const filtro = tipo ? `&tipo=${encodeURIComponent(tipo)}` : "";
-  return apiFetch<{ items: Avaliacao[] }>(`${BASE}/avaliacoes?paciente=${encodeURIComponent(paciente)}${filtro}`);
+  const filtro = tipo ? `?tipo=${encodeURIComponent(tipo)}` : "";
+  return apiFetch<{ items: Avaliacao[] }>(`${BASE}/avaliacoes${filtro}`, { headers: cabecalhoPaciente(paciente) });
 }
 
 export function enviarMidia(paciente: string, arquivo: File, descricao?: string) {
