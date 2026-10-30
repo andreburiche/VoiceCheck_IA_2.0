@@ -33,7 +33,7 @@ export function PracticeRoomHeader({
   return (
     <header className="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-line/70 bg-glass px-4 py-4 shadow-panel md:px-5">
       <div className="min-w-0 flex-1 space-y-2">
-        <h1 className="truncate font-display text-2xl font-semibold tracking-tight text-ink md:text-[1.75rem]">
+        <h1 className="truncate font-display text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">
           <span className="text-ink-muted">Treino · </span>
           {projectName || "Música"}
         </h1>

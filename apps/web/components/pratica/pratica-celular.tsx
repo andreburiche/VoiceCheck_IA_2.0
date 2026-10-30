@@ -565,11 +565,28 @@ export function PraticaCelular() {
         <>
           <header>
             <p className="text-sm text-ink-muted">Prática em casa</p>
-            <h1 className="mt-1 font-display text-2xl font-semibold text-ink">{plano.saudacao ? `Olá, ${plano.saudacao}!` : "Olá!"}</h1>
-            <p className="mt-1 text-sm text-ink-muted">
+            <h1 className="mt-1 font-display text-3xl font-bold tracking-[-0.03em] text-ink">{plano.saudacao ? `Olá, ${plano.saudacao}!` : "Olá!"}</h1>
+            <p className="mt-2 text-sm leading-relaxed text-ink-muted">
               {seguidos > 1 ? `${seguidos} dias seguidos praticando. ` : ""}Faça os exercícios num lugar silencioso, com o celular a um palmo da boca.
             </p>
           </header>
+
+          {plano.exercicios.length > 0 ? (() => {
+            const feitos = plano.exercicios.filter((_, i) => (hoje.get(i) ?? 0) > 0).length;
+            const total = plano.exercicios.length;
+            return (
+              <div className="mt-5" data-testid="pc-progresso">
+                <p className="flex items-baseline justify-between text-sm text-ink-muted">
+                  <span>Hoje</span>
+                  <span><span className="text-data text-base font-semibold text-ink">{feitos}</span> de <span className="text-data">{total}</span> {total === 1 ? "exercício" : "exercícios"}</span>
+                </p>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-canvas-raised ring-1 ring-inset ring-ink/10"
+                  role="progressbar" aria-label="Exercícios feitos hoje" aria-valuemin={0} aria-valuemax={total} aria-valuenow={feitos}>
+                  <div className="h-full rounded-full bg-accent transition-[width] duration-500 ease-out motion-reduce:transition-none" style={{ width: `${(feitos / total) * 100}%` }} />
+                </div>
+              </div>
+            );
+          })() : null}
 
           <div className={cn("mt-4 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm ring-1 ring-inset", online ? "ring-ink/10 text-ink-muted" : "ring-signal-warn/40 text-signal-warn")}
             role="status" data-testid="pc-status">
@@ -592,12 +609,15 @@ export function PraticaCelular() {
             {plano.exercicios.map((ex, i) => {
               const vezes = hoje.get(i) ?? 0;
               return (
-                <li key={i}>
+                <li key={i} className="motion-safe:animate-fade-up" style={{ animationDelay: `${i * 60}ms` }}>
                   <button type="button" onClick={() => { setAviso(null); setAberto(i); }}
                     className="w-full rounded-2xl bg-canvas-raised p-4 text-left ring-1 ring-inset ring-ink/10 transition-colors hover:ring-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     data-testid="pc-cartao">
                     <span className="flex items-start justify-between gap-3">
-                      <span className="font-display text-lg font-semibold text-ink">{ex.titulo}</span>
+                      <span className="flex items-baseline gap-3">
+                        <span className="text-data text-sm text-accent" aria-hidden>{String(i + 1).padStart(2, "0")}</span>
+                        <span className="font-display text-lg font-semibold text-ink">{ex.titulo}</span>
+                      </span>
                       <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-xs", vezes ? "bg-accent/15 text-ink" : "text-ink-faint ring-1 ring-inset ring-ink/10")}>
                         {vezes ? `Feito hoje${vezes > 1 ? ` · ${vezes}×` : ""}` : "Hoje: ainda não"}
                       </span>

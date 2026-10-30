@@ -857,7 +857,7 @@ export function VocalLabWorkspace({ projectId }: Props) {
 
       <div className="min-w-0 space-y-4">
         <header className="space-y-2">
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink md:text-[1.75rem]">
+          <h1 className="font-display text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">
             Laboratório vocal
           </h1>
           <div className="max-w-3xl space-y-1.5 rounded-2xl border border-line/60 bg-glass px-3.5 py-3 text-sm text-ink-muted">

@@ -848,7 +848,7 @@ export function VoiceCheckWorkspace() {
       <header className="panel-glass relative overflow-hidden rounded-2xl p-5 md:p-6 2xl:flex 2xl:items-center 2xl:gap-8">
         <div className="relative flex flex-wrap items-start justify-between gap-4 2xl:w-[26rem] 2xl:shrink-0">
           <div className="min-w-0">
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-ink md:text-[1.75rem]">
+            <h1 className="font-display text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">
               Diagnóstico vocal
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-ink-muted">

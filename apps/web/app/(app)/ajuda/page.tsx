@@ -35,8 +35,8 @@ export default function HelpPage() {
   return (
     <div className="page-shell space-y-6">
       <header>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink md:text-[1.75rem]">Ajuda</h1>
-        <p className="mt-1 text-sm text-ink-muted">O que cada número significa e como tirar o melhor de cada ferramenta.</p>
+        <h1 className="font-display text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">Ajuda</h1>
+        <p className="mt-2 text-base text-ink-muted">O que cada número significa e como tirar o melhor de cada ferramenta.</p>
       </header>
 
       <div className="grid gap-8 lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-start">

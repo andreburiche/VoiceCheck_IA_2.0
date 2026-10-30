@@ -37,8 +37,8 @@ export default function AdminPage() {
   return (
     <div className="page-shell space-y-8">
       <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink md:text-[1.75rem]">Administração</h1>
-        <p className="mt-1 text-sm text-ink-muted">Usuários, processamentos e registro de auditoria.</p>
+        <h1 className="font-display text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">Administração</h1>
+        <p className="mt-2 text-base text-ink-muted">Usuários, processamentos e registro de auditoria.</p>
       </div>
 
       <section className="space-y-2">

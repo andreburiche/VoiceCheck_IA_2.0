@@ -303,7 +303,7 @@ export function AnalysisWorkspace({ projectId }: Props) {
     <div className="page-shell space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink md:text-[1.75rem]">
+          <h1 className="font-display text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">
             Análise musical
           </h1>
           <p className="mt-1 max-w-2xl text-sm text-ink-muted">

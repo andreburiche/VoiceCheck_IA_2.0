@@ -300,7 +300,7 @@ export function ExportWizard({ projectId }: Props) {
       <header className="flex flex-wrap items-center gap-4 rounded-2xl border border-line bg-canvas-raised/90 p-4 shadow-panel">
         <CoverArt seed={projectId} title={project.data?.name} className="h-14 w-14 rounded-xl text-base" />
         <div className="min-w-0 flex-1">
-          <h1 className="truncate font-display text-2xl font-semibold tracking-tight text-ink md:text-[1.75rem]">
+          <h1 className="truncate font-display text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">
             {project.data?.name ?? "Projeto"}
           </h1>
           <p className="truncate text-sm text-ink-muted">

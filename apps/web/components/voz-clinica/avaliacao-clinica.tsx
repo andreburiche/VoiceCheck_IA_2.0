@@ -1030,8 +1030,8 @@ export function AvaliacaoClinica() {
   return (
     <div className="space-y-5">
       <header>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-ink md:text-[1.75rem]">Avaliação clínica</h1>
-        <p className="mt-1 max-w-[70ch] text-sm text-ink-muted">
+        <h1 className="font-display text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">Avaliação clínica</h1>
+        <p className="mt-2 max-w-[70ch] text-base text-ink-muted">
           Anamnese, medidas acústicas, protocolos de autoavaliação e escala perceptiva, com o histórico de cada paciente. Não é diagnóstico médico.
         </p>
       </header>

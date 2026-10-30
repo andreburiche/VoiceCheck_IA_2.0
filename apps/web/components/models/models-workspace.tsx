@@ -117,7 +117,7 @@ export function ModelsWorkspace() {
             <BrainCircuit className="h-5 w-5" aria-hidden />
           </span>
           <div>
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-ink md:text-[1.75rem]">
+            <h1 className="font-display text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">
               Modelos de IA
             </h1>
             <p className="text-sm text-ink-muted">
