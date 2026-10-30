@@ -611,6 +611,9 @@ def test_perceptiva_complementar(client: httpx.Client) -> None:
     assert client.post("/api/v1/voz-clinica/protocolos/perceptiva", json={"respostas": {"ressonancia": "equilibrada"}}).status_code == 400
     assert client.post("/api/v1/voz-clinica/protocolos/perceptiva", json={"respostas": {
         "ressonancia": "nasal demais", "pitch": "adequado", "loudness": "adequada"}}).status_code == 400
+    # valor que não é texto (lista) é recusado com 400, não vira erro 500
+    assert client.post("/api/v1/voz-clinica/protocolos/perceptiva", json={"respostas": {
+        "ressonancia": ["x"], "pitch": "adequado", "loudness": "adequada"}}).status_code == 400
     client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
 
 
@@ -626,6 +629,10 @@ def test_sessoes_de_terapia_numeradas(client: httpx.Client) -> None:
     assert r1["exercicios_lista"] == ["Sopro com canudo 3x1 min", "Vibração de língua"]
     s2 = client.post("/api/v1/voz-clinica/sessoes", json={"paciente": paciente, "data": "2026-10-27", "resposta": "melhorou"})
     assert s2.json()["resultado"]["numero"] == 2
+    # excluir a sessão 1 não faz a próxima repetir o número 2 (usa o maior número, não a contagem)
+    assert client.delete(f"/api/v1/voz-clinica/avaliacoes/{s1.json()['avaliacao_id']}").status_code in (200, 204)
+    s3 = client.post("/api/v1/voz-clinica/sessoes", json={"paciente": paciente, "data": "2026-10-28", "resposta": "estável"})
+    assert s3.json()["resultado"]["numero"] == 3
     # sem conteúdo, data no futuro e sem paciente: recusados
     assert client.post("/api/v1/voz-clinica/sessoes", json={"paciente": paciente, "data": "2026-10-27"}).status_code == 400
     assert client.post("/api/v1/voz-clinica/sessoes", json={"paciente": paciente, "data": "2099-01-01", "objetivos": "x"}).status_code == 400
@@ -697,6 +704,11 @@ def test_analise_em_lote(client: httpx.Client) -> None:
     assert itens[1]["ok"] and itens[1]["resultado"]["f0"]["media_hz"] == pytest.approx(240, rel=0.03)
     assert "graficos" not in itens[0]["resultado"]
     assert itens[2]["ok"] is False and itens[2]["erro"]
+    # arquivo grande demais no lote: só ele falha (lido um por vez, sem derrubar a requisição)
+    grande = [("files", ("ok.wav", io.BytesIO(_wav(f0=150)), "audio/wav")),
+              ("files", ("enorme.wav", io.BytesIO(b"\0" * (21 * 1024 * 1024)), "audio/wav"))]
+    itens = client.post("/api/v1/voz-clinica/analisar-lote", files=grande).json()["itens"]
+    assert itens[0]["ok"] and itens[1]["ok"] is False and "20 MB" in itens[1]["erro"]
     muitos = [("files", (f"{i}.wav", io.BytesIO(b"x"), "audio/wav")) for i in range(21)]
     assert client.post("/api/v1/voz-clinica/analisar-lote", files=muitos).status_code == 400
 
@@ -717,6 +729,9 @@ def test_manipular_pitch_e_duracao(client: httpx.Client) -> None:
     assert a["duracao_s"] == pytest.approx(3.0, rel=0.08)
     fora = client.post("/api/v1/voz-clinica/manipular", files={"file": ("v.wav", io.BytesIO(wav), "audio/wav")}, data={"semitons": "20"})
     assert fora.status_code == 400
+    for faixa in ({"f0_min": "0"}, {"f0_min": "500", "f0_max": "100"}, {"f0_min": "nan"}):
+        assert client.post("/api/v1/voz-clinica/manipular", files={"file": ("v.wav", io.BytesIO(wav), "audio/wav")},
+                           data=faixa).status_code == 400
 
 
 def test_nasalancia_salva_no_historico(client: httpx.Client) -> None:
@@ -727,7 +742,8 @@ def test_nasalancia_salva_no_historico(client: httpx.Client) -> None:
     assert r.status_code == 200, r.text
     assert r.json()["resultado"]["media_pct"] == 52.4 and r.json()["resultado"]["canais_invertidos"] is False
     assert client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"][0]["tipo"] == "nasalancia"
-    for ruim in ({"media_pct": 120}, {"tarefa": "cantada"}, {"quadros": 3}, {"fonte": "nuvem"}):
+    for ruim in ({"media_pct": 120}, {"tarefa": "cantada"}, {"quadros": 3}, {"fonte": "nuvem"},
+                 {"dp_pct": 90}, {"quadros": 100_000, "duracao_s": 1}):
         assert client.post("/api/v1/voz-clinica/nasalancia", json={**base, **ruim}).status_code == 422
     client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
 
@@ -739,6 +755,7 @@ def test_egg_salva_no_historico(client: httpx.Client) -> None:
     r = client.post("/api/v1/voz-clinica/egg", json=base)
     assert r.status_code == 200, r.text
     assert r.json()["resultado"]["polaridade_invertida"] is False
-    for ruim in ({"limiar_pct": 40}, {"canal_egg": 3}, {"cq_media_pct": -1}, {"ciclos": 2}):
+    for ruim in ({"limiar_pct": 40}, {"canal_egg": 3}, {"cq_media_pct": -1}, {"ciclos": 2},
+                 {"cq_dp_pct": 70}, {"ciclos": 100_000}):
         assert client.post("/api/v1/voz-clinica/egg", json={**base, **ruim}).status_code == 422
     client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})

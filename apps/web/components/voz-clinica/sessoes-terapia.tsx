@@ -38,7 +38,7 @@ export function SessoesTerapia({ paciente, versao, aoSalvar }: { paciente: strin
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [sessoes, setSessoes] = useState<ResultadoSessao[] | null>(null);
+  const [sessoes, setSessoes] = useState<(ResultadoSessao & { id: string })[] | null>(null);
   const pedido = useRef(0);
 
   const carregar = useCallback(async () => {
@@ -47,7 +47,7 @@ export function SessoesTerapia({ paciente, versao, aoSalvar }: { paciente: strin
     try {
       const itens = (await listarAvaliacoes(paciente)).items.filter((a) => a.tipo === "sessao");
       if (meu !== pedido.current) return;
-      setSessoes(itens.map((a) => a.resultado as ResultadoSessao).sort((a, b) => b.numero - a.numero));
+      setSessoes(itens.map((a) => ({ ...(a.resultado as ResultadoSessao), id: a.id })).sort((a, b) => b.numero - a.numero));
     } catch {
       if (meu === pedido.current) setSessoes([]);
     }
@@ -116,7 +116,7 @@ export function SessoesTerapia({ paciente, versao, aoSalvar }: { paciente: strin
       {sessoes?.length ? (
         <ol className="mt-2 space-y-3" data-testid="vc2-sessoes-lista">
           {sessoes.map((s) => (
-            <li key={`${s.numero}-${s.data}`} className="rounded-xl p-3 ring-1 ring-inset ring-ink/10">
+            <li key={s.id} className="rounded-xl p-3 ring-1 ring-inset ring-ink/10">
               <p className="text-sm font-semibold text-ink">Sessão {s.numero} · {dataBR(s.data)}</p>
               <dl className="mt-1 grid gap-1 text-sm">
                 {s.objetivos ? <div><dt className="inline text-ink-muted">Objetivos: </dt><dd className="inline text-ink">{s.objetivos}</dd></div> : null}

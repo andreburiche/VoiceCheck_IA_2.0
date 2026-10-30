@@ -31,25 +31,33 @@ function CartaoMidia({ item, aoExcluir }: { item: Avaliacao; aoExcluir: (a: Aval
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const urlRef = useRef<string | null>(null);
+  const vivo = useRef(true);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
     setErro(null);
     try {
       const blob = await baixarMidia(item.id);
+      if (!vivo.current) return; // cartão saiu da tela durante o download: não cria URL que ninguém revoga
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
       const u = URL.createObjectURL(blob);
       urlRef.current = u;
       setUrl(u);
     } catch (e) {
-      setErro(friendlyError(e, "Não foi possível carregar."));
+      if (vivo.current) setErro(friendlyError(e, "Não foi possível carregar."));
     } finally {
-      setCarregando(false);
+      if (vivo.current) setCarregando(false);
     }
   }, [item.id]);
 
   useEffect(() => {
+    vivo.current = true;
     if (r.categoria === "imagem") void carregar();
-    return () => { if (urlRef.current) URL.revokeObjectURL(urlRef.current); };
+    return () => {
+      vivo.current = false;
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+      urlRef.current = null;
+    };
   }, [carregar, r.categoria]);
 
   const legenda = r.descricao || r.nome_original || (r.categoria === "video" ? "Vídeo" : "Imagem");

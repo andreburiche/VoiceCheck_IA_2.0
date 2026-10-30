@@ -466,6 +466,15 @@ class NasalanciaEntrada(BaseModel):
     canais_invertidos: bool = False
     observacao: str | None = Field(default=None, max_length=300)
 
+    @model_validator(mode="after")
+    def _coerente(self) -> "NasalanciaEntrada":
+        # o desvio-padrão de valores entre 0 e 100 não passa de 50; quadros de 20 ms cabem na duração
+        if self.dp_pct > 50:
+            raise ValueError("Desvio-padrão da nasalância impossível (acima de 50 %)")
+        if self.quadros > self.duracao_s / 0.02 + 1:
+            raise ValueError("Mais quadros de 20 ms do que cabem na duração informada")
+        return self
+
 
 class EggEntrada(BaseModel):
     """Resumo da eletroglotografia medida no navegador (quociente de contato); o sinal não é enviado."""
@@ -481,3 +490,12 @@ class EggEntrada(BaseModel):
     limiar_pct: Literal[25, 35, 50]
     canal_egg: Literal[1, 2]
     polaridade_invertida: bool = False
+
+    @model_validator(mode="after")
+    def _coerente(self) -> "EggEntrada":
+        if self.cq_dp_pct > 50:
+            raise ValueError("Desvio-padrão do quociente de contato impossível (acima de 50 %)")
+        # cada ciclo dura em média 1/F0: não cabem muito mais que duração × F0 ciclos
+        if self.ciclos > self.duracao_s * self.f0_media_hz * 1.5 + 5:
+            raise ValueError("Mais ciclos do que cabem na duração e na F0 informadas")
+        return self

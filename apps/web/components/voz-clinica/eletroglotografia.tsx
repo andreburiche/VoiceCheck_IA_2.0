@@ -52,9 +52,14 @@ export function Eletroglotografia({ paciente, aoSalvar }: { paciente: string; ao
     if (!arquivo) return;
     setErro(null); setSalvo(false); setAudio(null);
     try {
+      const dados = await arquivo.arrayBuffer();
       const ctx = new AudioContext();
-      const buf = await ctx.decodeAudioData(await arquivo.arrayBuffer());
-      void ctx.close();
+      let buf: AudioBuffer;
+      try {
+        buf = await ctx.decodeAudioData(dados);
+      } finally {
+        void ctx.close().catch(() => undefined); // fecha mesmo se o arquivo estiver corrompido
+      }
       if (buf.duration > 60) { setErro("Arquivo maior que 60 s: recorte antes."); return; }
       const canais = Array.from({ length: Math.min(2, buf.numberOfChannels) }, (_, i) => buf.getChannelData(i).slice());
       if (canais.length < 2) setCanal(1);

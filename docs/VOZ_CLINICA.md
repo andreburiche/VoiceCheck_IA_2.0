@@ -22,7 +22,7 @@ paciente. Biofeedback e jogos (VoxGames, Voice Analyst) ficam para a fase 2.
 | EASE-BR | Facilidade para cantar (Rocha et al., CoDAS 2014). 22 itens; cada resposta é a opção marcada (não 0, um pouco 1, moderadamente 2, muito 3); itens 6, 12 e 21 (positivos) somam 3 − opção. Total 0–66. **Sem nota de corte nem subescalas**, porque a versão brasileira não publicou nenhuma. Lista os itens que somaram 2 ou 3 pontos |
 | Anamnese | Aba própria. Queixa, tempo e evolução, 10 sintomas marcáveis, profissão, uso profissional da voz, horas de uso por dia, canto, tabagismo, álcool, água, refluxo, alergia respiratória, audição, terapia anterior, cirurgias/intubações, medicamentos e observações. Tudo opcional; só o que foi preenchido é salvo (tipo `anamnese`, uma versão nova a cada salvamento). "Usar a última anamnese" recupera a versão anterior para atualizar. O relatório PDF traz a mais recente |
 | Histórico | Lista por paciente, mais recente primeiro, com exclusão confirmada |
-| Evolução | Um gráfico por medida (jitter, shimmer, HNR, CPPS, IDV-10, QVV, GRBASI G, EASE-BR), até 12 sessões, com linha da nota de corte nos protocolos e valor de cada sessão ao passar o mouse ou focar pelo teclado. Aparece a partir da 2ª avaliação do mesmo tipo |
+| Evolução | Um gráfico por medida (jitter, shimmer, HNR, CPPS, IDV-10, QVV, GRBASI G, EASE-BR; nasalância por tarefa e quociente de contato do EGG por nível-critério, que só se comparam entre si), até 12 sessões, com linha da nota de corte nos protocolos e valor de cada sessão ao passar o mouse ou focar pelo teclado. Aparece a partir da 2ª avaliação do mesmo tipo |
 | Protocolo de voz | Quadro com a medida mais recente de cada parte (fala, vogal, fonetograma, DSI, IDV-10, QVV, GRBASI). **F0 da fala**: leitura de texto, contagem ou fala espontânea (até 60 s) → F0 mediana e nota, média, desvio (Hz e st), faixa p5–p95, tempo com voz, pausas ≥ 250 ms. **Diadococinesia** (/pa/, /ta/, /ka/, /pataka/, até 20 s) → taxa em sílabas/s, intervalo médio, CV do ritmo, DP da intensidade, taxa no início e no fim, traço por sílaba (picos do envelope de intensidade: proeminência ≥ 6 dB, ≥ 70 ms entre sílabas). **Análise cepstral** (como no VoxMetria 5): vogal /ɛ/ + frase "Olha lá o avião azul" → CPP (sem suavização) e CPPS de cada uma; **AVQI 03.01** (Maryn 2010; Barsties & Maryn 2015) só com o motor Praat, com os comandos do roteiro publicado (3 s centrais da vogal + trechos sonoros da frase), sem ponto de corte na tela (depende da língua/protocolo). Voz sintética saudável ≈ 0,6; muito desviada ≈ 7,4. O DAI do VoxMetria não foi implementado (fórmula não publicada). **DSI** (Wuyts 2000) com TMF, F0-alta e jitter sugeridos do histórico e I-baixa em dB SPL digitada (decibelímetro), salvo com as quatro medidas |
 | Gráficos da análise | Abaixo da tabela acústica, como no VoxMetria: sinal com trechos com/sem voz, curvas de F0 e intensidade, histograma da F0 (moda e média) e espectro de longo termo (FFT + envelope LPC com formantes). Também o plano da vogal (F1 × F2). O espectrograma ganhou controles de ganho e contraste (banda larga e estreita já existiam). Dados reduzidos (`graficos.py`, < 40 kB) salvos no resultado |
 | Importar e editar | Na análise acústica: importar arquivo de áudio (WAV de preferência; MP3/M4A/OGG convertidos no navegador para WAV 16 bits mono, com aviso; até 60 s). Editor sobre a forma de onda: arrastar seleciona (ou campos de início/fim), ampliar/reduzir/ver tudo, ouvir a seleção, manter só a seleção, apagar a seleção (emenda com 5 ms de transição) e desfazer (até 20 passos) |
@@ -196,7 +196,7 @@ Revisão feita por um agente que não escreveu o código. Corrigido:
 
 Depois da revisão (30/10/2026, segunda rodada):
 
-- **Cota com trava:** a análise é gravada primeiro; a gravação vem numa segunda transação que começa com `SELECT ... FOR UPDATE` na linha do usuário, então dois envios simultâneos não passam do limite do plano (no InnoDB o snapshot só começa depois da trava).
+- **Cota com trava:** a análise é gravada primeiro; a gravação vem numa segunda transação que começa com `SELECT ... FOR UPDATE` na linha do usuário, então dois envios simultâneos não passam do limite do plano (no InnoDB o snapshot só começa depois da trava). Desde a terceira revisão, a trava só dura a reserva (cota conferida e bytes marcados); o envio ao storage vem depois, já sem a trava.
 - **Exportação LGPD em ZIP:** `GET /api/v1/voz-clinica/pacientes/exportar-zip` devolve `dados.json`, `LEIAME.txt` e `gravacoes/*.wav` (cada avaliação aponta seu arquivo em `arquivo_audio`). Botão "Com as gravações (ZIP)" no Histórico. Limite de 10 exportações em 10 minutos.
 - **Editor de áudio:** copiar a seleção e colar no ponto clicado (ou no lugar da seleção), com emendas de 5 ms e o limite de 60 s da análise.
 
@@ -211,6 +211,17 @@ Estudo com vozes sintéticas de valor conhecido (`apps/api/scripts/concordancia_
 inflava jitter e shimmer em vozes agudas; foi ajustado para seguir o Praat e agora difere em média 0,16 ponto no
 jitter, 0,57 no shimmer, 0,21 dB no CPPS e 0,23 dB no HNR (antes 0,72, 1,53, 1,37 e 1,89). F0 igual.
 O teste `test_motor_interno_concorda_com_o_praat_em_jitter_e_shimmer` (Docker) mantém isso.
+
+## Terceira revisão independente (30/10/2026) — código novo
+
+Um revisor separado leu mídias, lote, manipulação, sessões, nasalância, EGG, .docx e exclusão. Corrigido:
+
+- **Trava presa durante o upload (alta):** a trava da cota ficava segura durante o `await` do envio ao storage; um segundo pedido do mesmo usuário no mesmo worker esperava a trava no thread do event loop e parava o worker inteiro até o timeout do InnoDB (50 s). Agora a trava vive numa transação curta, sem `await`: confere a cota e já **reserva** os bytes no registro; o envio ao storage vem depois. Se o envio falha, a reserva é desfeita e o envio parcial apagado; se a avaliação foi excluída durante o envio, o arquivo é apagado.
+- **Snapshot antes da trava:** ler `user.id` depois de `commit`/`rollback` recarregava o usuário com um SELECT comum, abrindo o snapshot do InnoDB antes do `FOR UPDATE`. O id é guardado antes.
+- **Memória no lote e nas mídias:** o lote lê, analisa e descarta um arquivo por vez (até 20 MB cada; arquivo grande falha sozinho). Lote e mídias passam por um semáforo de 2 por worker.
+- **Número da sessão repetido:** usa o maior número já dado (não a contagem), com a trava do usuário contra dois registros ao mesmo tempo; a lista da tela usa o id como chave.
+- **Microfone aceso na nasalância:** falha ao montar a captura, clique duplo ou tela fechada durante o pedido de permissão agora param o microfone e fecham o AudioContext; o botão fica desativado enquanto abre.
+- Menores: perceptiva com valor que não é texto → 400 (era 500); `/manipular` confere a faixa de F0 (30 a 1200 Hz); AudioContext fechado quando o arquivo está corrompido (nasalância e EGG); URL do download da mídia revogada se o cartão sai da tela; o servidor recusa resumos impossíveis de nasalância e EGG (desvio-padrão acima de 50 %, mais quadros ou ciclos do que cabem na duração).
 
 ## Rodar a v2 isolada no computador
 

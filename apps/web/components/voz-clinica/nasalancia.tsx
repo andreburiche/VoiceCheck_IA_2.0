@@ -88,28 +88,59 @@ export function Nasalancia({ paciente, aoSalvar }: { paciente: string; aoSalvar:
     if (!r) { setErro("Pouco som na gravação. Leia o texto inteiro, perto dos microfones."); return; }
     setResultado({ r, fonte: "gravacao" });
   }
-  useEffect(() => () => parar(false), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // tela fechada no meio do pedido de permissão: a captura que estava começando é abortada
+  const montado = useRef(true);
+  const iniciando = useRef(false);
+  const [abrindo, setAbrindo] = useState(false);
+  useEffect(() => {
+    montado.current = true;
+    return () => { montado.current = false; parar(false); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function gravar() {
+    if (iniciando.current || cap.current) return; // clique duplo não abre duas capturas
+    iniciando.current = true;
+    setAbrindo(true);
     setErro(null); setAviso(null); setResultado(null); setSalvo(false);
-    let stream: MediaStream;
+    let stream: MediaStream | null = null;
+    let ctx: AudioContext | null = null;
+    const abortar = () => {
+      stream?.getTracks().forEach((t) => t.stop());
+      if (ctx) void ctx.close().catch(() => undefined);
+    };
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: { channelCount: { ideal: 2 }, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-      });
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { channelCount: { ideal: 2 }, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        });
+      } catch (e) {
+        if (montado.current) setErro(e instanceof DOMException && e.name === "NotAllowedError" ? "Permita o uso do microfone no navegador." : friendlyError(e, "Não foi possível abrir a entrada de áudio."));
+        return;
+      }
+      if (!montado.current) { abortar(); return; }
+      await iniciarCaptura(stream, (c) => { ctx = c; });
+      if (!montado.current) { parar(false); return; }
     } catch (e) {
-      setErro(e instanceof DOMException && e.name === "NotAllowedError" ? "Permita o uso do microfone no navegador." : friendlyError(e, "Não foi possível abrir a entrada de áudio."));
-      return;
+      if (cap.current) parar(false); else abortar();
+      if (montado.current) setErro(friendlyError(e, "Não foi possível iniciar a captura de 2 canais neste navegador."));
+    } finally {
+      iniciando.current = false;
+      if (montado.current) setAbrindo(false);
     }
+  }
+
+  async function iniciarCaptura(stream: MediaStream, registrarCtx: (c: AudioContext) => void) {
     const canais = stream.getAudioTracks()[0]?.getSettings().channelCount ?? 1;
     if (canais < 2) setAviso("O navegador informa 1 canal nesta entrada. Escolha a interface estéreo nas configurações do sistema; com 1 canal não dá para medir.");
     const ctx = new AudioContext();
+    registrarCtx(ctx);
     const url = URL.createObjectURL(new Blob([WORKLET], { type: "application/javascript" }));
     try {
       await ctx.audioWorklet.addModule(url);
     } finally {
       URL.revokeObjectURL(url);
     }
+    if (ctx.state === "suspended") await ctx.resume();
     const fonte = ctx.createMediaStreamSource(stream);
     const no = new AudioWorkletNode(ctx, "captura-2-canais", { channelCount: 2, channelCountMode: "explicit", channelInterpretation: "discrete" });
     const c = { ctx, stream, c0: [] as Float32Array[], c1: [] as Float32Array[], canais, timer: 0 };
@@ -136,9 +167,14 @@ export function Nasalancia({ paciente, aoSalvar }: { paciente: string; aoSalvar:
     if (!arquivo) return;
     setErro(null); setAviso(null); setResultado(null); setSalvo(false);
     try {
+      const dados = await arquivo.arrayBuffer();
       const ctx = new AudioContext();
-      const buf = await ctx.decodeAudioData(await arquivo.arrayBuffer());
-      void ctx.close();
+      let buf: AudioBuffer;
+      try {
+        buf = await ctx.decodeAudioData(dados);
+      } finally {
+        void ctx.close().catch(() => undefined); // fecha mesmo se o arquivo estiver corrompido
+      }
       if (buf.numberOfChannels < 2) { setErro("O arquivo é mono. A nasalância precisa de um WAV estéreo (canal 1 oral, canal 2 nasal)."); return; }
       if (buf.duration > LIMITE_S) { setErro(`Arquivo maior que ${LIMITE_S} s: recorte antes.`); return; }
       const [o, z] = inverter ? [buf.getChannelData(1), buf.getChannelData(0)] : [buf.getChannelData(0), buf.getChannelData(1)];
@@ -190,7 +226,7 @@ export function Nasalancia({ paciente, aoSalvar }: { paciente: string; aoSalvar:
         {gravando ? (
           <Button type="button" variant="danger" onClick={() => parar()} data-testid="vc2-nasal-parar">Parar</Button>
         ) : (
-          <Button type="button" onClick={() => void gravar()} data-testid="vc2-nasal-gravar">Gravar (2 canais)</Button>
+          <Button type="button" onClick={() => void gravar()} disabled={abrindo} data-testid="vc2-nasal-gravar">{abrindo ? "Abrindo…" : "Gravar (2 canais)"}</Button>
         )}
         <label className="inline-flex min-h-[36px] cursor-pointer items-center rounded-lg px-3 text-sm text-ink-muted ring-1 ring-inset ring-line hover:text-ink focus-within:ring-2 focus-within:ring-accent">
           Importar WAV estéreo

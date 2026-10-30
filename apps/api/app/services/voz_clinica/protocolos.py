@@ -189,7 +189,7 @@ def perceptiva(respostas) -> dict:
         valor = respostas.get(chave)
         if valor in (None, ""):
             continue
-        if valor not in opcoes:
+        if not isinstance(valor, str) or valor not in opcoes:
             raise ErroProtocolo(f"Perceptiva: {nome} precisa ser {', '.join(opcoes)}.")
         parametros[chave] = {"nome": nome, "valor": valor, "rotulo": opcoes[valor], "alterado": valor != normal}
     obs = respostas.get("observacoes") or ""

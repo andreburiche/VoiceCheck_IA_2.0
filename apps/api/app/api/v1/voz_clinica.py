@@ -10,6 +10,7 @@ resultado fica salvo para acompanhar a evolução entre sessões.
 from __future__ import annotations
 
 import asyncio
+import math
 import hashlib
 import hmac
 import unicodedata
@@ -169,7 +170,8 @@ async def _salvar_com_audio(db: DbSession, user: CurrentUser, nome: str, tipo: s
     ligar o áudio nunca a perdem. A gravação vem numa segunda transação que trava a linha do
     usuário antes de conferir a cota, para que dois envios simultâneos não passem do limite.
     """
-    row = ClinicalEvaluation(owner_id=user.id, patient_name=nome, kind=tipo, engine=resultado.get("motor"), result=resultado)
+    uid = user.id  # lido antes do commit: depois dele, ler user.id abriria o snapshot antes da trava
+    row = ClinicalEvaluation(owner_id=uid, patient_name=nome, kind=tipo, engine=resultado.get("motor"), result=resultado)
     db.add(row)
     db.flush()
     row_id = row.id
@@ -177,7 +179,7 @@ async def _salvar_com_audio(db: DbSession, user: CurrentUser, nome: str, tipo: s
     aviso = None
     guardado = False
     if guardar_audio:
-        aviso, guardado = await _guardar_audio(db, user.id, row_id, dados)
+        aviso, guardado = await _guardar_audio(db, uid, row_id, dados)
     return ResultadoSalvo(avaliacao_id=row_id, resultado=resultado, audio_guardado=guardado, aviso_audio=aviso)
 
 
@@ -191,32 +193,78 @@ def _travar_cota(db: DbSession, user_id: str) -> None:
     db.execute(select(User.id).where(User.id == user_id).with_for_update())
 
 
-async def _guardar_audio(db: DbSession, user_id: str, row_id: str, dados: bytes) -> tuple[str | None, bool]:
-    chave = None
+def _reservar_audio(db: DbSession, user_id: str, row_id: str, chave: str, tamanho: int) -> bool:
+    """Transação curta, sem nenhum await no meio: trava a linha do usuário, confere a cota e já
+    marca os bytes na avaliação (a reserva passa a contar na cota). A trava é solta no commit,
+    antes do envio ao storage; assim um upload lento nunca segura a trava nem trava o worker.
+    Devolve False se a avaliação já não existe (excluída nesse meio-tempo)."""
     try:
         _travar_cota(db, user_id)
-        assert_can_upload(db, user_id, len(dados))
-        chave = f"voz-clinica/{user_id}/{row_id}.wav"
-        await asyncio.to_thread(get_storage().put_bytes, chave, dados, "audio/wav")
+        assert_can_upload(db, user_id, tamanho)
+        feito = db.execute(
+            ClinicalEvaluation.__table__.update()
+            .where(ClinicalEvaluation.id == row_id, ClinicalEvaluation.owner_id == user_id)
+            .values(audio_key=chave, audio_bytes=tamanho)
+        )
+        if feito.rowcount != 1:
+            db.rollback()
+            return False
+        db.commit()
+        return True
+    except BaseException:
+        db.rollback()
+        raise
+
+
+def _desfazer_reserva(db: DbSession, row_id: str, chave: str) -> None:
+    try:
         db.execute(
             ClinicalEvaluation.__table__.update()
-            .where(ClinicalEvaluation.id == row_id)
-            .values(audio_key=chave, audio_bytes=len(dados))
+            .where(ClinicalEvaluation.id == row_id, ClinicalEvaluation.audio_key == chave)
+            .values(audio_key=None, audio_bytes=None)
         )
         db.commit()
-        return None, True
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        logger.exception("Voz clínica: falha ao desfazer a reserva da gravação")
+
+
+def _ainda_ligado(db: DbSession, row_id: str, chave: str) -> bool:
+    """Depois do envio: a avaliação ainda aponta para o arquivo? (pode ter sido excluída durante o upload)"""
+    achou = db.scalar(select(ClinicalEvaluation.id).where(ClinicalEvaluation.id == row_id,
+                                                          ClinicalEvaluation.audio_key == chave))
+    db.commit()
+    return achou is not None
+
+
+async def _guardar_audio(db: DbSession, user_id: str, row_id: str, dados: bytes) -> tuple[str | None, bool]:
+    chave = f"voz-clinica/{user_id}/{row_id}.wav"
+    try:
+        if not _reservar_audio(db, user_id, row_id, chave, len(dados)):
+            return "A avaliação foi excluída antes de a gravação ser guardada.", False
     except QuotaExceeded as exc:
-        db.rollback()
         return f"{exc.message}. A análise foi salva sem a gravação.", False
-    except Exception:  # noqa: BLE001 — storage ou banco fora do ar não podem perder a análise
-        db.rollback()
-        logger.exception("Voz clínica: falha ao guardar a gravação")
-        if chave:
-            _apagar_audios(db, [chave])  # arquivo enviado sem registro no banco não pode ficar sem dono
+    except Exception:  # noqa: BLE001 — banco fora do ar não pode perder a análise
+        logger.exception("Voz clínica: falha ao reservar a gravação")
         return "Não foi possível guardar a gravação; a análise foi salva sem ela.", False
+    try:
+        await asyncio.to_thread(get_storage().put_bytes, chave, dados, "audio/wav")
+    except Exception:  # noqa: BLE001 — storage fora do ar
+        logger.exception("Voz clínica: falha ao guardar a gravação")
+        _desfazer_reserva(db, row_id, chave)
+        await asyncio.to_thread(_apagar_audios, db, [chave])  # envio parcial não pode ficar sem dono
+        return "Não foi possível guardar a gravação; a análise foi salva sem ela.", False
+    if not _ainda_ligado(db, row_id, chave):
+        await asyncio.to_thread(_apagar_audios, db, [chave])
+        return "A avaliação foi excluída antes de a gravação ser guardada.", False
+    return None, True
 
 
 LOTE_MAX_ARQUIVOS = 20
+#: 60 s de WAV estéreo 24 bits a 48 kHz ≈ 17 MB; o lote só analisa os primeiros 60 s de cada arquivo.
+LOTE_MAX_BYTES = 20 * 1024 * 1024
+#: Uploads grandes (lote, mídias) lidos ao mesmo tempo neste worker: limita o pico de memória.
+_MEMORIA_PESADA = asyncio.Semaphore(2)
 
 
 @router.post("/analisar-lote", dependencies=[Depends(verify_csrf)])
@@ -233,7 +281,6 @@ async def analisar_lote(
     enforce_rate_limit(request, bucket="voz_clinica_lote", limit=6, window_sec=600)
     if not files or len(files) > LOTE_MAX_ARQUIVOS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Envie de 1 a {LOTE_MAX_ARQUIVOS} arquivos WAV")
-    lidos = [(f.filename or f"arquivo {i + 1}", await _read_limited(f, MAX_WAV_BYTES)) for i, f in enumerate(files)]
 
     def _um(dados: bytes) -> dict:
         audio = limitar_duracao(voz_clinica.ler_wav(dados), 60)
@@ -242,9 +289,18 @@ async def analisar_lote(
         return r
 
     itens = []
-    for nome, dados in lidos:
+    # um arquivo por vez: lê, analisa e descarta (o lote inteiro nunca fica na memória)
+    for i, arquivo in enumerate(files):
+        nome = arquivo.filename or f"arquivo {i + 1}"
         try:
-            itens.append({"arquivo": nome[:200], "ok": True, "resultado": await asyncio.to_thread(_um, dados)})
+            async with _MEMORIA_PESADA:
+                dados = await _read_limited(arquivo, LOTE_MAX_BYTES)
+                res = await asyncio.to_thread(_um, dados)
+                del dados
+            itens.append({"arquivo": nome[:200], "ok": True, "resultado": res})
+        except HTTPException as exc:
+            itens.append({"arquivo": nome[:200], "ok": False, "erro": "Arquivo grande demais (até 20 MB por arquivo no lote)"
+                          if exc.status_code == 413 else str(exc.detail)})
         except (voz_clinica.ErroAudio, ValueError) as exc:
             itens.append({"arquivo": nome[:200], "ok": False, "erro": str(exc)})
         except Exception:  # noqa: BLE001
@@ -269,6 +325,8 @@ async def manipular_gravacao(
     if not manipulacao.disponivel():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                             detail="A manipulação de pitch e duração precisa do Praat instalado no servidor")
+    if not (math.isfinite(f0_min) and math.isfinite(f0_max) and 30 <= f0_min < f0_max <= 1200):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Faixa de F0 inválida (30 a 1200 Hz, mínimo menor que o máximo)")
     dados = await _read_limited(file, MAX_WAV_BYTES)
 
     def _rodar() -> bytes:
@@ -362,18 +420,27 @@ def registrar_sessao(entrada: SessaoEntrada, user: CurrentUser, db: DbSession) -
               for k in ("objetivos", "exercicios", "resposta", "orientacoes", "observacoes")}
     if not any(campos.values()):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Preencha ao menos um campo da sessão")
-    anteriores = db.scalar(
-        select(func.count()).select_from(ClinicalEvaluation).where(
-            ClinicalEvaluation.owner_id == user.id, ClinicalEvaluation.patient_name == nome, ClinicalEvaluation.kind == "sessao"
+    uid = user.id
+    db.rollback()  # a trava tem de ser o primeiro comando da transação (ver _travar_cota)
+    _travar_cota(db, uid)  # serializa dois registros simultâneos do mesmo usuário
+    numeros = db.scalars(
+        select(ClinicalEvaluation.result).where(
+            ClinicalEvaluation.owner_id == uid, ClinicalEvaluation.patient_name == nome, ClinicalEvaluation.kind == "sessao"
         )
-    ) or 0
+    ).all()
+    # o maior número já usado (não a contagem): excluir a sessão 2 de 1-2-3 não faz a próxima repetir o 3
+    ultimo = max((int(r["numero"]) for r in numeros if isinstance(r, dict) and isinstance(r.get("numero"), int)), default=0)
     resultado = {
-        "numero": int(anteriores) + 1,
+        "numero": ultimo + 1,
         "data": entrada.data.isoformat(),
         **campos,
         "exercicios_lista": [l.strip() for l in (campos["exercicios"] or "").splitlines() if l.strip()][:30],
     }
-    salvo = _salvar(db, user, nome, "sessao", resultado)
+    row = ClinicalEvaluation(owner_id=uid, patient_name=nome, kind="sessao", engine=None, result=resultado)
+    db.add(row)
+    db.flush()
+    salvo = row.id
+    db.commit()
     return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
 
 
@@ -915,6 +982,12 @@ async def enviar_midia(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente")
     if descricao is not None and len(descricao) > 200:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Descrição com até 200 caracteres")
+    uid = user.id  # antes do rollback abaixo (ler user.id depois dele abriria o snapshot antes da trava)
+    async with _MEMORIA_PESADA:
+        return await _enviar_midia(db, uid, nome, descricao, file)
+
+
+async def _enviar_midia(db: DbSession, uid: str, nome: str, descricao: str | None, file: UploadFile) -> ResultadoSalvo:
     dados = await _read_limited(file, max_bytes=midias.LIMITE_VIDEO)
     try:
         categoria, mime, ext = midias.validar(dados)
@@ -927,24 +1000,34 @@ async def enviar_midia(
     # a leitura do usuário (login) já abriu a transação: encerra, para a trava ser o primeiro comando
     db.rollback()
     row_id = str(uuid.uuid4())
-    chave = f"voz-clinica/{user.id}/midia/{row_id}.{ext}"
-    enviado = False
+    chave = f"voz-clinica/{uid}/midia/{row_id}.{ext}"
+    # 1) reserva (transação curta, sem await): trava, confere a cota e grava o registro
     try:
-        _travar_cota(db, user.id)
-        assert_can_upload(db, user.id, len(dados))
-        await asyncio.to_thread(get_storage().put_bytes, chave, dados, mime)
-        enviado = True
-        db.add(ClinicalEvaluation(id=row_id, owner_id=user.id, patient_name=nome, kind="midia", engine=None,
+        _travar_cota(db, uid)
+        assert_can_upload(db, uid, len(dados))
+        db.add(ClinicalEvaluation(id=row_id, owner_id=uid, patient_name=nome, kind="midia", engine=None,
                                   result=resultado, audio_key=chave, audio_bytes=len(dados)))
         db.commit()
     except QuotaExceeded as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=exc.message) from exc
-    except Exception:
+    except BaseException:
         db.rollback()
-        if enviado:
-            _apagar_audios(db, [chave])
         raise
+    # 2) envio ao storage, já sem a trava; se falhar, o registro sai e o envio parcial é apagado
+    try:
+        await asyncio.to_thread(get_storage().put_bytes, chave, dados, mime)
+    except Exception:
+        try:
+            db.execute(ClinicalEvaluation.__table__.delete().where(ClinicalEvaluation.id == row_id))
+            db.commit()
+        except Exception:  # noqa: BLE001
+            db.rollback()
+            logger.exception("Voz clínica: falha ao desfazer o registro da mídia")
+        await asyncio.to_thread(_apagar_audios, db, [chave])
+        raise
+    if not _ainda_ligado(db, row_id, chave):  # excluída durante o envio
+        await asyncio.to_thread(_apagar_audios, db, [chave])
     return ResultadoSalvo(avaliacao_id=row_id, resultado=resultado)
 
 
