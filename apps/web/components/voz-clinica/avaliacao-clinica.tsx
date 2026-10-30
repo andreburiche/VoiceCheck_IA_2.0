@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileText, LoaderCircle, Mic, NotebookPen, Square, Trash2, Upload } from "lucide-react";
+import { Download, FileText, History, LoaderCircle, Mic, NotebookPen, Square, Trash2, Upload } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -772,7 +772,7 @@ function Historico({ paciente, versao, aoExcluirPaciente }: { paciente: string; 
   if (!paciente) return null;
   return (
     <section className={PAINEL} aria-labelledby="vc2-historico">
-      <h2 id="vc2-historico" className={TITULO}>
+      <h2 id="vc2-historico" className={cn(TITULO, "scroll-mt-4 focus:outline-none")} tabIndex={-1}>
         Histórico de {paciente}
       </h2>
       <Erro texto={erro} />
@@ -890,6 +890,13 @@ export function AvaliacaoClinica() {
   const [versao, setVersao] = useState(0);
   const [aba, setAba] = useState<Aba>("avaliacao");
   const idPaciente = useId();
+  function irParaHistorico() {
+    const titulo = document.getElementById("vc2-historico");
+    if (!titulo) return;
+    const suave = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    titulo.scrollIntoView({ behavior: suave ? "smooth" : "auto", block: "start" });
+    titulo.focus({ preventScroll: true }); // leitor de tela continua a partir do histórico
+  }
   const nome = useMemo(() => paciente.split(/\s+/).filter(Boolean).join(" "), [paciente]);
 
   const recarregarPacientes = useCallback(() => {
@@ -935,6 +942,13 @@ export function AvaliacaoClinica() {
           <p className="mt-2 text-xs text-ink-faint">Com o nome preenchido, cada resultado fica salvo no histórico do paciente.</p>
         </div>
         <CadastroPacienteForm paciente={nome} aoSalvar={recarregarPacientes} />
+        {nome ? (
+          // o histórico fica no fim da página, depois dos formulários (longe no celular): atalho até ele
+          <button type="button" onClick={irParaHistorico} data-testid="vc2-ir-historico"
+            className="mt-2 inline-flex min-h-[40px] items-center gap-1.5 rounded-lg text-sm font-medium text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+            <History className="h-4 w-4" aria-hidden /> Ver histórico de {nome}
+          </button>
+        ) : null}
       </section>
 
       <Abas ativa={aba} onChange={setAba} base={idPaciente} />
