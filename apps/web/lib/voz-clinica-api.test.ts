@@ -5,6 +5,7 @@ import {
   linhasAcusticas,
   numeroBR,
   resumoAvaliacao,
+  resumoCadastro,
   resumoProtocolo,
   type AnaliseAcustica,
   type Avaliacao,
@@ -115,3 +116,13 @@ describe("EASE-BR e anamnese", () => {
   });
 });
 
+
+describe("resumoCadastro", () => {
+  it("idade, sexo e profissão; vazio sem cadastro", () => {
+    const base = { paciente: "Ana", data_nascimento: "1990-01-01", sexo: null, telefone: null, email: null, profissao: null, profissional_da_voz: null, observacoes: null };
+    expect(resumoCadastro({ ...base, idade: 34, sexo: "feminino", profissao: "Professora", profissional_da_voz: true })).toBe("34 anos · feminino · Professora (voz profissional)");
+    expect(resumoCadastro({ ...base, idade: 1 })).toBe("1 ano");
+    expect(resumoCadastro({ ...base, profissional_da_voz: true })).toBe("voz profissional");
+    expect(resumoCadastro(null)).toBe("");
+  });
+});

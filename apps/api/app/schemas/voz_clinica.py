@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from datetime import timezone
 from typing import Annotated, Any, Literal
 
@@ -202,6 +202,50 @@ class PacienteResumo(BaseModel):
     paciente: str
     avaliacoes: int
     ultima: DataUtc
+    #: Há cadastro (data de nascimento, contato...) para este paciente.
+    cadastro: bool = False
+
+
+Sexo = Literal["feminino", "masculino", "outro"]
+
+
+class CadastroEntrada(BaseModel):
+    """Cadastro do paciente. Só o nome é obrigatório; campos vazios ficam sem valor."""
+
+    paciente: str = Field(min_length=1, max_length=120)
+    data_nascimento: date | None = None
+    sexo: Sexo | None = None
+    telefone: str | None = Field(default=None, max_length=30, pattern=r"^[0-9+()\-\s.]*$")
+    email: str | None = Field(default=None, max_length=255, pattern=r"^$|^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    profissao: str | None = Field(default=None, max_length=120)
+    profissional_da_voz: bool | None = None
+    observacoes: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("data_nascimento")
+    @classmethod
+    def _nascimento(cls, v: date | None) -> date | None:
+        if v is not None and not (date(1900, 1, 1) <= v <= date.today()):
+            raise ValueError("data de nascimento fora do intervalo (1900 até hoje)")
+        return v
+
+    @field_validator("telefone", "email", "profissao", "observacoes")
+    @classmethod
+    def _vazio(cls, v: str | None) -> str | None:
+        v = " ".join(v.split()) if v is not None and "\n" not in v else (v.strip() if v else v)
+        return v or None
+
+
+class CadastroOut(BaseModel):
+    paciente: str
+    data_nascimento: date | None = None
+    idade: int | None = None
+    sexo: Sexo | None = None
+    telefone: str | None = None
+    email: str | None = None
+    profissao: str | None = None
+    profissional_da_voz: bool | None = None
+    observacoes: str | None = None
+    atualizado_em: DataUtc
 
 
 class PacienteLista(BaseModel):

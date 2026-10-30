@@ -13,7 +13,7 @@ import asyncio
 import hashlib
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import JSONResponse, Response
@@ -24,12 +24,14 @@ from app.core.config import get_settings
 from app.core.deps import CurrentUser, DbSession, verify_csrf
 from app.core.rate_limit import enforce_rate_limit
 from app.api.v1.pratica_casa import plano_out, sessoes_por_plano
-from app.models import ClinicalEvaluation, HomePracticePlan
+from app.models import ClinicalEvaluation, HomePracticePlan, VoicePatient
 from app.schemas.voz_clinica import (
     AnamneseEntrada,
     AnotacaoEntrada,
     AvaliacaoLista,
     BiofeedbackEntrada,
+    CadastroEntrada,
+    CadastroOut,
     CargaEntrada,
     FonetogramaEntrada,
     JogoEntrada,
@@ -463,7 +465,55 @@ def listar_pacientes(user: CurrentUser, db: DbSession) -> PacienteLista:
         .order_by(func.max(ClinicalEvaluation.created_at).desc())
         .limit(1000)
     ).all()
-    return PacienteLista(items=[PacienteResumo(paciente=n, avaliacoes=c, ultima=u) for n, c, u in linhas])
+    cadastros = {p.name: p for p in db.scalars(select(VoicePatient).where(VoicePatient.owner_id == user.id)).all()}
+    itens = [PacienteResumo(paciente=n, avaliacoes=c, ultima=u, cadastro=n in cadastros) for n, c, u in linhas]
+    vistos = {i.paciente for i in itens}
+    # cadastrados que ainda não têm avaliação também aparecem na lista
+    itens += [PacienteResumo(paciente=n, avaliacoes=0, ultima=p.updated_at, cadastro=True)
+              for n, p in cadastros.items() if n not in vistos]
+    return PacienteLista(items=itens)
+
+
+def _idade(nascimento: date | None, em: date | None = None) -> int | None:
+    if nascimento is None:
+        return None
+    hoje = em or date.today()
+    return hoje.year - nascimento.year - ((hoje.month, hoje.day) < (nascimento.month, nascimento.day))
+
+
+def _cadastro_out(p: VoicePatient) -> CadastroOut:
+    return CadastroOut(
+        paciente=p.name, data_nascimento=p.birth_date, idade=_idade(p.birth_date), sexo=p.sex, telefone=p.phone,
+        email=p.email, profissao=p.occupation, profissional_da_voz=p.voice_professional, observacoes=p.notes,
+        atualizado_em=p.updated_at,
+    )
+
+
+def _cadastro(db: DbSession, user: CurrentUser, nome: str) -> VoicePatient | None:
+    return db.scalar(select(VoicePatient).where(VoicePatient.owner_id == user.id, VoicePatient.name == nome))
+
+
+@router.get("/pacientes/cadastro", response_model=CadastroOut)
+def obter_cadastro(user: CurrentUser, db: DbSession, paciente: str | None = None) -> CadastroOut:
+    p = _cadastro(db, user, _nome_obrigatorio(paciente))
+    if p is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente sem cadastro")
+    return _cadastro_out(p)
+
+
+@router.put("/pacientes/cadastro", response_model=CadastroOut, dependencies=[Depends(verify_csrf)])
+def salvar_cadastro(entrada: CadastroEntrada, user: CurrentUser, db: DbSession) -> CadastroOut:
+    """Cria ou atualiza o cadastro (o nome/código liga o cadastro às avaliações)."""
+    nome = _nome_obrigatorio(entrada.paciente)
+    p = _cadastro(db, user, nome)
+    if p is None:
+        p = VoicePatient(owner_id=user.id, name=nome)
+        db.add(p)
+    p.birth_date, p.sex, p.phone, p.email = entrada.data_nascimento, entrada.sexo, entrada.telefone, entrada.email
+    p.occupation, p.voice_professional, p.notes = entrada.profissao, entrada.profissional_da_voz, entrada.observacoes
+    db.commit()
+    db.refresh(p)
+    return _cadastro_out(p)
 
 
 def _nome_obrigatorio(paciente: str | None) -> str:
@@ -492,7 +542,8 @@ def exportar_paciente(request: Request, user: CurrentUser, db: DbSession, pacien
         .where(HomePracticePlan.owner_id == user.id, HomePracticePlan.patient_name == nome)
         .order_by(HomePracticePlan.created_at)
     ).all()
-    if not rows and not planos:
+    cadastro = _cadastro(db, user, nome)
+    if not rows and not planos and cadastro is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nada guardado para este paciente")
     total, ultima = sessoes_por_plano(db, user.id, [p.id for p in planos])
     agora = datetime.now(timezone.utc)
@@ -500,6 +551,7 @@ def exportar_paciente(request: Request, user: CurrentUser, db: DbSession, pacien
         "formato": "voicecheck-voz-clinica/1",
         "paciente": nome,
         "exportado_em": agora.isoformat(),
+        "cadastro": _cadastro_out(cadastro).model_dump(mode="json") if cadastro else None,
         "avaliacoes": [_saida(r).model_dump(mode="json") for r in rows],
         # o segredo dos links nunca é exportado (só o hash existe no banco, e ele também fica fora)
         "planos_pratica": [plano_out(p, total, ultima).model_dump(mode="json") for p in planos],
@@ -530,7 +582,8 @@ def excluir_paciente(request: Request, user: CurrentUser, db: DbSession, pacient
     chaves = [c for c in db.scalars(select(ClinicalEvaluation.audio_key).where(*filtro_aval)).all() if c]
     n_aval = db.execute(delete(ClinicalEvaluation).where(*filtro_aval)).rowcount or 0
     n_planos = db.execute(delete(HomePracticePlan).where(*filtro_plano)).rowcount or 0
-    if not n_aval and not n_planos:
+    n_cad = db.execute(delete(VoicePatient).where(VoicePatient.owner_id == user.id, VoicePatient.name == nome)).rowcount or 0
+    if not n_aval and not n_planos and not n_cad:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nada guardado para este paciente")
     write_audit(
@@ -539,7 +592,8 @@ def excluir_paciente(request: Request, user: CurrentUser, db: DbSession, pacient
     )
     db.commit()
     _apagar_audios(chaves)
-    return {"avaliacoes_excluidas": n_aval, "planos_excluidos": n_planos, "gravacoes_excluidas": len(chaves)}
+    return {"avaliacoes_excluidas": n_aval, "planos_excluidos": n_planos, "gravacoes_excluidas": len(chaves),
+            "cadastro_excluido": bool(n_cad)}
 
 
 @router.get("/avaliacoes", response_model=AvaliacaoLista)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -10,6 +10,7 @@ from sqlalchemy import (
     CHAR,
     JSON,
     Boolean,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -557,6 +558,30 @@ class ClinicalEvaluation(Base, TimestampMixin):
     #: Tamanho do WAV guardado; entra na cota de armazenamento do plano.
     audio_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     #: Anotação livre do profissional sobre esta avaliação/gravação (texto, até 4000 caracteres).
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+class VoicePatient(Base, TimestampMixin):
+    """Cadastro do paciente da avaliação clínica (VoiceCheck IA 2.0).
+
+    Ligado às avaliações pelo nome/código usado pelo profissional (único por profissional).
+    Todos os campos além do nome são opcionais: guarde só o necessário (LGPD, minimização).
+    """
+
+    __tablename__ = "voice_patients"
+    __table_args__ = (UniqueConstraint("owner_id", "name", name="uq_voice_patients_owner_name"),)
+
+    id: Mapped[str] = mapped_column(CHAR(36), primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    birth_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    #: feminino | masculino | outro
+    sex: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    phone: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    occupation: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    #: Usa a voz profissionalmente (professor, cantor, operador de telemarketing...).
+    voice_professional: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 

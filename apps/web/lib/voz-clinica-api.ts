@@ -189,7 +189,22 @@ export type Avaliacao = {
   anotacao?: string | null;
 };
 
-export type PacienteResumo = { paciente: string; avaliacoes: number; ultima: string };
+export type PacienteResumo = { paciente: string; avaliacoes: number; ultima: string; cadastro?: boolean };
+
+export type Sexo = "feminino" | "masculino" | "outro";
+/** Cadastro do paciente (só o nome é obrigatório). */
+export type CadastroPaciente = {
+  paciente: string;
+  data_nascimento: string | null;
+  idade?: number | null;
+  sexo: Sexo | null;
+  telefone: string | null;
+  email: string | null;
+  profissao: string | null;
+  profissional_da_voz: boolean | null;
+  observacoes: string | null;
+  atualizado_em?: string;
+};
 
 const BASE = "/api/v1/voz-clinica";
 
@@ -318,6 +333,30 @@ export function salvarFonetograma(paciente: string, duracao_s: number, pontos: P
   });
 }
 
+/** Cadastro do paciente; null quando ainda não há cadastro. */
+export async function obterCadastro(paciente: string): Promise<CadastroPaciente | null> {
+  try {
+    return await apiFetch<CadastroPaciente>(`${BASE}/pacientes/cadastro?paciente=${encodeURIComponent(paciente)}`);
+  } catch (e) {
+    if ((e as { status?: number }).status === 404) return null;
+    throw e;
+  }
+}
+
+export function salvarCadastro(c: CadastroPaciente) {
+  return apiFetch<CadastroPaciente>(`${BASE}/pacientes/cadastro`, { method: "PUT", json: c });
+}
+
+/** "34 anos · feminino · Professora (voz profissional)" — para o cabeçalho e o relatório. */
+export function resumoCadastro(c: CadastroPaciente | null): string {
+  if (!c) return "";
+  return [
+    c.idade != null ? `${c.idade} ${c.idade === 1 ? "ano" : "anos"}` : null,
+    c.sexo,
+    c.profissao ? `${c.profissao}${c.profissional_da_voz ? " (voz profissional)" : ""}` : c.profissional_da_voz ? "voz profissional" : null,
+  ].filter(Boolean).join(" · ");
+}
+
 export function listarPacientes() {
   return apiFetch<{ items: PacienteResumo[] }>(`${BASE}/pacientes`);
 }
@@ -332,7 +371,7 @@ export async function exportarPaciente(paciente: string): Promise<{ arquivo: str
 
 /** LGPD (eliminação): apaga avaliações e links de prática do paciente. Irreversível. */
 export function excluirPaciente(paciente: string) {
-  return apiFetch<{ avaliacoes_excluidas: number; planos_excluidos: number; gravacoes_excluidas?: number }>(
+  return apiFetch<{ avaliacoes_excluidas: number; planos_excluidos: number; gravacoes_excluidas?: number; cadastro_excluido?: boolean }>(
     `${BASE}/pacientes?paciente=${encodeURIComponent(paciente)}`,
     { method: "DELETE" },
   );

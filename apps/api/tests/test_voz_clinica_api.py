@@ -395,7 +395,7 @@ def test_exportar_e_excluir_paciente(client: httpx.Client) -> None:
     assert sem_csrf.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente}).status_code == 403
 
     r = client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
-    assert r.json() == {"avaliacoes_excluidas": 2, "planos_excluidos": 1, "gravacoes_excluidas": 0}
+    assert r.json() == {"avaliacoes_excluidas": 2, "planos_excluidos": 1, "gravacoes_excluidas": 0, "cadastro_excluido": False}
     assert client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"] == []
     with _celular(criado["token"]) as cel:  # o link do paciente parou junto
         assert cel.get("/api/v1/pratica-casa/plano").status_code == 404
@@ -437,7 +437,7 @@ def test_gravacao_guardada_ouvir_e_apagar(client: httpx.Client) -> None:
     assert client.delete(f"/api/v1/voz-clinica/avaliacoes/{ident}").status_code == 204
     assert client.get(f"/api/v1/voz-clinica/avaliacoes/{ident}/audio").status_code == 404
     r = client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
-    assert r.json() == {"avaliacoes_excluidas": 2, "planos_excluidos": 0, "gravacoes_excluidas": 1}
+    assert r.json() == {"avaliacoes_excluidas": 2, "planos_excluidos": 0, "gravacoes_excluidas": 1, "cadastro_excluido": False}
     assert client.get(f"/api/v1/voz-clinica/avaliacoes/{c['avaliacao_id']}/audio").status_code == 404
 
 
@@ -517,3 +517,32 @@ def test_carga_vocal_salva_resumo(client: httpx.Client) -> None:
     fora = {**corpo, "minutos": [{"minuto": 2, "fonacao_pct": 90}]}
     assert client.post("/api/v1/voz-clinica/carga", json=fora).status_code == 422
     client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
+
+
+def test_cadastro_do_paciente(client: httpx.Client) -> None:
+    from datetime import date
+
+    paciente = f"Cad {uuid.uuid4().hex[:6]}"
+    assert client.get("/api/v1/voz-clinica/pacientes/cadastro", params={"paciente": paciente}).status_code == 404
+    hoje = date.today()
+    nasc = date(hoje.year - 34, 1, 1).isoformat()
+    corpo = {"paciente": paciente, "data_nascimento": nasc, "sexo": "feminino", "telefone": "(11) 98888-7777",
+             "email": "ana@example.com", "profissao": "Professora", "profissional_da_voz": True, "observacoes": "  "}
+    r = client.put("/api/v1/voz-clinica/pacientes/cadastro", json=corpo)
+    assert r.status_code == 200, r.text
+    c = r.json()
+    assert c["idade"] == 34 and c["sexo"] == "feminino" and c["observacoes"] is None and c["profissional_da_voz"] is True
+    # cadastrado sem avaliação aparece na lista de pacientes
+    lista = client.get("/api/v1/voz-clinica/pacientes").json()["items"]
+    assert any(p["paciente"] == paciente and p["avaliacoes"] == 0 and p["cadastro"] for p in lista)
+    # atualização (upsert), entradas inválidas
+    assert client.put("/api/v1/voz-clinica/pacientes/cadastro", json={**corpo, "profissao": "Cantora"}).json()["profissao"] == "Cantora"
+    for ruim in ({"sexo": "x"}, {"email": "sem-arroba"}, {"telefone": "abc"}, {"data_nascimento": "2999-01-01"}):
+        assert client.put("/api/v1/voz-clinica/pacientes/cadastro", json={**corpo, **ruim}).status_code == 422, ruim
+    assert _cliente("intruso").get("/api/v1/voz-clinica/pacientes/cadastro", params={"paciente": paciente}).status_code == 404
+    # exportação e exclusão (LGPD) levam o cadastro junto
+    exp = client.get("/api/v1/voz-clinica/pacientes/exportar", params={"paciente": paciente}).json()
+    assert exp["cadastro"]["profissao"] == "Cantora" and exp["avaliacoes"] == []
+    r = client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
+    assert r.json() == {"avaliacoes_excluidas": 0, "planos_excluidos": 0, "gravacoes_excluidas": 0, "cadastro_excluido": True}
+    assert client.get("/api/v1/voz-clinica/pacientes/cadastro", params={"paciente": paciente}).status_code == 404

@@ -25,6 +25,8 @@ export type OpcoesRelatorio = {
   profissional?: string | null;
   observacoes?: string | null;
   geradoEm?: Date;
+  /** Idade, sexo e profissão do cadastro (contatos não entram no relatório). */
+  dadosPaciente?: string | null;
 };
 
 function dataHora(iso: string): string {
@@ -280,6 +282,7 @@ export function montarRelatorioClinico(paciente: string, itens: Avaliacao[], opc
   <p class="sub">VoiceCheck IA · avaliação clínica da voz</p>
   <div class="meta">
     <div><strong>Paciente:</strong> ${esc(nome)}</div>
+    ${omitEmpty("Dados", opcoes.dadosPaciente)}
     ${omitEmpty("Profissional", opcoes.profissional)}
     <div><strong>Período:</strong> ${esc(periodo)}</div>
     <div><strong>Avaliações:</strong> ${ordenadas.length}</div>

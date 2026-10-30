@@ -51,6 +51,11 @@ describe("montarRelatorioClinico", () => {
     expect(html).toContain("Evolução"); // jitter tem 2 sessões
   });
 
+  it("mostra idade/sexo/profissão do cadastro só quando há", () => {
+    expect(montarRelatorioClinico("Ana", [idv(1, 3)], { dadosPaciente: "34 anos · feminino" })).toContain("<strong>Dados:</strong> 34 anos · feminino");
+    expect(montarRelatorioClinico("Ana", [idv(1, 3)]).includes("<strong>Dados:</strong>")).toBe(false);
+  });
+
   it("escapa texto digitado pelo usuário", () => {
     const html = montarRelatorioClinico("<script>x</script>", [idv(1, 3)], { observacoes: "a < b & c" });
     expect(html.includes("<script>x</script>")).toBe(false);

@@ -15,6 +15,7 @@ import { Espectrograma } from "@/components/voz-clinica/espectrograma";
 import { Fonetograma } from "@/components/voz-clinica/fonetograma";
 import { JogosTerapia } from "@/components/voz-clinica/jogos-terapia";
 import { PraticaCasa } from "@/components/voz-clinica/pratica-casa";
+import { CadastroPacienteForm } from "@/components/voz-clinica/cadastro-paciente";
 import { CargaVocal } from "@/components/voz-clinica/carga-vocal";
 import { ComparacaoAntesDepois } from "@/components/voz-clinica/comparacao";
 import { GraficosAnalise } from "@/components/voz-clinica/graficos-analise";
@@ -36,6 +37,8 @@ import {
   linhasAcusticas,
   listarAvaliacoes,
   listarPacientes,
+  obterCadastro,
+  resumoCadastro,
   resumoAvaliacao,
   resumoProtocolo,
   type AnaliseAcustica,
@@ -533,13 +536,21 @@ function Relatorio({ paciente, itens }: { paciente: string; itens: Avaliacao[] }
   const [profissional, setProfissional] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [erro, setErro] = useState<string | null>(null);
+  const [dadosPaciente, setDadosPaciente] = useState("");
   const id = useId();
+  // idade/sexo/profissão do cadastro: buscados ao abrir (a impressão precisa sair do clique, sem espera)
+  useEffect(() => {
+    if (!aberto) return;
+    let vivo = true;
+    obterCadastro(paciente).then((c) => vivo && setDadosPaciente(resumoCadastro(c))).catch(() => undefined);
+    return () => { vivo = false; };
+  }, [aberto, paciente]);
 
   function gerar(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
     try {
-      imprimirRelatorioClinico(paciente, itens, { profissional, observacoes, geradoEm: new Date() });
+      imprimirRelatorioClinico(paciente, itens, { profissional, observacoes, dadosPaciente, geradoEm: new Date() });
       setAberto(false);
     } catch (err) {
       setErro(friendlyError(err, "Não foi possível gerar o relatório."));
@@ -621,7 +632,8 @@ function DadosDoPaciente({ paciente, aoExcluir }: { paciente: string; aoExcluir:
       aoExcluir(
         `Dados de ${paciente} excluídos: ${r.avaliacoes_excluidas} ${r.avaliacoes_excluidas === 1 ? "registro" : "registros"}` +
           (g ? `, ${g} ${g === 1 ? "gravação" : "gravações"}` : "") +
-          ` e ${r.planos_excluidos} ${r.planos_excluidos === 1 ? "link de prática" : "links de prática"}.`,
+          ` e ${r.planos_excluidos} ${r.planos_excluidos === 1 ? "link de prática" : "links de prática"}` +
+          (r.cadastro_excluido ? ", além do cadastro." : "."),
       );
     } catch (e) {
       setErro(friendlyError(e, "Não foi possível excluir os dados."));
@@ -646,7 +658,7 @@ function DadosDoPaciente({ paciente, aoExcluir }: { paciente: string; aoExcluir:
       <ConfirmDialog
         open={confirmar}
         title={`Excluir todos os dados de ${paciente}?`}
-        description="Apaga para sempre todas as avaliações, gravações, protocolos, anamneses, sessões e links de prática deste paciente; os links param de funcionar na hora. Antes, confira se a guarda do prontuário exigida pelo seu conselho profissional permite a exclusão e, se preciso, exporte os dados."
+        description="Apaga para sempre o cadastro e todas as avaliações, gravações, protocolos, anamneses, sessões e links de prática deste paciente; os links param de funcionar na hora. Antes, confira se a guarda do prontuário exigida pelo seu conselho profissional permite a exclusão e, se preciso, exporte os dados."
         confirmLabel="Excluir tudo"
         danger
         busy={excluindo}
@@ -917,11 +929,12 @@ export function AvaliacaoClinica() {
           />
           <datalist id={`${idPaciente}-lista`}>
             {pacientes.map((p) => (
-              <option key={p.paciente} value={p.paciente}>{`${p.avaliacoes} avaliações`}</option>
+              <option key={p.paciente} value={p.paciente}>{`${p.avaliacoes} ${p.avaliacoes === 1 ? "avaliação" : "avaliações"}${p.cadastro ? " · cadastrado" : ""}`}</option>
             ))}
           </datalist>
           <p className="mt-2 text-xs text-ink-faint">Com o nome preenchido, cada resultado fica salvo no histórico do paciente.</p>
         </div>
+        <CadastroPacienteForm paciente={nome} aoSalvar={recarregarPacientes} />
       </section>
 
       <Abas ativa={aba} onChange={setAba} base={idPaciente} />
