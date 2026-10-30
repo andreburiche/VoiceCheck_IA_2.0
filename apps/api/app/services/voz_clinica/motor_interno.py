@@ -1,9 +1,11 @@
 """Motor interno de análise acústica (numpy/scipy).
 
 Segue as definições do Praat sempre que possível (Boersma, 1993; manual do
-Praat, "Voice"), mas é uma implementação própria. Os valores absolutos de
-HNR e CPPS podem diferir do Praat; para comparar com pontos de corte
-publicados, use o motor "praat".
+Praat, "Voice"), mas é uma implementação própria, calibrada contra o Praat
+(docs/CONCORDANCIA_MOTORES.md): diferença média de 0,16 ponto no jitter, 0,57
+no shimmer, 0,21 dB no CPPS e 0,22 dB no HNR. Mesmo assim, para comparar com
+pontos de corte publicados prefira o motor "praat", e não misture os dois motores
+no acompanhamento de um paciente.
 """
 
 from __future__ import annotations
@@ -302,6 +304,55 @@ def perturbacao(trechos) -> dict:
 
 
 # --------------------------------------------------------------------------
+# HNR como o "To Harmonicity (cc)" do Praat
+# --------------------------------------------------------------------------
+
+def hnr_cc(audio: Audio, f0_min: float = 75.0, f0_max: float = 600.0, passo: float = 0.01,
+           silencio: float = 0.1, periodos: float = 1.0) -> float | None:
+    """Média do HNR (dB) por correlação cruzada, com os parâmetros do Praat ("To Harmonicity (cc)":
+    passo 0,01 s, 1 período do piso de pitch por janela, limiar de silêncio 0,1; "Get mean" ignora
+    os quadros sem periodicidade). Calibrado contra o Praat: erro médio 0,22 dB.
+    """
+    x, taxa = audio.amostras, audio.taxa
+    L = int(round(periodos / f0_min * taxa))
+    lmin, lmax = max(1, int(np.floor(taxa / f0_max))), int(np.ceil(taxa / f0_min))
+    pico = float(np.max(np.abs(x))) if len(x) else 0.0
+    if pico <= 0 or len(x) < 2 * (L + lmax):
+        return None
+    valores = []
+    for c in range(L + lmax, len(x) - L - lmax, max(1, int(passo * taxa))):
+        i0 = c - L // 2
+        seg = x[i0 : i0 + L]
+        if np.max(np.abs(seg)) < silencio * pico:
+            continue
+        seg = seg - seg.mean()
+        e0 = float(np.dot(seg, seg))
+        if e0 <= 0:
+            continue
+        # correlação com todos os segmentos deslocados: o numerador já é centrado porque o
+        # segmento de referência tem média zero; a energia centrada vem de somas acumuladas
+        ext = x[i0 + lmin : i0 + lmax + L]
+        num = np.correlate(ext, seg, mode="valid")
+        s1 = np.concatenate(([0.0], np.cumsum(ext)))
+        s2 = np.concatenate(([0.0], np.cumsum(ext * ext)))
+        soma, soma2 = s1[L:] - s1[:-L], s2[L:] - s2[:-L]
+        energia = np.maximum(soma2 - soma * soma / L, 0.0)
+        rs = num / np.sqrt(e0 * energia + 1e-30)
+        k = int(np.argmax(rs))
+        r = float(rs[k])
+        if 0 < k < len(rs) - 1:
+            a, b, c2 = rs[k - 1], rs[k], rs[k + 1]
+            d = a - 2 * b + c2
+            if d:
+                r = float(b - 0.25 * (a - c2) * (0.5 * (a - c2) / d))
+        if r <= 0:
+            continue  # quadro sem periodicidade: o Praat marca −200 dB e a média o ignora
+        r = min(r, 0.999999)
+        valores.append(10 * np.log10(r / (1 - r)))
+    return round(float(np.mean(valores)), 2) if valores else None
+
+
+# --------------------------------------------------------------------------
 # CPPS (Hillenbrand et al., 1994; parâmetros próximos aos do Praat)
 # --------------------------------------------------------------------------
 
@@ -476,9 +527,11 @@ def analisar(audio: Audio, f0_min=75.0, f0_max=600.0) -> dict:
         rms_db.append(20 * np.log10(np.sqrt(np.mean(q**2)) + 1e-12))
     rms_db = np.array(rms_db)
 
-    # harmonicidade (HNR) a partir da correlação dos quadros vozeados
-    r = np.clip(corrs[vozeado], 1e-6, 0.999999)
-    hnr = 10 * np.log10(r / (1 - r))
+    # harmonicidade (HNR) como o Praat; se não der (gravação curta), a correlação do rastreador de pitch
+    hnr_db = hnr_cc(audio, f0_min, f0_max)
+    if hnr_db is None:
+        r = np.clip(corrs[vozeado], 1e-6, 0.999999)
+        hnr_db = round(float(np.mean(10 * np.log10(r / (1 - r)))), 2)
 
     ciclos = marcar_ciclos(audio, tempos, f0s)
     pert = perturbacao(ciclos)
@@ -499,7 +552,7 @@ def analisar(audio: Audio, f0_min=75.0, f0_max=600.0) -> dict:
             "max_dbfs": round(float(np.max(rms_db)), 2),
         },
         "perturbacao": pert,
-        "ruido": {"hnr_db": round(float(np.mean(hnr)), 2)},
+        "ruido": {"hnr_db": hnr_db},
         "cpps_db": cpps(audio),
         "excitacao": exc,
         "graficos": graficos.montar(audio, tempos, f0s),

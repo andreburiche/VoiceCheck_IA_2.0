@@ -165,3 +165,17 @@ def test_quadro_sem_periodicidade_com_picos_negativos_nao_quebra(monkeypatch):
     x = 0.3 * np.random.default_rng(1).standard_normal(16000)
     tempos, f0s, corrs = mi.rastrear_pitch(Audio(x, 16000), 60, 400)
     assert len(tempos) > 0 and np.isnan(f0s).all() and (corrs >= 0).all()
+
+
+def test_hnr_como_o_praat_sobe_com_menos_ruido_e_ignora_silencio():
+    """HNR por correlação cruzada (To Harmonicity (cc)): silêncio no meio não puxa a média para baixo."""
+    from app.services.voz_clinica.motor_interno import hnr_cc
+
+    limpa = sintetizar(f0=150, ruido=0.005, formantes=VOGAL_F, seed=3).audio
+    suja = sintetizar(f0=150, ruido=0.05, formantes=VOGAL_F, seed=3).audio
+    h_limpa, h_suja = hnr_cc(limpa), hnr_cc(suja)
+    assert h_limpa > h_suja + 10
+    x = limpa.amostras.copy()
+    x[len(x) // 3 : 2 * len(x) // 3] *= 0.001  # pausa longa
+    assert hnr_cc(Audio(x, limpa.taxa)) == pytest.approx(h_limpa, abs=1.5)
+    assert hnr_cc(Audio(np.zeros(100), 16000)) is None

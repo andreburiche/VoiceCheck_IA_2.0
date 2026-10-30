@@ -207,7 +207,7 @@ Ainda fica para depois: nova tentativa de apagar arquivos que falharem; se houve
 Estudo com vozes sintéticas de valor conhecido (`apps/api/scripts/concordancia_motores.py`, resultado em
 [CONCORDANCIA_MOTORES.md](CONCORDANCIA_MOTORES.md)). O motor interno (reserva quando o Praat não está instalado)
 inflava jitter e shimmer em vozes agudas; foi ajustado para seguir o Praat e agora difere em média 0,16 ponto no
-jitter, 0,57 no shimmer e 0,21 dB no CPPS (antes 0,72, 1,53 e 1,37). F0 igual; HNR na mesma ordem, com desvio de ~2 dB.
+jitter, 0,57 no shimmer, 0,21 dB no CPPS e 0,23 dB no HNR (antes 0,72, 1,53, 1,37 e 1,89). F0 igual.
 O teste `test_motor_interno_concorda_com_o_praat_em_jitter_e_shimmer` (Docker) mantém isso.
 
 ## Rodar a v2 isolada no computador
