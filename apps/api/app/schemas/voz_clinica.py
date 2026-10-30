@@ -134,6 +134,10 @@ class ResultadoSalvo(BaseModel):
 
     avaliacao_id: str | None = None
     resultado: dict[str, Any]
+    #: Análise acústica salva com paciente: a gravação foi guardada para ouvir/comparar depois?
+    audio_guardado: bool | None = None
+    #: Motivo de não guardar (cota cheia, falha no storage), para avisar na tela.
+    aviso_audio: str | None = None
 
 
 class AvaliacaoOut(BaseModel):
@@ -143,6 +147,8 @@ class AvaliacaoOut(BaseModel):
     motor: str | None = None
     resultado: dict[str, Any]
     criado_em: DataUtc
+    #: Há gravação guardada (GET /avaliacoes/{id}/audio).
+    audio: bool = False
 
 
 class AvaliacaoLista(BaseModel):

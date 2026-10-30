@@ -365,7 +365,47 @@ def test_exportar_e_excluir_paciente(client: httpx.Client) -> None:
     assert sem_csrf.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente}).status_code == 403
 
     r = client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
-    assert r.json() == {"avaliacoes_excluidas": 2, "planos_excluidos": 1}
+    assert r.json() == {"avaliacoes_excluidas": 2, "planos_excluidos": 1, "gravacoes_excluidas": 0}
     assert client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"] == []
     with _celular(criado["token"]) as cel:  # o link do paciente parou junto
         assert cel.get("/api/v1/pratica-casa/plano").status_code == 404
+
+
+def test_gravacao_guardada_ouvir_e_apagar(client: httpx.Client) -> None:
+    """Antes/depois: a gravação da análise fica guardada, só o dono ouve, e some junto com a avaliação."""
+    paciente = f"Audio {uuid.uuid4().hex[:6]}"
+    wav = _wav(f0=180)
+    a = client.post("/api/v1/voz-clinica/analisar", files={"file": ("v.wav", io.BytesIO(wav), "audio/wav")},
+                    data={"paciente": paciente})
+    assert a.status_code == 200, a.text
+    assert a.json()["audio_guardado"] is True and a.json()["aviso_audio"] is None
+    ident = a.json()["avaliacao_id"]
+
+    ouvir = client.get(f"/api/v1/voz-clinica/avaliacoes/{ident}/audio")
+    assert ouvir.status_code == 200
+    assert ouvir.content == wav and ouvir.headers["content-type"] == "audio/wav"
+    assert "no-store" in ouvir.headers["cache-control"]
+    lista = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"]
+    assert lista[0]["audio"] is True
+
+    # sem guardar: a análise é salva, a gravação não
+    b = client.post("/api/v1/voz-clinica/analisar", files={"file": ("v.wav", io.BytesIO(wav), "audio/wav")},
+                    data={"paciente": paciente, "guardar_audio": "false"})
+    assert b.json()["audio_guardado"] is False
+    assert client.get(f"/api/v1/voz-clinica/avaliacoes/{b.json()['avaliacao_id']}/audio").status_code == 404
+
+    # outro profissional não ouve; id inválido é 404
+    assert _cliente("intruso").get(f"/api/v1/voz-clinica/avaliacoes/{ident}/audio").status_code == 404
+    assert client.get("/api/v1/voz-clinica/avaliacoes/nao-e-uuid/audio").status_code == 404
+
+    exportado = client.get("/api/v1/voz-clinica/pacientes/exportar", params={"paciente": paciente}).json()
+    assert exportado["gravacoes_guardadas"] == 1
+
+    # excluir a avaliação apaga a gravação; excluir o paciente informa quantas foram
+    c = client.post("/api/v1/voz-clinica/analisar", files={"file": ("v.wav", io.BytesIO(wav), "audio/wav")},
+                    data={"paciente": paciente}).json()
+    assert client.delete(f"/api/v1/voz-clinica/avaliacoes/{ident}").status_code == 204
+    assert client.get(f"/api/v1/voz-clinica/avaliacoes/{ident}/audio").status_code == 404
+    r = client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
+    assert r.json() == {"avaliacoes_excluidas": 2, "planos_excluidos": 0, "gravacoes_excluidas": 1}
+    assert client.get(f"/api/v1/voz-clinica/avaliacoes/{c['avaliacao_id']}/audio").status_code == 404

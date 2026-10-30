@@ -1,5 +1,5 @@
 /** VoiceCheck IA 2.0 — cliente das rotas /api/v1/voz-clinica. */
-import { apiFetch } from "@/lib/api";
+import { API_URL, apiFetch } from "@/lib/api";
 import type { Anamnese } from "@/lib/voz-clinica-anamnese";
 import { resumoAnamnese } from "@/lib/voz-clinica-anamnese";
 import type { ResumoBiofeedback } from "@/lib/voz-clinica-biofeedback";
@@ -93,7 +93,14 @@ export type ResultadoEaseBr = {
 
 export type ResultadoProtocolo = ResultadoIdv10 | ResultadoQvv | ResultadoGrbasi | ResultadoEaseBr;
 
-export type Salvo<T> = { avaliacao_id: string | null; resultado: T };
+export type Salvo<T> = {
+  avaliacao_id: string | null;
+  resultado: T;
+  /** Análise acústica com paciente: a gravação ficou guardada (ouvir e comparar depois). */
+  audio_guardado?: boolean | null;
+  /** Por que a gravação não foi guardada (cota cheia, falha no armazenamento). */
+  aviso_audio?: string | null;
+};
 
 export type Avaliacao = {
   id: string;
@@ -102,6 +109,8 @@ export type Avaliacao = {
   motor: string | null;
   resultado: AnaliseAcustica | ResultadoProtocolo | Anamnese | ResultadoPratica | ResultadoBiofeedback | ResultadoJogoSalvo | ResultadoFonetograma;
   criado_em: string;
+  /** Há gravação guardada (análise acústica). */
+  audio?: boolean;
 };
 
 export type PacienteResumo = { paciente: string; avaliacoes: number; ultima: string };
@@ -114,13 +123,14 @@ export function statusVozClinica() {
 
 export function analisarGravacao(
   wav: Blob,
-  opcoes: { f0Min: number; f0Max: number; paciente?: string | null },
+  opcoes: { f0Min: number; f0Max: number; paciente?: string | null; guardarAudio?: boolean },
 ) {
   const dados = new FormData();
   dados.append("file", wav, "gravacao.wav");
   dados.append("f0_min", String(opcoes.f0Min));
   dados.append("f0_max", String(opcoes.f0Max));
   if (opcoes.paciente) dados.append("paciente", opcoes.paciente);
+  if (opcoes.guardarAudio === false) dados.append("guardar_audio", "false");
   return apiFetch<Salvo<AnaliseAcustica>>(`${BASE}/analisar`, {
     method: "POST",
     body: dados,
@@ -206,7 +216,7 @@ export async function exportarPaciente(paciente: string): Promise<{ arquivo: str
 
 /** LGPD (eliminação): apaga avaliações e links de prática do paciente. Irreversível. */
 export function excluirPaciente(paciente: string) {
-  return apiFetch<{ avaliacoes_excluidas: number; planos_excluidos: number }>(
+  return apiFetch<{ avaliacoes_excluidas: number; planos_excluidos: number; gravacoes_excluidas?: number }>(
     `${BASE}/pacientes?paciente=${encodeURIComponent(paciente)}`,
     { method: "DELETE" },
   );
@@ -214,6 +224,21 @@ export function excluirPaciente(paciente: string) {
 
 export function listarAvaliacoes(paciente: string) {
   return apiFetch<{ items: Avaliacao[] }>(`${BASE}/avaliacoes?paciente=${encodeURIComponent(paciente)}`);
+}
+
+/** Gravação guardada de uma análise (WAV). Vem como Blob: o elemento <audio> não manda o
+ * cookie de sessão quando a API está em outro domínio, então o arquivo passa pelo fetch. */
+export async function baixarAudioAvaliacao(id: string): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${BASE}/avaliacoes/${encodeURIComponent(id)}/audio`, { credentials: "include" });
+  } catch {
+    throw new Error("Não foi possível falar com o servidor para buscar a gravação.");
+  }
+  if (!res.ok) {
+    throw new Error(res.status === 404 ? "A gravação desta sessão não está mais guardada." : "Não foi possível carregar a gravação.");
+  }
+  return res.blob();
 }
 
 export function excluirAvaliacao(id: string) {

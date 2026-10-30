@@ -15,6 +15,7 @@ import { Espectrograma } from "@/components/voz-clinica/espectrograma";
 import { Fonetograma } from "@/components/voz-clinica/fonetograma";
 import { JogosTerapia } from "@/components/voz-clinica/jogos-terapia";
 import { PraticaCasa } from "@/components/voz-clinica/pratica-casa";
+import { ComparacaoAntesDepois } from "@/components/voz-clinica/comparacao";
 import { GraficoEvolucao } from "@/components/voz-clinica/grafico-evolucao";
 import { MAX_PONTOS, seriesEvolucao } from "@/lib/voz-clinica-evolucao";
 import { imprimirRelatorioClinico } from "@/lib/voz-clinica-relatorio";
@@ -87,10 +88,13 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
   const [analisando, setAnalisando] = useState(false);
   const [resultado, setResultado] = useState<AnaliseAcustica | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [guardarAudio, setGuardarAudio] = useState(true);
+  const [situacaoAudio, setSituacaoAudio] = useState<string | null>(null);
   const [suportado, setSuportado] = useState(true);
   const gravador = useRef<GravadorClinico | null>(null);
   const relogio = useRef<number | null>(null);
   const idTipo = useId();
+  const idGuardar = useId();
 
   useEffect(() => setSuportado(gravadorSuportado()), []);
   useEffect(() => () => {
@@ -148,10 +152,14 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
     if (!gravacao) return;
     setAnalisando(true);
     setErro(null);
+    setSituacaoAudio(null);
     try {
       const faixa = FAIXAS_F0[tipoVoz];
-      const r = await analisarGravacao(gravacao.wav, { f0Min: faixa.f0Min, f0Max: faixa.f0Max, paciente });
+      const r = await analisarGravacao(gravacao.wav, { f0Min: faixa.f0Min, f0Max: faixa.f0Max, paciente, guardarAudio });
       setResultado(r.resultado);
+      setSituacaoAudio(
+        r.aviso_audio ?? (r.audio_guardado ? "Gravação guardada: dá para ouvir de novo e comparar na aba Comparar." : null),
+      );
       if (r.avaliacao_id) aoSalvar();
     } catch (e) {
       setErro(friendlyError(e, "Não foi possível analisar a gravação."));
@@ -237,10 +245,25 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
           {analisando ? <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden /> : null}
           {analisando ? "Analisando…" : "Analisar gravação"}
         </Button>
-        {paciente ? null : (
+        {paciente ? (
+          <label htmlFor={idGuardar} className="mt-3 flex items-start gap-2 text-sm text-ink-muted">
+            <input
+              id={idGuardar}
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 accent-[var(--accent)]"
+              checked={guardarAudio}
+              onChange={(e) => setGuardarAudio(e.target.checked)}
+              data-testid="vc2-guardar-audio"
+            />
+            <span>Guardar a gravação para ouvir de novo e comparar antes/depois (conta no espaço de armazenamento do plano)</span>
+          </label>
+        ) : (
           <p className="mt-2 text-xs text-ink-faint">Sem nome de paciente, o resultado aparece aqui mas não fica salvo.</p>
         )}
       </div>
+      {situacaoAudio ? (
+        <p className="mt-2 text-xs text-ink-muted" role="status" data-testid="vc2-situacao-audio">{situacaoAudio}</p>
+      ) : null}
 
       <Erro texto={erro} />
 
@@ -519,7 +542,12 @@ function DadosDoPaciente({ paciente, aoExcluir }: { paciente: string; aoExcluir:
       const r = await excluirPaciente(paciente);
       setConfirmar(false);
       // este painel some junto com o histórico: o aviso fica com o histórico
-      aoExcluir(`Dados de ${paciente} excluídos: ${r.avaliacoes_excluidas} ${r.avaliacoes_excluidas === 1 ? "registro" : "registros"} e ${r.planos_excluidos} ${r.planos_excluidos === 1 ? "link de prática" : "links de prática"}.`);
+      const g = r.gravacoes_excluidas ?? 0;
+      aoExcluir(
+        `Dados de ${paciente} excluídos: ${r.avaliacoes_excluidas} ${r.avaliacoes_excluidas === 1 ? "registro" : "registros"}` +
+          (g ? `, ${g} ${g === 1 ? "gravação" : "gravações"}` : "") +
+          ` e ${r.planos_excluidos} ${r.planos_excluidos === 1 ? "link de prática" : "links de prática"}.`,
+      );
     } catch (e) {
       setErro(friendlyError(e, "Não foi possível excluir os dados."));
     } finally {
@@ -543,7 +571,7 @@ function DadosDoPaciente({ paciente, aoExcluir }: { paciente: string; aoExcluir:
       <ConfirmDialog
         open={confirmar}
         title={`Excluir todos os dados de ${paciente}?`}
-        description="Apaga para sempre todas as avaliações, protocolos, anamneses, sessões e links de prática deste paciente; os links param de funcionar na hora. Antes, confira se a guarda do prontuário exigida pelo seu conselho profissional permite a exclusão e, se preciso, exporte os dados."
+        description="Apaga para sempre todas as avaliações, gravações, protocolos, anamneses, sessões e links de prática deste paciente; os links param de funcionar na hora. Antes, confira se a guarda do prontuário exigida pelo seu conselho profissional permite a exclusão e, se preciso, exporte os dados."
         confirmLabel="Excluir tudo"
         danger
         busy={excluindo}
@@ -666,6 +694,7 @@ function Historico({ paciente, versao, aoExcluirPaciente }: { paciente: string; 
 const ABAS = [
   { id: "avaliacao", rotulo: "Avaliação" },
   { id: "anamnese", rotulo: "Anamnese" },
+  { id: "comparar", rotulo: "Comparar" },
   { id: "fonetograma", rotulo: "Fonetograma" },
   { id: "biofeedback", rotulo: "Biofeedback" },
   { id: "jogos", rotulo: "Jogos" },
@@ -786,6 +815,11 @@ export function AvaliacaoClinica() {
       <div role="tabpanel" id={`${idPaciente}-painel-anamnese`} aria-labelledby={`${idPaciente}-aba-anamnese`} hidden={aba !== "anamnese"}>
         <AnamneseVocal paciente={nome} aoSalvar={aoSalvar} />
       </div>
+      {aba === "comparar" ? (
+        <div role="tabpanel" id={`${idPaciente}-painel-comparar`} aria-labelledby={`${idPaciente}-aba-comparar`}>
+          <ComparacaoAntesDepois paciente={nome} versao={versao} />
+        </div>
+      ) : null}
       {aba === "fonetograma" ? (
         <div role="tabpanel" id={`${idPaciente}-painel-fonetograma`} aria-labelledby={`${idPaciente}-aba-fonetograma`}>
           <Fonetograma paciente={nome} aoSalvar={aoSalvar} />

@@ -9,7 +9,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import AudioAsset, Plan, ProcessingJob, Subscription, UsageLedger, VoiceCheckDiagnosis
+from app.models import AudioAsset, ClinicalEvaluation, Plan, ProcessingJob, Subscription, UsageLedger, VoiceCheckDiagnosis
 from app.models.entities import JobStatus, SubscriptionStatus, UsageKind
 
 
@@ -95,7 +95,13 @@ def storage_bytes_used(db: Session, user_id: str) -> int:
             )
         ).where(VoiceCheckDiagnosis.owner_id == user_id)
     )
-    return int(total or 0) + int(vc_total or 0)
+    # Gravações guardadas da avaliação clínica da voz (VoiceCheck IA 2.0).
+    clin_total = db.scalar(
+        select(func.coalesce(func.sum(ClinicalEvaluation.audio_bytes), 0)).where(
+            ClinicalEvaluation.owner_id == user_id
+        )
+    )
+    return int(total or 0) + int(vc_total or 0) + int(clin_total or 0)
 
 
 def concurrent_jobs_count(db: Session, user_id: str) -> int:

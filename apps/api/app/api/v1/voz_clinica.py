@@ -16,7 +16,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy import delete, func, select
 
 from app.api.v1.voicecheck import _read_limited
@@ -47,6 +47,8 @@ from app.services import voz_clinica
 from app.services.voz_clinica.fonetograma import resumir_campo
 from app.services.voz_clinica.indices import dsi
 from app.services.audit import write_audit
+from app.services.quotas import QuotaExceeded, assert_can_upload
+from app.services.storage import get_storage
 from app.services.voz_clinica.pratica import hash_token, novo_token
 from app.services.voz_clinica.protocolos import PROTOCOLOS, ErroProtocolo
 
@@ -81,8 +83,21 @@ def _salvar(db: DbSession, user: CurrentUser, paciente: str | None, tipo: str,
 def _saida(row: ClinicalEvaluation) -> AvaliacaoOut:
     return AvaliacaoOut(
         id=row.id, paciente=row.patient_name, tipo=row.kind, motor=row.engine,
-        resultado=row.result, criado_em=row.created_at,
+        resultado=row.result, criado_em=row.created_at, audio=row.audio_key is not None,
     )
+
+
+def _apagar_audios(chaves: list[str]) -> None:
+    """Depois do commit: um arquivo que sobrar no storage não é grave; um registro
+    apontando para arquivo apagado seria (por isso o banco vem primeiro)."""
+    if not chaves:
+        return
+    storage = get_storage()
+    for chave in chaves:
+        try:
+            storage.delete(chave)
+        except Exception:  # noqa: BLE001
+            logger.warning("Voz clínica: gravação não apagada do storage: %s", chave)
 
 
 @router.get("/status", response_model=StatusOut)
@@ -100,8 +115,14 @@ async def analisar(
     f0_max: float = Form(600.0),
     motor: str = Form("auto"),
     paciente: str | None = Form(None),
+    guardar_audio: bool = Form(True),
 ) -> ResultadoSalvo:
-    """Recebe um WAV sem compressão (vogal sustentada) e devolve as medidas acústicas."""
+    """Recebe um WAV sem compressão (vogal sustentada) e devolve as medidas acústicas.
+
+    Com paciente informado, a análise é salva e (salvo `guardar_audio=false`) a gravação
+    também, para ouvir de novo e comparar sessões. O áudio conta na cota de armazenamento;
+    se a cota estiver cheia ou o storage falhar, a análise é salva assim mesmo, sem o áudio.
+    """
     enforce_rate_limit(
         request,
         bucket="voz_clinica",
@@ -123,8 +144,25 @@ async def analisar(
         logger.exception("Voz clínica: falha na análise")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Não foi possível analisar a gravação") from exc
 
-    salvo = _salvar(db, user, nome, "acustica", resultado, resultado.get("motor")) if "f0" in resultado else None
-    return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
+    if nome is None or "f0" not in resultado:
+        return ResultadoSalvo(avaliacao_id=None, resultado=resultado)
+    row = ClinicalEvaluation(owner_id=user.id, patient_name=nome, kind="acustica", engine=resultado.get("motor"), result=resultado)
+    db.add(row)
+    db.flush()  # gera o id, usado na chave do arquivo
+    aviso = None
+    if guardar_audio:
+        try:
+            assert_can_upload(db, user.id, len(dados))
+            chave = f"voz-clinica/{user.id}/{row.id}.wav"
+            await asyncio.to_thread(get_storage().put_bytes, chave, dados, "audio/wav")
+            row.audio_key, row.audio_bytes = chave, len(dados)
+        except QuotaExceeded as exc:
+            aviso = f"{exc.message}. A análise foi salva sem a gravação."
+        except Exception:  # noqa: BLE001 — storage fora do ar não pode perder a análise
+            logger.exception("Voz clínica: falha ao guardar a gravação")
+            aviso = "Não foi possível guardar a gravação; a análise foi salva sem ela."
+    db.commit()
+    return ResultadoSalvo(avaliacao_id=row.id, resultado=resultado, audio_guardado=row.audio_key is not None, aviso_audio=aviso)
 
 
 @router.post("/protocolos/{nome}", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
@@ -317,6 +355,9 @@ def exportar_paciente(request: Request, user: CurrentUser, db: DbSession, pacien
         "avaliacoes": [_saida(r).model_dump(mode="json") for r in rows],
         # o segredo dos links nunca é exportado (só o hash existe no banco, e ele também fica fora)
         "planos_pratica": [plano_out(p, total, ultima).model_dump(mode="json") for p in planos],
+        # o áudio não vai dentro do JSON (pode passar de centenas de MB): cada avaliação com
+        # "audio": true tem a gravação em GET /api/v1/voz-clinica/avaliacoes/{id}/audio
+        "gravacoes_guardadas": sum(1 for r in rows if r.audio_key),
     }
     write_audit(
         db, action="voz_clinica.paciente_exportado", resource_type="paciente", actor_id=user.id, request=request,
@@ -338,6 +379,7 @@ def excluir_paciente(request: Request, user: CurrentUser, db: DbSession, pacient
     nome = _nome_obrigatorio(paciente)
     filtro_aval = (ClinicalEvaluation.owner_id == user.id, ClinicalEvaluation.patient_name == nome)
     filtro_plano = (HomePracticePlan.owner_id == user.id, HomePracticePlan.patient_name == nome)
+    chaves = [c for c in db.scalars(select(ClinicalEvaluation.audio_key).where(*filtro_aval)).all() if c]
     n_aval = db.execute(delete(ClinicalEvaluation).where(*filtro_aval)).rowcount or 0
     n_planos = db.execute(delete(HomePracticePlan).where(*filtro_plano)).rowcount or 0
     if not n_aval and not n_planos:
@@ -345,10 +387,11 @@ def excluir_paciente(request: Request, user: CurrentUser, db: DbSession, pacient
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nada guardado para este paciente")
     write_audit(
         db, action="voz_clinica.paciente_excluido", resource_type="paciente", actor_id=user.id, request=request,
-        meta={"paciente": _rastro(user.id, nome), "avaliacoes": n_aval, "planos": n_planos},
+        meta={"paciente": _rastro(user.id, nome), "avaliacoes": n_aval, "planos": n_planos, "gravacoes": len(chaves)},
     )
     db.commit()
-    return {"avaliacoes_excluidas": n_aval, "planos_excluidos": n_planos}
+    _apagar_audios(chaves)
+    return {"avaliacoes_excluidas": n_aval, "planos_excluidos": n_planos, "gravacoes_excluidas": len(chaves)}
 
 
 @router.get("/avaliacoes", response_model=AvaliacaoLista)
@@ -361,15 +404,7 @@ def listar_avaliacoes(user: CurrentUser, db: DbSession, paciente: str | None = N
     return AvaliacaoLista(items=[_saida(r) for r in rows])
 
 
-@router.delete(
-    "/avaliacoes/{avaliacao_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    # explícito: com "from __future__ import annotations" o FastAPI lê "-> None" como o tipo
-    # NoneType e recusa a rota 204 ("must not have a response body") — a API nem sobe
-    response_model=None,
-    dependencies=[Depends(verify_csrf)],
-)
-def excluir_avaliacao(avaliacao_id: str, user: CurrentUser, db: DbSession) -> None:
+def _avaliacao_do_usuario(db: DbSession, user: CurrentUser, avaliacao_id: str) -> ClinicalEvaluation:
     try:
         ident = str(uuid.UUID(avaliacao_id))
     except ValueError as exc:
@@ -379,5 +414,41 @@ def excluir_avaliacao(avaliacao_id: str, user: CurrentUser, db: DbSession) -> No
     )
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avaliação não encontrada")
+    return row
+
+
+@router.delete(
+    "/avaliacoes/{avaliacao_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    # explícito: com "from __future__ import annotations" o FastAPI lê "-> None" como o tipo
+    # NoneType e recusa a rota 204 ("must not have a response body") — a API nem sobe
+    response_model=None,
+    dependencies=[Depends(verify_csrf)],
+)
+def excluir_avaliacao(avaliacao_id: str, user: CurrentUser, db: DbSession) -> None:
+    row = _avaliacao_do_usuario(db, user, avaliacao_id)
+    chave = row.audio_key
     db.delete(row)
     db.commit()
+    _apagar_audios([chave] if chave else [])
+
+
+@router.get("/avaliacoes/{avaliacao_id}/audio")
+def ouvir_avaliacao(avaliacao_id: str, user: CurrentUser, db: DbSession) -> Response:
+    """A gravação guardada de uma análise acústica (só para o dono)."""
+    row = _avaliacao_do_usuario(db, user, avaliacao_id)
+    if row.audio_key is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Esta avaliação não tem gravação guardada")
+    try:
+        dados = get_storage().get_bytes(row.audio_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Voz clínica: gravação sumiu do storage")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gravação não encontrada no armazenamento") from exc
+    return Response(
+        dados,
+        media_type="audio/wav",
+        headers={
+            "Content-Disposition": f'inline; filename="voicecheck-{row.created_at:%Y%m%d-%H%M}.wav"',
+            "Cache-Control": "private, no-store",
+        },
+    )

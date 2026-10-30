@@ -552,6 +552,10 @@ class ClinicalEvaluation(Base, TimestampMixin):
         ForeignKey("home_practice_plans.id", ondelete="SET NULL", name="fk_clinical_evaluations_practice_plan"),
         nullable=True,
     )
+    #: Gravação da análise acústica no storage (ouvir de novo e comparar antes/depois).
+    audio_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    #: Tamanho do WAV guardado; entra na cota de armazenamento do plano.
+    audio_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
 
 class HomePracticePlan(Base, TimestampMixin):
