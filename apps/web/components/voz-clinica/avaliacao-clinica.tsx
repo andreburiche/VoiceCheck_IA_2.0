@@ -16,7 +16,9 @@ import { Fonetograma } from "@/components/voz-clinica/fonetograma";
 import { JogosTerapia } from "@/components/voz-clinica/jogos-terapia";
 import { PraticaCasa } from "@/components/voz-clinica/pratica-casa";
 import { CadastroPacienteForm } from "@/components/voz-clinica/cadastro-paciente";
+import { MidiasPaciente } from "@/components/voz-clinica/midias-paciente";
 import { SessoesTerapia } from "@/components/voz-clinica/sessoes-terapia";
+import { montarDocxClinico, nomeArquivoDocx } from "@/lib/voz-clinica-docx";
 import { EditorAudio } from "@/components/voz-clinica/editor-audio";
 import { CargaVocal } from "@/components/voz-clinica/carga-vocal";
 import { ComparacaoAntesDepois } from "@/components/voz-clinica/comparacao";
@@ -598,15 +600,33 @@ function Relatorio({ paciente, itens }: { paciente: string; itens: Avaliacao[] }
     }
   }
 
+  /** Mesmo conteúdo em Word (.docx), para editar (como o iVox); os gráficos ficam só no PDF. */
+  function gerarDocx() {
+    setErro(null);
+    try {
+      const agora = new Date();
+      const dados = montarDocxClinico(paciente, itens, { profissional, observacoes, dadosPaciente, geradoEm: agora });
+      const url = URL.createObjectURL(new Blob([dados], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = nomeArquivoDocx(paciente, agora);
+      a.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setAberto(false);
+    } catch (err) {
+      setErro(friendlyError(err, "Não foi possível gerar o relatório em Word."));
+    }
+  }
+
   return (
     <div className="mt-3">
       <Button type="button" variant="secondary" size="sm" onClick={() => setAberto((v) => !v)} aria-expanded={aberto} data-testid="vc2-relatorio-abrir">
-        <FileText className="h-4 w-4" aria-hidden /> Relatório em PDF
+        <FileText className="h-4 w-4" aria-hidden /> Relatório (PDF ou Word)
       </Button>
       {aberto ? (
         <form onSubmit={gerar} className="mt-3 space-y-3 rounded-xl p-4 ring-1 ring-inset ring-ink/10" data-testid="vc2-relatorio-form">
           <p className="text-xs text-ink-muted">
-            Reúne a análise acústica e os protocolos mais recentes, os gráficos de evolução e todas as sessões. Campos vazios ficam fora do PDF.
+            Reúne a análise acústica e os protocolos mais recentes, os gráficos de evolução e todas as sessões. Campos vazios ficam fora do relatório. O Word (.docx) traz o mesmo conteúdo para editar, sem os gráficos.
           </p>
           <div className="max-w-sm">
             <Label htmlFor={`${id}-prof`}>Profissional</Label>
@@ -625,6 +645,7 @@ function Relatorio({ paciente, itens }: { paciente: string; itens: Avaliacao[] }
           </div>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" size="sm">Gerar PDF</Button>
+            <Button type="button" size="sm" variant="secondary" onClick={gerarDocx} data-testid="vc2-relatorio-docx">Word (.docx)</Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => setAberto(false)}>Cancelar</Button>
           </div>
           <p className="text-xs text-ink-faint">Na janela de impressão, escolha “Salvar como PDF”.</p>
@@ -706,7 +727,7 @@ function DadosDoPaciente({ paciente, itens, aoExcluir }: { paciente: string; ite
         </Button>
         {comAudio ? (
           <Button type="button" variant="secondary" size="sm" onClick={() => void exportar(true)} disabled={exportando} data-testid="vc2-exportar-zip">
-            <Download className="h-4 w-4" aria-hidden /> Com as gravações (ZIP, {comAudio})
+            <Download className="h-4 w-4" aria-hidden /> Com gravações e mídias (ZIP, {comAudio})
           </Button>
         ) : null}
         <Button type="button" variant="secondary" size="sm" onClick={planilha} data-testid="vc2-planilha">
@@ -905,6 +926,7 @@ const ABAS = [
   { id: "carga", rotulo: "Carga vocal" },
   { id: "jogos", rotulo: "Jogos" },
   { id: "sessoes", rotulo: "Sessões" },
+  { id: "midias", rotulo: "Mídias" },
   { id: "pratica", rotulo: "Prática em casa" },
 ] as const;
 type Aba = (typeof ABAS)[number]["id"];
@@ -940,8 +962,9 @@ function Abas({ ativa, onChange, base }: { ativa: Aba; onChange: (a: Aba) => voi
           className={cn(
             "min-h-[44px] flex-1 rounded-lg px-2 text-[13px] font-medium leading-tight transition-colors sm:min-h-[40px] sm:whitespace-nowrap sm:px-4 sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
             ativa === a.id ? "bg-canvas-card text-ink shadow-sm" : "text-ink-muted hover:text-ink",
-            // celular: se sobrar uma aba sozinha na última linha da grade 3×n, ela ocupa a linha toda
+            // celular: a última aba ocupa o que sobrar da última linha da grade 3×n
             i === ABAS.length - 1 && ABAS.length % 3 === 1 && "col-span-3 sm:col-span-1",
+            i === ABAS.length - 1 && ABAS.length % 3 === 2 && "col-span-2 sm:col-span-1",
           )}
           data-testid={`vc2-aba-${a.id}`}
         >
@@ -1070,6 +1093,11 @@ export function AvaliacaoClinica() {
       {aba === "sessoes" ? (
         <div role="tabpanel" id={`${idPaciente}-painel-sessoes`} aria-labelledby={`${idPaciente}-aba-sessoes`}>
           <SessoesTerapia key={nome} paciente={nome} versao={versao} aoSalvar={aoSalvar} />
+        </div>
+      ) : null}
+      {aba === "midias" ? (
+        <div role="tabpanel" id={`${idPaciente}-painel-midias`} aria-labelledby={`${idPaciente}-aba-midias`}>
+          <MidiasPaciente key={nome} paciente={nome} versao={versao} aoSalvar={aoSalvar} />
         </div>
       ) : null}
       {aba === "jogos" ? (

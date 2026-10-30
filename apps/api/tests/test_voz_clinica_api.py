@@ -634,3 +634,49 @@ def test_sessoes_de_terapia_numeradas(client: httpx.Client) -> None:
     dados = client.get("/api/v1/voz-clinica/pacientes/exportar", params={"paciente": paciente}).json()
     assert [a["tipo"] for a in dados["avaliacoes"]] == ["sessao", "sessao"]
     assert client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente}).json()["avaliacoes_excluidas"] == 2
+
+
+def _png(lado: int = 8) -> bytes:
+    """PNG válido de verdade (cinza), sem depender de biblioteca de imagem."""
+    import struct
+    import zlib
+
+    def bloco(tipo: bytes, dados: bytes) -> bytes:
+        return struct.pack(">I", len(dados)) + tipo + dados + struct.pack(">I", zlib.crc32(tipo + dados) & 0xFFFFFFFF)
+
+    linhas = b"".join(b"\x00" + bytes([128]) * lado for _ in range(lado))
+    return (b"\x89PNG\r\n\x1a\n" + bloco(b"IHDR", struct.pack(">IIBBBBB", lado, lado, 8, 0, 0, 0, 0))
+            + bloco(b"IDAT", zlib.compress(linhas)) + bloco(b"IEND", b""))
+
+
+def test_midias_do_paciente(client: httpx.Client) -> None:
+    """Como o iVox: imagens e vídeos do paciente, com o tipo conferido pelo conteúdo."""
+    paciente = f"Midia {uuid.uuid4().hex[:6]}"
+    png = _png()
+    r = client.post("/api/v1/voz-clinica/midias", files={"file": ("../../laringe.png", io.BytesIO(png), "image/png")},
+                    data={"paciente": paciente, "descricao": "Videolaringoscopia — quadro"})
+    assert r.status_code == 200, r.text
+    res, ident = r.json()["resultado"], r.json()["avaliacao_id"]
+    assert res["categoria"] == "imagem" and res["mime"] == "image/png" and res["nome_original"] == "laringe.png"
+    v = client.get(f"/api/v1/voz-clinica/midias/{ident}")
+    assert v.status_code == 200 and v.content == png and v.headers["content-type"] == "image/png"
+    assert v.headers["x-content-type-options"] == "nosniff" and "sandbox" in v.headers["content-security-policy"]
+    # mídia não é gravação de voz; outro profissional não vê
+    assert client.get(f"/api/v1/voz-clinica/avaliacoes/{ident}/audio").status_code == 404
+    assert _cliente("intruso").get(f"/api/v1/voz-clinica/midias/{ident}").status_code == 404
+    # vídeo MP4 (assinatura ftyp) aceito; HTML e SVG disfarçados de imagem, recusados
+    mp4 = b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 200
+    assert client.post("/api/v1/voz-clinica/midias", files={"file": ("v.mp4", io.BytesIO(mp4), "video/mp4")},
+                       data={"paciente": paciente}).json()["resultado"]["categoria"] == "video"
+    for nome, corpo in [("x.png", b"<html><script>alert(1)</script></html>" + b" " * 100),
+                        ("x.svg", b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>' + b" " * 100)]:
+        assert client.post("/api/v1/voz-clinica/midias", files={"file": (nome, io.BytesIO(corpo), "image/png")},
+                           data={"paciente": paciente}).status_code == 415
+    # ZIP da LGPD leva as mídias; excluir o paciente apaga tudo
+    z = client.get("/api/v1/voz-clinica/pacientes/exportar-zip", params={"paciente": paciente})
+    with zipfile.ZipFile(io.BytesIO(z.content)) as zf:
+        nomes = [n for n in zf.namelist() if n.startswith("midias/")]
+        assert len(nomes) == 2 and any(n.endswith(".png") for n in nomes) and any(n.endswith(".mp4") for n in nomes)
+    r = client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
+    assert r.json()["avaliacoes_excluidas"] == 2 and r.json()["gravacoes_excluidas"] == 2
+    assert client.get(f"/api/v1/voz-clinica/midias/{ident}").status_code == 404

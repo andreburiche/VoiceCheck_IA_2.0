@@ -54,6 +54,7 @@ from app.services import voz_clinica
 from app.services.voz_clinica.audio import limitar_duracao
 from app.services.voz_clinica.cepstral import analisar_cepstral
 from app.services.voz_clinica.ddk import analisar_ddk
+from app.services.voz_clinica import midias
 from app.services.voz_clinica.exclusao import apagar_ou_agendar, tentar_pendentes
 from app.services.voz_clinica.fala import analisar_fala
 from app.services.voz_clinica.fonetograma import resumir_campo
@@ -651,6 +652,7 @@ LEIAME_ZIP = """VoiceCheck IA 2.0 - exportação dos dados do paciente (LGPD, ar
 
 dados.json      cadastro, avaliações, protocolos, anotações e planos de prática em casa
 gravacoes/      as gravações guardadas, em WAV (abre no Praat, Audacity ou qualquer player)
+midias/         imagens e vídeos do paciente, no formato em que foram enviados
 
 Cada gravação tem o nome data_tipo_código.wav; o código são os 8 primeiros caracteres
 do "id" da avaliação no dados.json (campo "arquivo_audio" de cada avaliação).
@@ -671,7 +673,10 @@ def _montar_zip(corpo: dict, rows: list[ClinicalEvaluation]) -> tuple[object, in
         for r in rows:
             if not r.audio_key:
                 continue
-            arquivo = f"gravacoes/{r.created_at:%Y-%m-%d_%H%M%S}_{r.kind}_{r.id[:8]}.wav"
+            if r.kind == "midia":
+                arquivo = f"midias/{r.created_at:%Y-%m-%d_%H%M%S}_{r.id[:8]}.{(r.result or {}).get('extensao', 'bin')}"
+            else:
+                arquivo = f"gravacoes/{r.created_at:%Y-%m-%d_%H%M%S}_{r.kind}_{r.id[:8]}.wav"
             try:
                 dados = get_storage().get_bytes(r.audio_key)
             except Exception:  # noqa: BLE001 — uma gravação faltando não impede a exportação
@@ -798,11 +803,84 @@ def anotar_avaliacao(avaliacao_id: str, entrada: AnotacaoEntrada, user: CurrentU
     return _saida(row)
 
 
+@router.post("/midias", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
+async def enviar_midia(
+    request: Request,
+    user: CurrentUser,
+    db: DbSession,
+    file: UploadFile = File(...),
+    paciente: str = Form(...),
+    descricao: str | None = Form(None),
+) -> ResultadoSalvo:
+    """Imagem ou vídeo do paciente (como o iVox): guardado no storage, conta na cota do plano."""
+    enforce_rate_limit(request, bucket="voz_clinica_midia", limit=30, window_sec=600)
+    nome = _paciente(paciente)
+    if nome is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente")
+    if descricao is not None and len(descricao) > 200:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Descrição com até 200 caracteres")
+    dados = await _read_limited(file, max_bytes=midias.LIMITE_VIDEO)
+    try:
+        categoria, mime, ext = midias.validar(dados)
+    except midias.ErroMidia as exc:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)) from exc
+    resultado = {
+        "categoria": categoria, "mime": mime, "extensao": ext, "bytes": len(dados),
+        "nome_original": midias.nome_seguro(file.filename), "descricao": (descricao or "").strip() or None,
+    }
+    # a leitura do usuário (login) já abriu a transação: encerra, para a trava ser o primeiro comando
+    db.rollback()
+    row_id = str(uuid.uuid4())
+    chave = f"voz-clinica/{user.id}/midia/{row_id}.{ext}"
+    enviado = False
+    try:
+        _travar_cota(db, user.id)
+        assert_can_upload(db, user.id, len(dados))
+        await asyncio.to_thread(get_storage().put_bytes, chave, dados, mime)
+        enviado = True
+        db.add(ClinicalEvaluation(id=row_id, owner_id=user.id, patient_name=nome, kind="midia", engine=None,
+                                  result=resultado, audio_key=chave, audio_bytes=len(dados)))
+        db.commit()
+    except QuotaExceeded as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=exc.message) from exc
+    except Exception:
+        db.rollback()
+        if enviado:
+            _apagar_audios(db, [chave])
+        raise
+    return ResultadoSalvo(avaliacao_id=row_id, resultado=resultado)
+
+
+@router.get("/midias/{avaliacao_id}")
+def ver_midia(avaliacao_id: str, user: CurrentUser, db: DbSession) -> Response:
+    """O arquivo da mídia (só para o dono), com o tipo detectado no envio."""
+    row = _avaliacao_do_usuario(db, user, avaliacao_id)
+    if row.kind != "midia" or not row.audio_key:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mídia não encontrada")
+    try:
+        dados = get_storage().get_bytes(row.audio_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Voz clínica: mídia sumiu do storage")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mídia não encontrada no armazenamento") from exc
+    r = row.result or {}
+    return Response(
+        dados,
+        media_type=r.get("mime", "application/octet-stream"),
+        headers={
+            "Content-Disposition": f'inline; filename="voicecheck-midia-{row.created_at:%Y%m%d-%H%M}.{r.get("extensao", "bin")}"',
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+        },
+    )
+
+
 @router.get("/avaliacoes/{avaliacao_id}/audio")
 def ouvir_avaliacao(avaliacao_id: str, user: CurrentUser, db: DbSession) -> Response:
     """A gravação guardada de uma análise acústica (só para o dono)."""
     row = _avaliacao_do_usuario(db, user, avaliacao_id)
-    if row.audio_key is None:
+    if row.audio_key is None or row.kind == "midia":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Esta avaliação não tem gravação guardada")
     try:
         dados = get_storage().get_bytes(row.audio_key)

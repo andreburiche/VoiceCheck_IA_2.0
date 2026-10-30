@@ -9,7 +9,7 @@ import { JOGOS, VARIACOES, type ResultadoJogo } from "@/lib/voz-clinica-jogos";
 import { resumoPratica, type ExercicioPratica, type ResultadoPratica } from "@/lib/voz-clinica-pratica";
 
 
-export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica" | "dsi" | "fala" | "ddk" | "cepstral" | "carga" | "perceptiva" | "sessao";
+export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica" | "dsi" | "fala" | "ddk" | "cepstral" | "carga" | "perceptiva" | "sessao" | "midia";
 export type Protocolo = "idv10" | "qvv" | "grbasi" | "easebr" | "perceptiva";
 
 /** Resumo de sessão de biofeedback salvo (medido no navegador). */
@@ -188,6 +188,25 @@ export type ResultadoSessao = {
   orientacoes: string | null;
   observacoes: string | null;
 };
+
+/** Imagem ou vídeo do paciente (como no iVox); o tipo é conferido pelo conteúdo no servidor. */
+export type ResultadoMidia = {
+  categoria: "imagem" | "video";
+  mime: string;
+  extensao: string;
+  bytes: number;
+  nome_original: string | null;
+  descricao: string | null;
+};
+
+/** Mesmos limites do servidor (services/voz_clinica/midias.py). */
+export const LIMITES_MIDIA = { imagem: 15 * 1024 * 1024, video: 100 * 1024 * 1024 };
+export const ACEITA_MIDIA = "image/jpeg,image/png,image/webp,video/mp4,video/quicktime,video/webm";
+
+export function tamanhoBR(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${fixoBR(bytes / 1024, 0)} KB`;
+  return `${fixoBR(bytes / (1024 * 1024), 1)} MB`;
+}
 
 export type EntradaSessao = {
   paciente: string;
@@ -446,6 +465,26 @@ export function listarAvaliacoes(paciente: string) {
   return apiFetch<{ items: Avaliacao[] }>(`${BASE}/avaliacoes?paciente=${encodeURIComponent(paciente)}`);
 }
 
+export function enviarMidia(paciente: string, arquivo: File, descricao?: string) {
+  const dados = new FormData();
+  dados.append("file", arquivo, arquivo.name);
+  dados.append("paciente", paciente);
+  if (descricao?.trim()) dados.append("descricao", descricao.trim());
+  return apiFetch<Salvo<ResultadoMidia>>(`${BASE}/midias`, { method: "POST", body: dados, timeoutMs: 180_000 });
+}
+
+/** Arquivo da mídia como Blob (passa pelo fetch com o cookie de sessão, como as gravações). */
+export async function baixarMidia(id: string): Promise<Blob> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${BASE}/midias/${encodeURIComponent(id)}`, { credentials: "include" });
+  } catch {
+    throw new Error("Não foi possível falar com o servidor para buscar a mídia.");
+  }
+  if (!res.ok) throw new Error(res.status === 404 ? "Esta mídia não está mais guardada." : "Não foi possível carregar a mídia.");
+  return res.blob();
+}
+
 /** Gravação guardada de uma análise (WAV). Vem como Blob: o elemento <audio> não manda o
  * cookie de sessão quando a API está em outro domínio, então o arquivo passa pelo fetch. */
 export async function baixarAudioAvaliacao(id: string): Promise<Blob> {
@@ -543,6 +582,10 @@ export function dataBR(iso: string): string {
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
 }
 
+export function resumoMidia(r: ResultadoMidia): string {
+  return [r.categoria === "video" ? "Vídeo" : "Imagem", r.descricao, r.nome_original, tamanhoBR(r.bytes)].filter(Boolean).join(" · ");
+}
+
 export function resumoSessao(r: ResultadoSessao): string {
   const partes = [`Sessão ${r.numero} (${dataBR(r.data)})`];
   if (r.objetivos) partes.push(`objetivo: ${r.objetivos.length > 60 ? `${r.objetivos.slice(0, 57)}…` : r.objetivos}`);
@@ -554,6 +597,7 @@ export function resumoSessao(r: ResultadoSessao): string {
 export function resumoAvaliacao(a: Avaliacao): string {
   if (a.tipo === "pratica") return resumoPratica(a.resultado as ResultadoPratica);
   if (a.tipo === "sessao") return resumoSessao(a.resultado as ResultadoSessao);
+  if (a.tipo === "midia") return resumoMidia(a.resultado as ResultadoMidia);
   if (a.tipo === "anamnese") return resumoAnamnese(a.resultado as Anamnese);
   if (a.tipo === "fonetograma") {
     const r = (a.resultado as ResultadoFonetograma).resumo;
@@ -643,6 +687,7 @@ export const ROTULO_TIPO: Record<TipoAvaliacao, string> = {
   carga: "Carga vocal",
   perceptiva: "Perceptiva",
   sessao: "Sessão de terapia",
+  midia: "Mídia",
 };
 
 export const ROTULO_DDK: Record<TarefaDdk, string> = { pa: "/pa/", ta: "/ta/", ka: "/ka/", pataka: "/pataka/" };

@@ -134,3 +134,18 @@ def test_banco_falha_depois_do_envio_apaga_o_arquivo(monkeypatch):
     aviso, ok = asyncio.run(rotas._guardar_audio(_BancoFalso(log, falhar_commit=True), "u1", "a1", b"x"))
     assert not ok and "salva sem ela" in aviso
     assert log[-2:] == ["rollback", "apagou"]
+
+
+def test_midia_tipo_pelo_conteudo():
+    from app.services.voz_clinica import midias
+
+    assert midias.detectar(b"\xff\xd8\xff\xe0" + b"0" * 100)[1] == "image/jpeg"
+    assert midias.detectar(b"RIFF\x00\x00\x00\x00WEBPVP8 " + b"0" * 100)[2] == "webp"
+    assert midias.detectar(b"\x00\x00\x00\x14ftypqt  " + b"0" * 100)[1] == "video/quicktime"
+    assert midias.detectar(b"\x1a\x45\xdf\xa3" + b"0" * 100)[1] == "video/webm"
+    for ruim in (b"GIF89a" + b"0" * 100, b"%PDF-1.7" + b"0" * 100, b"\x00\x00\x00\x18ftypheic" + b"0" * 100):
+        with pytest.raises(midias.ErroMidia):
+            midias.detectar(ruim)
+    with pytest.raises(midias.ErroMidia, match="maior que 15 MB"):
+        midias.validar(b"\x89PNG\r\n\x1a\n" + b"0" * (15 * 1024 * 1024))
+    assert midias.nome_seguro("C:\\\\fotos\\\\..\\\\exame\x00.png") == "exame.png"

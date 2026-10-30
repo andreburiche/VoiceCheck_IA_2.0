@@ -4,6 +4,8 @@ import {
   OPCOES_PERCEPTIVA,
   ROTULO_TIPO,
   dataBR,
+  resumoMidia,
+  tamanhoBR,
   linhasAcusticas,
   numeroBR,
   resumoAvaliacao,
@@ -152,5 +154,15 @@ describe("perceptiva complementar e sessões de terapia (iVox)", () => {
     expect(r.endsWith("… · 2 exercícios")).toBe(true);
     expect(ROTULO_TIPO.sessao).toBe("Sessão de terapia");
     expect(dataBR("2026-01-05")).toBe("05/01/2026");
+  });
+});
+
+describe("mídias do paciente", () => {
+  it("resumo com tipo, descrição, nome e tamanho", () => {
+    expect(resumoMidia({ categoria: "video", mime: "video/mp4", extensao: "mp4", bytes: 5 * 1024 * 1024, nome_original: "sessao.mp4", descricao: "Sessão 3" }))
+      .toBe("Vídeo · Sessão 3 · sessao.mp4 · 5,0 MB");
+    expect(resumoMidia({ categoria: "imagem", mime: "image/png", extensao: "png", bytes: 2048, nome_original: null, descricao: null }))
+      .toBe("Imagem · 2 KB");
+    expect(tamanhoBR(1536 * 1024)).toBe("1,5 MB");
   });
 });

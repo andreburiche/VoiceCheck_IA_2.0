@@ -18,7 +18,7 @@ DataUtc = Annotated[datetime, AfterValidator(_com_fuso)]
 
 TipoAvaliacao = Literal[
     "acustica", "idv10", "qvv", "grbasi", "easebr", "anamnese", "biofeedback", "jogo", "fonetograma", "pratica",
-    "dsi", "fala", "ddk", "cepstral", "carga", "perceptiva", "sessao",
+    "dsi", "fala", "ddk", "cepstral", "carga", "perceptiva", "sessao", "midia",
 ]
 JogoId = Literal["altitude", "trilha", "sopro", "surdo-sonoro", "som-silencio"]
 

@@ -14,6 +14,7 @@ import {
   type Avaliacao,
   type ResultadoEaseBr,
   type ResultadoGrbasi,
+  type ResultadoPerceptiva,
   type ResultadoIdv10,
   type ResultadoQvv,
 } from "@/lib/voz-clinica-api";
@@ -162,6 +163,12 @@ function secaoProtocolos(itens: Avaliacao[]): string {
     blocos.push(`<div class="card"><div class="lbl">GRBASI · ${esc(dataDia(g.criado_em))}</div>
       <div class="val">${esc(r.registro)}</div>
       <div class="muted">${esc(params)}</div></div>`);
+  }
+  const perc = ultimaDoTipo(itens, "perceptiva");
+  if (perc) {
+    const r = perc.resultado as ResultadoPerceptiva;
+    blocos.push(`<div class="card"><div class="lbl">Perceptiva complementar · ${esc(dataDia(perc.criado_em))}</div>
+      <div class="muted">${esc(resumoProtocolo(r))}${r.observacoes ? `. ${esc(r.observacoes)}` : ""}</div></div>`);
   }
   const ease = ultimaDoTipo(itens, "easebr");
   if (ease) {
