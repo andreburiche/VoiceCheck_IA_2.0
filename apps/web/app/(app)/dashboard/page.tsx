@@ -3,9 +3,10 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, AudioLines, FolderKanban, Mic2, TextCursorInput, Upload, Waves } from "lucide-react";
+import { Activity, AudioLines, FolderKanban, Mic2, Stethoscope, TextCursorInput, Upload, Waves } from "lucide-react";
 
 import { LastDiagnosisCard } from "@/components/dashboard/last-diagnosis-card";
+import { PacientesRecentes } from "@/components/dashboard/pacientes-recentes";
 import { WaveHero } from "@/components/dashboard/wave-hero";
 import { Panel, Stat, TrendChart } from "@/components/hud";
 import { buttonVariants } from "@/components/ui/button";
@@ -109,10 +110,10 @@ export default function DashboardPage() {
 
   return (
     <div className="page-shell space-y-6">
-      <WaveHero userName={me.data?.name ?? "músico"} importHref={importHref} />
+      <WaveHero userName={me.data?.name ?? "você"} importHref={importHref} />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <LastDiagnosisCard className="lg:col-span-2" />
+      <div className="grid grid-cols-1 gap-4 motion-safe:animate-fade-up-delay lg:grid-cols-3">
+        <PacientesRecentes className="lg:col-span-2" />
         <section aria-label="Sua biblioteca e treino" className="panel-glass min-w-0 rounded-2xl p-5">
           <h2 className="font-display text-base font-semibold text-ink">Sua biblioteca</h2>
           <dl className="mt-4 space-y-3 text-sm">
@@ -136,6 +137,8 @@ export default function DashboardPage() {
           </dl>
         </section>
       </div>
+
+      <LastDiagnosisCard />
 
       <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
         <Panel
@@ -190,6 +193,7 @@ export default function DashboardPage() {
           ) : (
             <QuickActionCard href={importHref} title="Importar a primeira música" description="MP3, WAV, FLAC ou MP4" icon={Upload} />
           )}
+          <QuickActionCard href="/voz-clinica" title="Avaliação clínica" description="Paciente, medidas, protocolos e relatório" icon={Stethoscope} />
           <QuickActionCard href="/voicecheck" title="Diagnóstico vocal" description="Envie uma gravação e veja cada ocorrência" icon={Activity} />
         </Panel>
       </div>

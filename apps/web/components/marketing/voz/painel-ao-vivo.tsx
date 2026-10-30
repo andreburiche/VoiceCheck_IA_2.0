@@ -167,8 +167,9 @@ export function PainelAoVivo({ compacto = false }: { compacto?: boolean } = {}) 
     const io = new IntersectionObserver((entradas) => {
       visivel = entradas.some((e) => e.isIntersecting);
       if (!visivel) { cancelAnimationFrame(quadro); return; }
-      const ric = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
-      if (!dados.current && ric) ric(() => vivo && iniciar()); else iniciar();
+      const ric = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+      // espera o navegador ficar ocioso, mas no máximo 1 s (senão o painel pode ficar em "Preparando")
+      if (!dados.current && ric) ric(() => vivo && iniciar(), { timeout: 1000 }); else iniciar();
     }, { rootMargin: "100px" });
     io.observe(el);
     const ro = new ResizeObserver(() => { if (dados.current && (reduzir || !visivel)) desenhar(c, dados.current, 1); });

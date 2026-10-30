@@ -23,10 +23,10 @@ const SIDEBAR_WIDTH = "w-[15.5rem] md:w-full";
 
 const primaryLinks = [
   { href: "/dashboard", label: "Painel", icon: LayoutDashboard },
+  { href: "/voz-clinica", label: "Avaliação clínica", icon: Stethoscope },
+  { href: "/voicecheck", label: "Diagnóstico vocal", icon: AudioWaveform },
   { href: "/projects", label: "Minhas músicas", icon: FolderOpen },
   { href: "/library", label: "Biblioteca e setlists", icon: Library },
-  { href: "/voicecheck", label: "Diagnóstico vocal", icon: AudioWaveform },
-  { href: "/voz-clinica", label: "Avaliação clínica", icon: Stethoscope },
 ];
 
 const labLinks = [
@@ -101,7 +101,7 @@ export function Sidebar({
         )}
         aria-label="Principal"
       >
-        <NavGroup label="Estúdio" links={primaryLinks} pathname={pathname} collapsed={rail} onNavigate={onNavigate} />
+        <NavGroup label="Trabalho" links={primaryLinks} pathname={pathname} collapsed={rail} onNavigate={onNavigate} />
         <NavGroup
           label="Sistema"
           links={[...labLinks, ...adminLinks]}
