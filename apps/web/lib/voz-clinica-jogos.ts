@@ -26,7 +26,7 @@ export const JOGOS: Record<JogoId, { titulo: string; treina: string; instrucao: 
   sopro: {
     titulo: "Sopro longo",
     treina: "Tempo de fonação",
-    instrucao: "Respire e sustente um “a” confortável, sem parar, até completar a barra.",
+    instrucao: "Respire e sustente o som da variação escolhida, sem parar, até completar a barra.",
   },
   "surdo-sonoro": {
     titulo: "Surdo ou sonoro",
@@ -38,6 +38,35 @@ export const JOGOS: Record<JogoId, { titulo: string; treina: string; instrucao: 
     treina: "Ataque vocal e plosivos",
     instrucao: "Fique em silêncio. Quando o círculo acender, diga uma vez, curto: “pá” (ou “a”). Som fora da hora conta como antecipação.",
   },
+};
+
+/** Variações de cada jogo (como os vários jogos por módulo do VoxGames). A primeira é a padrão. */
+export const VARIACOES: Record<JogoId, { id: string; rotulo: string; descricao: string }[]> = {
+  altitude: [
+    { id: "patamares", rotulo: "Patamares", descricao: "Três níveis (fraco, médio, forte), com pausa para respirar." },
+    { id: "forte-fraco", rotulo: "Forte e fraco", descricao: "Alterna só entre bem fraco e bem forte." },
+    { id: "ondas", rotulo: "Ondas", descricao: "Crescendo e decrescendo contínuos." },
+  ],
+  trilha: [
+    { id: "deslizes", rotulo: "Deslizes", descricao: "Patamares ligados por subidas e descidas." },
+    { id: "escada", rotulo: "Escada", descricao: "Degraus subindo e descendo, sem deslizar." },
+    { id: "sirene", rotulo: "Sirene", descricao: "Glissando contínuo, do grave ao agudo e de volta." },
+  ],
+  sopro: [
+    { id: "livre", rotulo: "Vogal", descricao: "“a” confortável até completar a meta." },
+    { id: "fricativa", rotulo: "/s/ e /z/", descricao: "Sustente o som mostrado (s ou z); só conta o tempo com som." },
+  ],
+  "surdo-sonoro": [
+    { id: "todos", rotulo: "Todos os pares", descricao: "s/z, f/v e ch/j sorteados." },
+    { id: "s", rotulo: "s / z", descricao: "Só o par s/z." },
+    { id: "f", rotulo: "f / v", descricao: "Só o par f/v." },
+    { id: "ch", rotulo: "ch / j", descricao: "Só o par ch/j." },
+  ],
+  "som-silencio": [
+    { id: "imprevisivel", rotulo: "Imprevisível", descricao: "Sinais a cada 1,8 a 3,5 s." },
+    { id: "ritmado", rotulo: "Ritmado", descricao: "Sinal a cada 2 s, no mesmo ritmo." },
+    { id: "rapido", rotulo: "Rápido", descricao: "Sinais a cada 1 a 1,8 s." },
+  ],
 };
 
 // ---------------------------------------------------------------------------
@@ -74,11 +103,51 @@ export type Segmento = { inicio: number; fim: number; de: number; ate: number };
  * Altitude: patamares (baixo, médio, alto) com pausas para respirar.
  * Trilha: patamares ligados por deslizes (glissandos).
  */
-export function gerarPercurso(jogo: "altitude" | "trilha", duracao_s: number, semente = 1): Segmento[] {
+export function gerarPercurso(jogo: "altitude" | "trilha", duracao_s: number, semente = 1, variacao?: string): Segmento[] {
+  const v = variacao ?? VARIACOES[jogo][0]!.id;
   const rnd = aleatorio(semente);
-  const niveis = [0.2, 0.5, 0.8];
   const segs: Segmento[] = [];
   let t = 2; // 2 s para se preparar
+  if (v === "forte-fraco") {
+    let alto = rnd() < 0.5;
+    while (t < duracao_s) {
+      const fim = Math.min(duracao_s, t + 2.5);
+      const nivel = alto ? 0.85 : 0.15;
+      segs.push({ inicio: t, fim, de: nivel, ate: nivel });
+      t = fim + 1.2;
+      alto = !alto;
+    }
+    return segs;
+  }
+  if (v === "ondas" || v === "sirene") {
+    // ondas: cresce e decresce (4 s cada metade); sirene: grave → agudo → grave (3 s cada), sem pausa
+    const metade = v === "ondas" ? 4 : 3;
+    const [baixo, alto] = v === "ondas" ? [0.15, 0.85] : [0.1, 0.9];
+    let subindo = true;
+    while (t < duracao_s) {
+      const fim = Math.min(duracao_s, t + metade);
+      segs.push({ inicio: t, fim, de: subindo ? baixo : alto, ate: subindo ? alto : baixo });
+      t = fim + (v === "ondas" && !subindo ? 1.2 : 0); // ondas: respira depois de cada onda
+      subindo = !subindo;
+    }
+    return segs;
+  }
+  if (v === "escada") {
+    const degraus = [0.15, 0.32, 0.5, 0.68, 0.85];
+    const seq = [...degraus, ...degraus.slice(0, -1).reverse()];
+    let k = 0;
+    while (t < duracao_s) {
+      const fim = Math.min(duracao_s, t + 1.5);
+      const nivel = seq[k % seq.length]!;
+      segs.push({ inicio: t, fim, de: nivel, ate: nivel });
+      t = fim;
+      k++;
+      if (k % seq.length === 0) t += 1.5; // respira a cada escada completa
+    }
+    return segs;
+  }
+  // padrão: patamares (altitude) ou deslizes (trilha)
+  const niveis = [0.2, 0.5, 0.8];
   let anterior = niveis[1]!;
   while (t < duracao_s) {
     let nivel = niveis[Math.floor(rnd() * niveis.length)]!;
@@ -204,10 +273,12 @@ export const PARES = [
 
 export type Desafio = { som: string; exemplo: string; esperado: "surdo" | "sonoro" };
 
-export function gerarDesafios(quantidade: number, semente = 1): Desafio[] {
+export function gerarDesafios(quantidade: number, semente = 1, par_?: string): Desafio[] {
   const rnd = aleatorio(semente);
+  const pares = PARES.filter((p) => !par_ || par_ === "todos" || p.surdo === par_);
+  const lista = pares.length ? pares : PARES;
   return Array.from({ length: quantidade }, () => {
-    const par = PARES[Math.floor(rnd() * PARES.length)]!;
+    const par = lista[Math.floor(rnd() * lista.length)]!;
     const sonoro = rnd() < 0.5;
     return sonoro
       ? { som: par.sonoro, exemplo: par.exemploSonoro, esperado: "sonoro" as const }
@@ -276,13 +347,13 @@ export function pontuacaoDesafios(e: EstadoDesafios): number {
 // ---------------------------------------------------------------------------
 
 /** Instantes (s) em que o sinal acende: o primeiro após 3 s, depois a cada 1,8 a 3,5 s (imprevisível). */
-export function gerarSinais(quantidade: number, semente = 1, inicio_s = 3): number[] {
+export function gerarSinais(quantidade: number, semente = 1, inicio_s = 3, ritmo = "imprevisivel"): number[] {
   const rnd = aleatorio(semente);
   const saida: number[] = [];
   let t = inicio_s;
   for (let i = 0; i < quantidade; i++) {
     saida.push(Math.round(t * 100) / 100);
-    t += 1.8 + rnd() * 1.7;
+    t += ritmo === "ritmado" ? 2 : ritmo === "rapido" ? 1 + rnd() * 0.8 : 1.8 + rnd() * 1.7;
   }
   return saida;
 }
@@ -353,6 +424,8 @@ export function sinalAtivo(sinais: number[], t: number, janela_s = 1.2): boolean
 
 export type ResultadoJogo = {
   jogo: JogoId;
+  /** Variação jogada (VARIACOES[jogo]); ausente = a padrão. */
+  variacao?: string;
   duracao_s: number;
   pontuacao_pct: number;
   /** Detalhes numéricos do jogo (meta, melhor tempo, acertos…). */

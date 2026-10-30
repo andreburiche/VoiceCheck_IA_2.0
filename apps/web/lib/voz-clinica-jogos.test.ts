@@ -19,6 +19,7 @@ import {
   type ClasseSom,
   estadoAtaqueInicial,
   gerarSinais,
+  VARIACOES,
   limiarDeRuido,
   passoAtaque,
   pontuacaoAtaque,
@@ -198,5 +199,34 @@ describe("som e silêncio (ataque vocal)", () => {
     expect(limiarDeRuido([-62, -60, -58])).toBe(-45);
     expect(limiarDeRuido([-90, -90])).toBe(-50);
     expect(limiarDeRuido([])).toBe(-40);
+  });
+});
+
+describe("variações (vários jogos por módulo)", () => {
+  it("cada jogo tem pelo menos 2 variações e a primeira é a padrão", () => {
+    for (const lista of Object.values(VARIACOES)) expect(lista.length >= 2).toBe(true);
+    expect(gerarPercurso("altitude", 30, 42, "patamares")).toEqual(gerarPercurso("altitude", 30, 42));
+  });
+
+  it("forte e fraco alterna os extremos; escada sobe de degrau em degrau", () => {
+    const ff = gerarPercurso("altitude", 30, 3, "forte-fraco");
+    for (let i = 1; i < ff.length; i++) expect(ff[i]!.de !== ff[i - 1]!.de).toBe(true);
+    expect(ff.every((s) => s.de === 0.15 || s.de === 0.85)).toBe(true);
+    const esc = gerarPercurso("trilha", 30, 1, "escada");
+    expect(esc.slice(0, 5).map((s) => s.de)).toEqual([0.15, 0.32, 0.5, 0.68, 0.85]);
+    expect(esc.every((s) => s.de === s.ate)).toBe(true);
+  });
+
+  it("sirene é contínua, sem pausas, indo e voltando", () => {
+    const s = gerarPercurso("trilha", 20, 1, "sirene");
+    for (let i = 1; i < s.length; i++) {
+      expect(s[i]!.inicio).toBe(s[i - 1]!.fim);
+      expect(s[i]!.de).toBe(s[i - 1]!.ate);
+    }
+  });
+
+  it("surdo/sonoro com um par só; sinais ritmados a cada 2 s", () => {
+    expect(gerarDesafios(12, 5, "f").every((d) => d.som === "f" || d.som === "v")).toBe(true);
+    expect(gerarSinais(4, 1, 3, "ritmado")).toEqual([3, 5, 7, 9]);
   });
 });

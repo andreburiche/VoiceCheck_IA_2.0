@@ -13,6 +13,7 @@ import { medianaDe3, nivelDbfs, pitchYin, SILENCIO_DBFS, type Faixa } from "@/li
 import { abrirMicrofoneAoVivo, gravadorSuportado } from "@/lib/voz-clinica-gravador";
 import {
   JOGOS,
+  VARIACOES,
   alvoEm,
   classificarSom,
   estadoAtaqueInicial,
@@ -59,6 +60,7 @@ type Config = {
 
 type Partida = {
   jogo: JogoId;
+  variacao: string;
   inicio: number;
   percurso: Segmento[];
   desafios: Desafio[];
@@ -172,6 +174,9 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
     meta_s: 10,
     desafios: 8,
   });
+  const [variacoes, setVariacoes] = useState<Record<JogoId, string>>(
+    () => Object.fromEntries((Object.keys(VARIACOES) as JogoId[]).map((j) => [j, VARIACOES[j][0]!.id])) as Record<JogoId, string>,
+  );
   const [jogando, setJogando] = useState(false);
   const [placar, setPlacar] = useState<{ pct: number; texto: string; classe?: ClasseSom; desafio?: Desafio; indice?: number; historico?: boolean[]; sopro?: EstadoSopro; aceso?: boolean; ataque?: EstadoAtaque }>({ pct: 0, texto: "" });
   const [resultado, setResultado] = useState<ResultadoJogo | null>(null);
@@ -237,7 +242,7 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
         detalhes: { desafios: p.desafiosE.acertos + p.desafiosE.erros, acertos: p.desafiosE.acertos, erros: p.desafiosE.erros },
       };
     }
-    setResultado(r);
+    setResultado({ ...r, variacao: p.variacao });
   }, [fecharAudio]);
 
   async function comecar() {
@@ -261,15 +266,17 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
     const c = cfg.current;
     const semente = Math.floor(Math.random() * 1e9);
     const inicio = audio.current!.ctx.currentTime;
+    const variacao = variacoes[jogo];
     partida.current = {
       jogo,
+      variacao,
       inicio,
-      percurso: jogo === "altitude" || jogo === "trilha" ? gerarPercurso(jogo, c.duracao_s, semente) : [],
-      desafios: jogo === "surdo-sonoro" ? gerarDesafios(c.desafios, semente) : [],
+      percurso: jogo === "altitude" || jogo === "trilha" ? gerarPercurso(jogo, c.duracao_s, semente, variacao) : [],
+      desafios: jogo === "surdo-sonoro" ? gerarDesafios(c.desafios, semente, variacao) : [],
       percursoE: estadoPercursoInicial(),
       soproE: estadoSoproInicial(),
       desafiosE: { ...estadoDesafiosInicial(), inicioDesafio: inicio + 1.5 },
-      sinais: jogo === "som-silencio" ? gerarSinais(c.desafios, semente) : [],
+      sinais: jogo === "som-silencio" ? gerarSinais(c.desafios, semente, 3, variacao) : [],
       ataqueE: estadoAtaqueInicial(),
       ruido: [],
       limiar: null,
@@ -301,8 +308,11 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
         const hz = medianaDe3(brutos);
         p.y = hz === null ? null : normalizar(hz, conf.faixaPitch, "log");
       } else if (p.jogo === "sopro") {
-        const r = pitchYin(buffer, a.ctx.sampleRate, 60, 1000);
-        p.soproE = passoSopro(p.soproE, t, r !== null);
+        // vogal: conta só com pitch; /s/ e /z/: qualquer som de fricativa (o /s/ não tem pitch)
+        const comSom = p.variacao === "fricativa"
+          ? classificarSom(buffer, a.ctx.sampleRate) !== "silencio"
+          : pitchYin(buffer, a.ctx.sampleRate, 60, 1000) !== null;
+        p.soproE = passoSopro(p.soproE, t, comSom);
       } else if (p.jogo === "som-silencio") {
         const db = nivelDbfs(buffer);
         // ruído de fundo medido de 0,5 s até 0,5 s antes do primeiro sinal (o paciente em silêncio)
@@ -400,7 +410,19 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
         ))}
       </div>
 
-      <p className="mt-4 max-w-[70ch] text-sm text-ink">{def.instrucao}</p>
+      <div className="mt-4 flex flex-wrap items-end gap-3">
+        <div>
+          <Label htmlFor={`${id}-var`} className="text-xs">Variação</Label>
+          <select id={`${id}-var`} value={variacoes[jogo]} disabled={jogando}
+            onChange={(e) => { const v = e.target.value; setVariacoes((m) => ({ ...m, [jogo]: v })); setResultado(null); }}
+            className="mt-1 block h-9 rounded-lg border border-line bg-canvas-raised px-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            data-testid="vc2-jogo-variacao">
+            {VARIACOES[jogo].map((v) => <option key={v.id} value={v.id}>{v.rotulo}</option>)}
+          </select>
+        </div>
+        <p className="pb-2 text-xs text-ink-muted">{VARIACOES[jogo].find((v) => v.id === variacoes[jogo])?.descricao}</p>
+      </div>
+      <p className="mt-3 max-w-[70ch] text-sm text-ink">{def.instrucao}</p>
 
       <fieldset className="mt-3 flex flex-wrap items-end gap-x-6 gap-y-3" disabled={jogando}>
         <legend className="sr-only">Configuração do jogo</legend>
@@ -505,7 +527,10 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
 
       {resultado ? (
         <div className="mt-4 rounded-xl p-3 ring-1 ring-inset ring-ink/10" data-testid="vc2-jogo-resultado">
-          <h3 className="text-sm font-semibold text-ink">Resultado — {JOGOS[resultado.jogo].titulo}</h3>
+          <h3 className="text-sm font-semibold text-ink">
+            Resultado — {JOGOS[resultado.jogo].titulo}
+            {resultado.variacao ? ` (${VARIACOES[resultado.jogo].find((v) => v.id === resultado.variacao)?.rotulo ?? resultado.variacao})` : ""}
+          </h3>
           <p className="text-data mt-1 text-2xl font-semibold text-ink">{fixoBR(resultado.pontuacao_pct, 1)}%</p>
           <p className="text-sm text-ink-muted">
             {resultado.jogo === "sopro"

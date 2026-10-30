@@ -120,6 +120,8 @@ class JogoEntrada(BaseModel):
 
     paciente: str = Field(min_length=1, max_length=120)
     jogo: JogoId
+    #: Variação do jogo (ex.: "ondas", "escada"); vazio = a padrão.
+    variacao: str | None = Field(default=None, max_length=20, pattern=r"^[a-z-]*$")
     duracao_s: float = Field(ge=0, le=3600)
     pontuacao_pct: float = Field(ge=0, le=100)
     #: Números do jogo (meta, melhor tempo, acertos…): até 12 chaves curtas.

@@ -5,7 +5,7 @@ import { resumoAnamnese } from "@/lib/voz-clinica-anamnese";
 import type { ResumoBiofeedback } from "@/lib/voz-clinica-biofeedback";
 import type { ResumoCarga } from "@/lib/voz-clinica-carga";
 import type { PontoCampo, ResumoCampo } from "@/lib/voz-clinica-fonetograma";
-import { JOGOS, type ResultadoJogo } from "@/lib/voz-clinica-jogos";
+import { JOGOS, VARIACOES, type ResultadoJogo } from "@/lib/voz-clinica-jogos";
 import { resumoPratica, type ExercicioPratica, type ResultadoPratica } from "@/lib/voz-clinica-pratica";
 
 
@@ -486,7 +486,8 @@ export function resumoAvaliacao(a: Avaliacao): string {
       : r.jogo === "surdo-sonoro" ? ` · ${fixoBR(d.acertos, 0)} de ${fixoBR(d.desafios, 0)} acertos`
       : r.jogo === "som-silencio" ? ` · ${fixoBR(d.acertos, 0)} de ${fixoBR(d.sinais, 0)} sinais · reação ${fixoBR(d.reacao_media_ms, 0)} ms`
       : " no alvo";
-    return `${JOGOS[r.jogo]?.titulo ?? r.jogo}: ${fixoBR(r.pontuacao_pct, 1)}%${extra}`;
+    const variacao = r.variacao ? VARIACOES[r.jogo]?.find((v) => v.id === r.variacao)?.rotulo : undefined;
+    return `${JOGOS[r.jogo]?.titulo ?? r.jogo}${variacao ? ` (${variacao})` : ""}: ${fixoBR(r.pontuacao_pct, 1)}%${extra}`;
   }
   if (a.tipo === "biofeedback") {
     const r = a.resultado as ResultadoBiofeedback;
