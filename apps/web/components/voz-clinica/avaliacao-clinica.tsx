@@ -19,6 +19,8 @@ import { CadastroPacienteForm } from "@/components/voz-clinica/cadastro-paciente
 import { DiagramaDesvio } from "@/components/voz-clinica/diagrama-desvio";
 import { FerramentasPraat } from "@/components/voz-clinica/ferramentas-praat";
 import { MidiasPaciente } from "@/components/voz-clinica/midias-paciente";
+import { Eletroglotografia } from "@/components/voz-clinica/eletroglotografia";
+import { Nasalancia } from "@/components/voz-clinica/nasalancia";
 import { SessoesTerapia } from "@/components/voz-clinica/sessoes-terapia";
 import { montarDocxClinico, nomeArquivoDocx } from "@/lib/voz-clinica-docx";
 import { EditorAudio } from "@/components/voz-clinica/editor-audio";
@@ -927,6 +929,7 @@ const ABAS = [
   { id: "fonetograma", rotulo: "Fonetograma" },
   { id: "biofeedback", rotulo: "Biofeedback" },
   { id: "carga", rotulo: "Carga vocal" },
+  { id: "equipamentos", rotulo: "Equipamentos" },
   { id: "jogos", rotulo: "Jogos" },
   { id: "sessoes", rotulo: "Sessões" },
   { id: "midias", rotulo: "Mídias" },
@@ -1102,6 +1105,13 @@ export function AvaliacaoClinica() {
       {aba === "midias" ? (
         <div role="tabpanel" id={`${idPaciente}-painel-midias`} aria-labelledby={`${idPaciente}-aba-midias`}>
           <MidiasPaciente key={nome} paciente={nome} versao={versao} aoSalvar={aoSalvar} />
+        </div>
+      ) : null}
+      {/* nasalância e EGG: precisam de equipamento (interface estéreo, eletroglotógrafo) */}
+      {aba === "equipamentos" ? (
+        <div role="tabpanel" id={`${idPaciente}-painel-equipamentos`} aria-labelledby={`${idPaciente}-aba-equipamentos`} className="space-y-5">
+          <Nasalancia key={`n-${nome}`} paciente={nome} aoSalvar={aoSalvar} />
+          <Eletroglotografia key={`e-${nome}`} paciente={nome} aoSalvar={aoSalvar} />
         </div>
       ) : null}
       {aba === "ferramentas" ? (

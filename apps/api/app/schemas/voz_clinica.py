@@ -18,7 +18,7 @@ DataUtc = Annotated[datetime, AfterValidator(_com_fuso)]
 
 TipoAvaliacao = Literal[
     "acustica", "idv10", "qvv", "grbasi", "easebr", "anamnese", "biofeedback", "jogo", "fonetograma", "pratica",
-    "dsi", "fala", "ddk", "cepstral", "carga", "perceptiva", "sessao", "midia",
+    "dsi", "fala", "ddk", "cepstral", "carga", "perceptiva", "sessao", "midia", "nasalancia", "egg",
 ]
 JogoId = Literal["altitude", "trilha", "sopro", "surdo-sonoro", "som-silencio"]
 
@@ -450,3 +450,34 @@ class SessaoEntrada(BaseModel):
     resposta: str | None = Field(default=None, max_length=1000)
     orientacoes: str | None = Field(default=None, max_length=1000)
     observacoes: str | None = Field(default=None, max_length=2000)
+
+
+class NasalanciaEntrada(BaseModel):
+    """Resumo da nasalância medida no navegador (2 canais: oral e nasal); o áudio não é enviado."""
+
+    paciente: str = Field(min_length=1, max_length=120)
+    tarefa: Literal["oral", "nasal", "balanceado", "vogal", "outro"]
+    media_pct: float = Field(ge=0, le=100)
+    dp_pct: float = Field(ge=0, le=100)
+    mediana_pct: float = Field(ge=0, le=100)
+    quadros: int = Field(ge=10, le=100_000)
+    duracao_s: float = Field(gt=0, le=600)
+    fonte: Literal["gravacao", "arquivo"]
+    canais_invertidos: bool = False
+    observacao: str | None = Field(default=None, max_length=300)
+
+
+class EggEntrada(BaseModel):
+    """Resumo da eletroglotografia medida no navegador (quociente de contato); o sinal não é enviado."""
+
+    paciente: str = Field(min_length=1, max_length=120)
+    tarefa: Literal["vogal", "fala", "canto", "glissando", "outro"]
+    cq_media_pct: float = Field(ge=0, le=100)
+    cq_dp_pct: float = Field(ge=0, le=100)
+    cq_mediana_pct: float = Field(ge=0, le=100)
+    f0_media_hz: float = Field(gt=0, le=2000)
+    ciclos: int = Field(ge=5, le=1_000_000)
+    duracao_s: float = Field(gt=0, le=600)
+    limiar_pct: Literal[25, 35, 50]
+    canal_egg: Literal[1, 2]
+    polaridade_invertida: bool = False

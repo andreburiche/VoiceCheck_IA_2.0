@@ -717,3 +717,28 @@ def test_manipular_pitch_e_duracao(client: httpx.Client) -> None:
     assert a["duracao_s"] == pytest.approx(3.0, rel=0.08)
     fora = client.post("/api/v1/voz-clinica/manipular", files={"file": ("v.wav", io.BytesIO(wav), "audio/wav")}, data={"semitons": "20"})
     assert fora.status_code == 400
+
+
+def test_nasalancia_salva_no_historico(client: httpx.Client) -> None:
+    paciente = f"Nasal {uuid.uuid4().hex[:6]}"
+    base = {"paciente": paciente, "tarefa": "nasal", "media_pct": 52.4, "dp_pct": 8.1, "mediana_pct": 53.0,
+            "quadros": 240, "duracao_s": 5.2, "fonte": "gravacao"}
+    r = client.post("/api/v1/voz-clinica/nasalancia", json=base)
+    assert r.status_code == 200, r.text
+    assert r.json()["resultado"]["media_pct"] == 52.4 and r.json()["resultado"]["canais_invertidos"] is False
+    assert client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"][0]["tipo"] == "nasalancia"
+    for ruim in ({"media_pct": 120}, {"tarefa": "cantada"}, {"quadros": 3}, {"fonte": "nuvem"}):
+        assert client.post("/api/v1/voz-clinica/nasalancia", json={**base, **ruim}).status_code == 422
+    client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
+
+
+def test_egg_salva_no_historico(client: httpx.Client) -> None:
+    paciente = f"Egg {uuid.uuid4().hex[:6]}"
+    base = {"paciente": paciente, "tarefa": "vogal", "cq_media_pct": 47.2, "cq_dp_pct": 3.1, "cq_mediana_pct": 47.0,
+            "f0_media_hz": 198.5, "ciclos": 640, "duracao_s": 3.4, "limiar_pct": 35, "canal_egg": 2}
+    r = client.post("/api/v1/voz-clinica/egg", json=base)
+    assert r.status_code == 200, r.text
+    assert r.json()["resultado"]["polaridade_invertida"] is False
+    for ruim in ({"limiar_pct": 40}, {"canal_egg": 3}, {"cq_media_pct": -1}, {"ciclos": 2}):
+        assert client.post("/api/v1/voz-clinica/egg", json={**base, **ruim}).status_code == 422
+    client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})

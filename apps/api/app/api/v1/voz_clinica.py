@@ -35,6 +35,8 @@ from app.schemas.voz_clinica import (
     CadastroEntrada,
     CadastroOut,
     CargaEntrada,
+    EggEntrada,
+    NasalanciaEntrada,
     SessaoEntrada,
     FonetogramaEntrada,
     JogoEntrada,
@@ -372,6 +374,30 @@ def registrar_sessao(entrada: SessaoEntrada, user: CurrentUser, db: DbSession) -
         "exercicios_lista": [l.strip() for l in (campos["exercicios"] or "").splitlines() if l.strip()][:30],
     }
     salvo = _salvar(db, user, nome, "sessao", resultado)
+    return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
+
+
+@router.post("/nasalancia", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
+def salvar_nasalancia(entrada: NasalanciaEntrada, user: CurrentUser, db: DbSession) -> ResultadoSalvo:
+    """Nasalância (Nasometer/lingWAVES) medida no navegador com dois microfones (oral e nasal)."""
+    nome = _paciente(entrada.paciente)
+    if nome is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente")
+    if entrada.mediana_pct > 100 or entrada.dp_pct > 100:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Valores de nasalância inválidos")
+    resultado = {**entrada.model_dump(exclude={"paciente"}), "observacao": (entrada.observacao or "").strip() or None}
+    salvo = _salvar(db, user, nome, "nasalancia", resultado)
+    return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
+
+
+@router.post("/egg", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
+def salvar_egg(entrada: EggEntrada, user: CurrentUser, db: DbSession) -> ResultadoSalvo:
+    """Eletroglotografia (lingWAVES): quociente de contato medido no navegador a partir do sinal do EGG."""
+    nome = _paciente(entrada.paciente)
+    if nome is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente")
+    resultado = entrada.model_dump(exclude={"paciente"})
+    salvo = _salvar(db, user, nome, "egg", resultado)
     return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
 
 

@@ -9,7 +9,7 @@ import { JOGOS, VARIACOES, type ResultadoJogo } from "@/lib/voz-clinica-jogos";
 import { resumoPratica, type ExercicioPratica, type ResultadoPratica } from "@/lib/voz-clinica-pratica";
 
 
-export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica" | "dsi" | "fala" | "ddk" | "cepstral" | "carga" | "perceptiva" | "sessao" | "midia";
+export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica" | "dsi" | "fala" | "ddk" | "cepstral" | "carga" | "perceptiva" | "sessao" | "midia" | "nasalancia" | "egg";
 export type Protocolo = "idv10" | "qvv" | "grbasi" | "easebr" | "perceptiva";
 
 /** Resumo de sessão de biofeedback salvo (medido no navegador). */
@@ -206,6 +206,53 @@ export const ACEITA_MIDIA = "image/jpeg,image/png,image/webp,video/mp4,video/qui
 export function tamanhoBR(bytes: number): string {
   if (bytes < 1024 * 1024) return `${fixoBR(bytes / 1024, 0)} KB`;
   return `${fixoBR(bytes / (1024 * 1024), 1)} MB`;
+}
+
+/** Nasalância salva (resumo; o áudio não sai do navegador). */
+export type NasalanciaSalva = {
+  tarefa: "oral" | "nasal" | "balanceado" | "vogal" | "outro";
+  media_pct: number;
+  dp_pct: number;
+  mediana_pct: number;
+  quadros: number;
+  duracao_s: number;
+  fonte: "gravacao" | "arquivo";
+  canais_invertidos?: boolean;
+  observacao?: string | null;
+};
+
+export const ROTULO_TAREFA_NASAL: Record<NasalanciaSalva["tarefa"], string> = {
+  oral: "texto oral", nasal: "texto nasal", balanceado: "texto balanceado", vogal: "vogal sustentada", outro: "outra tarefa",
+};
+
+export function salvarNasalancia(paciente: string, r: NasalanciaSalva) {
+  return apiFetch<Salvo<NasalanciaSalva>>(`${BASE}/nasalancia`, { method: "POST", json: { ...r, paciente } });
+}
+
+export function resumoNasalancia(r: NasalanciaSalva): string {
+  return `Nasalância ${fixoBR(r.media_pct, 1)}% (DP ${fixoBR(r.dp_pct, 1)}) · ${ROTULO_TAREFA_NASAL[r.tarefa] ?? r.tarefa} · ${fixoBR(r.duracao_s, 1)} s`;
+}
+
+/** Eletroglotografia salva (quociente de contato; o sinal não sai do navegador). */
+export type EggSalvo = {
+  tarefa: "vogal" | "fala" | "canto" | "glissando" | "outro";
+  cq_media_pct: number;
+  cq_dp_pct: number;
+  cq_mediana_pct: number;
+  f0_media_hz: number;
+  ciclos: number;
+  duracao_s: number;
+  limiar_pct: 25 | 35 | 50;
+  canal_egg: 1 | 2;
+  polaridade_invertida?: boolean;
+};
+
+export function salvarEgg(paciente: string, r: EggSalvo) {
+  return apiFetch<Salvo<EggSalvo>>(`${BASE}/egg`, { method: "POST", json: { ...r, paciente } });
+}
+
+export function resumoEgg(r: EggSalvo): string {
+  return `Quociente de contato ${fixoBR(r.cq_media_pct, 1)}% (DP ${fixoBR(r.cq_dp_pct, 1)}; nível ${r.limiar_pct}%) · F0 ${fixoBR(r.f0_media_hz, 0)} Hz · ${r.ciclos} ciclos`;
 }
 
 export type EntradaSessao = {
@@ -641,6 +688,8 @@ export function resumoAvaliacao(a: Avaliacao): string {
   if (a.tipo === "pratica") return resumoPratica(a.resultado as ResultadoPratica);
   if (a.tipo === "sessao") return resumoSessao(a.resultado as ResultadoSessao);
   if (a.tipo === "midia") return resumoMidia(a.resultado as ResultadoMidia);
+  if (a.tipo === "nasalancia") return resumoNasalancia(a.resultado as NasalanciaSalva);
+  if (a.tipo === "egg") return resumoEgg(a.resultado as EggSalvo);
   if (a.tipo === "anamnese") return resumoAnamnese(a.resultado as Anamnese);
   if (a.tipo === "fonetograma") {
     const r = (a.resultado as ResultadoFonetograma).resumo;
@@ -731,6 +780,8 @@ export const ROTULO_TIPO: Record<TipoAvaliacao, string> = {
   perceptiva: "Perceptiva",
   sessao: "Sessão de terapia",
   midia: "Mídia",
+  nasalancia: "Nasalância",
+  egg: "Eletroglotografia",
 };
 
 export const ROTULO_DDK: Record<TarefaDdk, string> = { pa: "/pa/", ta: "/ta/", ka: "/ka/", pataka: "/pataka/" };
