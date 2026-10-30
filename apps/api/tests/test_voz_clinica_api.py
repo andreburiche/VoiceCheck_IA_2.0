@@ -59,7 +59,7 @@ def test_status_lista_motores(client: httpx.Client) -> None:
     r = client.get("/api/v1/voz-clinica/status")
     assert r.status_code == 200, r.text
     assert "interno" in r.json()["motores"]
-    assert set(r.json()["protocolos"]) == {"idv10", "qvv", "grbasi", "easebr"}
+    assert set(r.json()["protocolos"]) == {"idv10", "qvv", "grbasi", "easebr", "perceptiva"}
 
 
 def test_analisar_sem_paciente_nao_salva(client: httpx.Client) -> None:
@@ -595,3 +595,42 @@ def test_gravacao_longa_recusada(client: httpx.Client) -> None:
     longa = para_wav(sintetizar(f0=150, dur=61, taxa=8000).audio)
     r = client.post("/api/v1/voz-clinica/analisar", files={"file": ("v.wav", io.BytesIO(longa), "audio/wav")})
     assert r.status_code == 400 and "limite" in r.json()["message"]
+
+
+def test_perceptiva_complementar(client: httpx.Client) -> None:
+    """Como no iVox: ressonância, pitch, loudness e ataque vocal, além do GRBASI."""
+    paciente = f"Percep {uuid.uuid4().hex[:6]}"
+    r = client.post("/api/v1/voz-clinica/protocolos/perceptiva", json={"paciente": paciente, "respostas": {
+        "ressonancia": "hipernasal", "pitch": "adequado", "loudness": "reduzida", "ataque": "brusco", "observacoes": "fala tensa"}})
+    assert r.status_code == 200, r.text
+    res = r.json()["resultado"]
+    assert res["alterados"] == ["ressonância hipernasal", "loudness reduzida (fraca)", "ataque vocal brusco"]
+    assert res["parametros"]["pitch"]["alterado"] is False and res["observacoes"] == "fala tensa"
+    assert client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"][0]["tipo"] == "perceptiva"
+    # inválidos
+    assert client.post("/api/v1/voz-clinica/protocolos/perceptiva", json={"respostas": {"ressonancia": "equilibrada"}}).status_code == 400
+    assert client.post("/api/v1/voz-clinica/protocolos/perceptiva", json={"respostas": {
+        "ressonancia": "nasal demais", "pitch": "adequado", "loudness": "adequada"}}).status_code == 400
+    client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente})
+
+
+def test_sessoes_de_terapia_numeradas(client: httpx.Client) -> None:
+    """Como o histórico de terapia do iVox: cada sessão registrada recebe o número seguinte."""
+    paciente = f"Sessao {uuid.uuid4().hex[:6]}"
+    s1 = client.post("/api/v1/voz-clinica/sessoes", json={
+        "paciente": paciente, "data": "2026-10-20", "objetivos": "reduzir tensão",
+        "exercicios": "Sopro com canudo 3x1 min\n\nVibração de língua", "observacoes": "  "})
+    assert s1.status_code == 200, s1.text
+    r1 = s1.json()["resultado"]
+    assert r1["numero"] == 1 and r1["observacoes"] is None
+    assert r1["exercicios_lista"] == ["Sopro com canudo 3x1 min", "Vibração de língua"]
+    s2 = client.post("/api/v1/voz-clinica/sessoes", json={"paciente": paciente, "data": "2026-10-27", "resposta": "melhorou"})
+    assert s2.json()["resultado"]["numero"] == 2
+    # sem conteúdo, data no futuro e sem paciente: recusados
+    assert client.post("/api/v1/voz-clinica/sessoes", json={"paciente": paciente, "data": "2026-10-27"}).status_code == 400
+    assert client.post("/api/v1/voz-clinica/sessoes", json={"paciente": paciente, "data": "2099-01-01", "objetivos": "x"}).status_code == 400
+    assert client.post("/api/v1/voz-clinica/sessoes", json={"paciente": "   ", "data": "2026-10-27", "objetivos": "x"}).status_code in (400, 422)
+    # entra na exportação LGPD e sai com a exclusão do paciente
+    dados = client.get("/api/v1/voz-clinica/pacientes/exportar", params={"paciente": paciente}).json()
+    assert [a["tipo"] for a in dados["avaliacoes"]] == ["sessao", "sessao"]
+    assert client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente}).json()["avaliacoes_excluidas"] == 2

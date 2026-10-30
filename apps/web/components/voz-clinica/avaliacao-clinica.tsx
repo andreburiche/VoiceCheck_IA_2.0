@@ -16,6 +16,7 @@ import { Fonetograma } from "@/components/voz-clinica/fonetograma";
 import { JogosTerapia } from "@/components/voz-clinica/jogos-terapia";
 import { PraticaCasa } from "@/components/voz-clinica/pratica-casa";
 import { CadastroPacienteForm } from "@/components/voz-clinica/cadastro-paciente";
+import { SessoesTerapia } from "@/components/voz-clinica/sessoes-terapia";
 import { EditorAudio } from "@/components/voz-clinica/editor-audio";
 import { CargaVocal } from "@/components/voz-clinica/carga-vocal";
 import { ComparacaoAntesDepois } from "@/components/voz-clinica/comparacao";
@@ -29,6 +30,7 @@ import { importarAudio } from "@/lib/voz-clinica-importar";
 import { historicoCsv } from "@/lib/voz-clinica-planilha";
 import {
   FAIXAS_F0,
+  OPCOES_PERCEPTIVA,
   ROTULO_TIPO,
   analisarGravacao,
   anotarAvaliacao,
@@ -400,6 +402,69 @@ const PROTOCOLOS: DefProtocolo[] = [
     botao: "Calcular EASE-BR",
   },
 ];
+
+/** Perceptiva complementar ao GRBASI (como no iVox): ressonância, pitch, loudness e ataque vocal. */
+function FormPerceptiva({ paciente, aoSalvar }: { paciente: string; aoSalvar: () => void }) {
+  const [valores, setValores] = useState<Record<string, string>>({});
+  const [obs, setObs] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [resumo, setResumo] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const base = useId();
+
+  async function enviar(e: React.FormEvent) {
+    e.preventDefault();
+    const falta = OPCOES_PERCEPTIVA.filter((p) => p.obrigatorio && !valores[p.chave]).map((p) => p.rotulo.toLowerCase());
+    if (falta.length) {
+      setErro(`Marque ${falta.join(", ")}.`);
+      return;
+    }
+    setEnviando(true);
+    setErro(null);
+    try {
+      const r = await calcularProtocolo("perceptiva", {
+        ressonancia: valores.ressonancia!, pitch: valores.pitch!, loudness: valores.loudness!,
+        ...(valores.ataque ? { ataque: valores.ataque } : {}),
+        ...(obs.trim() ? { observacoes: obs.trim() } : {}),
+      }, paciente);
+      setResumo(resumoProtocolo(r.resultado));
+      if (r.avaliacao_id) aoSalvar();
+    } catch (err) {
+      setErro(friendlyError(err, "Não foi possível registrar."));
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <form onSubmit={(e) => void enviar(e)} aria-labelledby={`${base}-t`} data-testid="vc2-form-perceptiva">
+      <h3 id={`${base}-t`} className="font-display text-base font-semibold text-ink">Perceptiva complementar</h3>
+      <p className="mt-1 text-xs text-ink-muted">Complementa o GRBASI: ressonância, pitch, loudness e ataque vocal percebidos na avaliação.</p>
+      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {OPCOES_PERCEPTIVA.map((p) => (
+          <div key={p.chave}>
+            <Label htmlFor={`${base}-${p.chave}`} className="text-xs">{p.rotulo}{p.obrigatorio ? "" : " (opcional)"}</Label>
+            <select id={`${base}-${p.chave}`} className={cn(SELECT, "mt-1 h-9")} value={valores[p.chave] ?? ""}
+              onChange={(e) => { setValores((v) => ({ ...v, [p.chave]: e.target.value })); setResumo(null); }}
+              data-testid={`vc2-perceptiva-${p.chave}`}>
+              <option value="">—</option>
+              {p.opcoes.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+            </select>
+          </div>
+        ))}
+      </div>
+      <Label htmlFor={`${base}-obs`} className="mt-3 block text-xs">Observações (opcional)</Label>
+      <Input id={`${base}-obs`} className="mt-1" maxLength={500} value={obs} onChange={(e) => setObs(e.target.value)} />
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <Button type="submit" variant="secondary" size="sm" disabled={enviando} data-testid="vc2-perceptiva-registrar">
+          {enviando ? "Registrando…" : "Registrar perceptiva"}
+        </Button>
+        {resumo ? <p className="text-sm text-ink" role="status" data-testid="vc2-perceptiva-resumo">{resumo}</p> : null}
+      </div>
+      <Erro texto={erro} />
+    </form>
+  );
+}
 
 function FormProtocolo({ def, paciente, aoSalvar }: { def: DefProtocolo; paciente: string; aoSalvar: () => void }) {
   const [valores, setValores] = useState<(number | null)[]>(() => def.itens.map(() => null));
@@ -839,6 +904,7 @@ const ABAS = [
   { id: "biofeedback", rotulo: "Biofeedback" },
   { id: "carga", rotulo: "Carga vocal" },
   { id: "jogos", rotulo: "Jogos" },
+  { id: "sessoes", rotulo: "Sessões" },
   { id: "pratica", rotulo: "Prática em casa" },
 ] as const;
 type Aba = (typeof ABAS)[number]["id"];
@@ -874,6 +940,8 @@ function Abas({ ativa, onChange, base }: { ativa: Aba; onChange: (a: Aba) => voi
           className={cn(
             "min-h-[44px] flex-1 rounded-lg px-2 text-[13px] font-medium leading-tight transition-colors sm:min-h-[40px] sm:whitespace-nowrap sm:px-4 sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
             ativa === a.id ? "bg-canvas-card text-ink shadow-sm" : "text-ink-muted hover:text-ink",
+            // celular: se sobrar uma aba sozinha na última linha da grade 3×n, ela ocupa a linha toda
+            i === ABAS.length - 1 && ABAS.length % 3 === 1 && "col-span-3 sm:col-span-1",
           )}
           data-testid={`vc2-aba-${a.id}`}
         >
@@ -964,6 +1032,7 @@ export function AvaliacaoClinica() {
           {PROTOCOLOS.map((def) => (
             <FormProtocolo key={`${def.nome}|${nome}`} def={def} paciente={nome} aoSalvar={aoSalvar} />
           ))}
+          <FormPerceptiva key={`perceptiva|${nome}`} paciente={nome} aoSalvar={aoSalvar} />
         </section>
       </div>
       </div>
@@ -996,6 +1065,11 @@ export function AvaliacaoClinica() {
       {aba === "carga" ? (
         <div role="tabpanel" id={`${idPaciente}-painel-carga`} aria-labelledby={`${idPaciente}-aba-carga`}>
           <CargaVocal paciente={nome} aoSalvar={aoSalvar} />
+        </div>
+      ) : null}
+      {aba === "sessoes" ? (
+        <div role="tabpanel" id={`${idPaciente}-painel-sessoes`} aria-labelledby={`${idPaciente}-aba-sessoes`}>
+          <SessoesTerapia key={nome} paciente={nome} versao={versao} aoSalvar={aoSalvar} />
         </div>
       ) : null}
       {aba === "jogos" ? (

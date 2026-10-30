@@ -158,4 +158,51 @@ def easebr(respostas) -> dict:
     }
 
 
-PROTOCOLOS = {"idv10": idv10, "qvv": qvv, "grbasi": grbasi, "easebr": easebr}
+# --------------------------------------------------------------------------
+# Avaliação perceptivo-auditiva complementar ao GRBASI: ressonância, pitch,
+# loudness e ataque vocal (categorias usuais da clínica vocal brasileira;
+# Behlau, Voz: o livro do especialista, 2001). Registro clínico, sem escore.
+# --------------------------------------------------------------------------
+
+PERCEPTIVA_PARAMETROS = {
+    "ressonancia": ("ressonância", {
+        "equilibrada": "equilibrada", "hipernasal": "hipernasal", "hiponasal": "hiponasal",
+        "mista": "mista (hiper e hiponasal)", "laringofaringea": "laringofaríngea",
+        "faringea": "faríngea", "oral": "oral (anteriorizada)",
+    }, "equilibrada"),
+    "pitch": ("pitch", {"adequado": "adequado", "agudo": "agudo", "grave": "grave"}, "adequado"),
+    "loudness": ("loudness", {"adequada": "adequada", "elevada": "elevada (forte)", "reduzida": "reduzida (fraca)"}, "adequada"),
+    "ataque": ("ataque vocal", {"isocronico": "isocrônico", "brusco": "brusco", "aspirado": "aspirado"}, "isocronico"),
+}
+PERCEPTIVA_OBRIGATORIOS = ("ressonancia", "pitch", "loudness")
+
+
+def perceptiva(respostas) -> dict:
+    """Recebe {"ressonancia": ..., "pitch": ..., "loudness": ..., "ataque"?: ..., "observacoes"?: texto}."""
+    if not isinstance(respostas, dict):
+        raise ErroProtocolo("Perceptiva: envie um objeto com ressonancia, pitch e loudness.")
+    faltando = [PERCEPTIVA_PARAMETROS[p][0] for p in PERCEPTIVA_OBRIGATORIOS if not respostas.get(p)]
+    if faltando:
+        raise ErroProtocolo(f"Perceptiva: faltam {', '.join(faltando)}.")
+    parametros = {}
+    for chave, (nome, opcoes, normal) in PERCEPTIVA_PARAMETROS.items():
+        valor = respostas.get(chave)
+        if valor in (None, ""):
+            continue
+        if valor not in opcoes:
+            raise ErroProtocolo(f"Perceptiva: {nome} precisa ser {', '.join(opcoes)}.")
+        parametros[chave] = {"nome": nome, "valor": valor, "rotulo": opcoes[valor], "alterado": valor != normal}
+    obs = respostas.get("observacoes") or ""
+    if not isinstance(obs, str) or len(obs) > 500:
+        raise ErroProtocolo("Perceptiva: observações em texto, até 500 caracteres.")
+    alterados = [f"{p['nome']} {p['rotulo']}" for p in parametros.values() if p["alterado"]]
+    return {
+        "protocolo": "Perceptiva",
+        "parametros": parametros,
+        "alterados": alterados,
+        "observacoes": obs.strip() or None,
+        "leitura": "registro perceptivo-auditivo do profissional, complementar ao GRBASI",
+    }
+
+
+PROTOCOLOS = {"idv10": idv10, "qvv": qvv, "grbasi": grbasi, "easebr": easebr, "perceptiva": perceptiva}

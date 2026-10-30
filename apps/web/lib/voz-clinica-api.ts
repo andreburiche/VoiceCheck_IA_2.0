@@ -9,8 +9,8 @@ import { JOGOS, VARIACOES, type ResultadoJogo } from "@/lib/voz-clinica-jogos";
 import { resumoPratica, type ExercicioPratica, type ResultadoPratica } from "@/lib/voz-clinica-pratica";
 
 
-export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica" | "dsi" | "fala" | "ddk" | "cepstral" | "carga";
-export type Protocolo = "idv10" | "qvv" | "grbasi" | "easebr";
+export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica" | "dsi" | "fala" | "ddk" | "cepstral" | "carga" | "perceptiva" | "sessao";
+export type Protocolo = "idv10" | "qvv" | "grbasi" | "easebr" | "perceptiva";
 
 /** Resumo de sessão de biofeedback salvo (medido no navegador). */
 export type ResultadoBiofeedback = ResumoBiofeedback & { fonte: "navegador" };
@@ -157,6 +157,48 @@ export type ResultadoGrbasi = {
   parametros: Record<string, { nome: string; nota: number; nivel: string }>;
 };
 
+/** Perceptiva complementar ao GRBASI (ressonância, pitch, loudness, ataque vocal), como no iVox. */
+export type ResultadoPerceptiva = {
+  protocolo: "Perceptiva";
+  parametros: Record<string, { nome: string; valor: string; rotulo: string; alterado: boolean }>;
+  alterados: string[];
+  observacoes: string | null;
+};
+
+export type EntradaPerceptiva = { ressonancia: string; pitch: string; loudness: string; ataque?: string; observacoes?: string };
+
+/** Opções da perceptiva complementar (as mesmas que a API aceita); a primeira de cada é a adequada. */
+export const OPCOES_PERCEPTIVA: { chave: keyof Omit<EntradaPerceptiva, "observacoes">; rotulo: string; obrigatorio: boolean; opcoes: [string, string][] }[] = [
+  { chave: "ressonancia", rotulo: "Ressonância", obrigatorio: true, opcoes: [
+    ["equilibrada", "Equilibrada"], ["hipernasal", "Hipernasal"], ["hiponasal", "Hiponasal"], ["mista", "Mista (hiper e hiponasal)"],
+    ["laringofaringea", "Laringofaríngea"], ["faringea", "Faríngea"], ["oral", "Oral (anteriorizada)"]] },
+  { chave: "pitch", rotulo: "Pitch", obrigatorio: true, opcoes: [["adequado", "Adequado"], ["agudo", "Agudo"], ["grave", "Grave"]] },
+  { chave: "loudness", rotulo: "Loudness", obrigatorio: true, opcoes: [["adequada", "Adequada"], ["elevada", "Elevada (forte)"], ["reduzida", "Reduzida (fraca)"]] },
+  { chave: "ataque", rotulo: "Ataque vocal", obrigatorio: false, opcoes: [["isocronico", "Isocrônico"], ["brusco", "Brusco"], ["aspirado", "Aspirado"]] },
+];
+
+/** Sessão de terapia registrada (evolução clínica), como o histórico de terapia do iVox. */
+export type ResultadoSessao = {
+  numero: number;
+  data: string;
+  objetivos: string | null;
+  exercicios: string | null;
+  exercicios_lista: string[];
+  resposta: string | null;
+  orientacoes: string | null;
+  observacoes: string | null;
+};
+
+export type EntradaSessao = {
+  paciente: string;
+  data: string;
+  objetivos?: string;
+  exercicios?: string;
+  resposta?: string;
+  orientacoes?: string;
+  observacoes?: string;
+};
+
 export type ResultadoEaseBr = {
   protocolo: "EASE-BR";
   total: number;
@@ -165,7 +207,7 @@ export type ResultadoEaseBr = {
   itens_com_queixa: number[];
 };
 
-export type ResultadoProtocolo = ResultadoIdv10 | ResultadoQvv | ResultadoGrbasi | ResultadoEaseBr;
+export type ResultadoProtocolo = ResultadoIdv10 | ResultadoQvv | ResultadoGrbasi | ResultadoEaseBr | ResultadoPerceptiva;
 
 export type Salvo<T> = {
   avaliacao_id: string | null;
@@ -267,7 +309,7 @@ export function calcularDsi(entrada: ResultadoDsi["entradas"], paciente?: string
 
 export function calcularProtocolo(
   nome: Protocolo,
-  respostas: number[] | Record<string, number>,
+  respostas: number[] | Record<string, number> | EntradaPerceptiva,
   paciente?: string | null,
 ) {
   return apiFetch<Salvo<ResultadoProtocolo>>(`${BASE}/protocolos/${nome}`, {
@@ -313,6 +355,10 @@ export function salvarBiofeedback(paciente: string, resumo: ResumoBiofeedback) {
     method: "POST",
     json: { paciente, ...resumo },
   });
+}
+
+export function registrarSessao(entrada: EntradaSessao) {
+  return apiFetch<Salvo<ResultadoSessao>>(`${BASE}/sessoes`, { method: "POST", json: entrada });
 }
 
 export function salvarCarga(paciente: string, resumo: ResumoCarga) {
@@ -485,12 +531,29 @@ export function resumoProtocolo(r: ResultadoProtocolo): string {
     const n = r.itens_com_queixa?.length ?? 0;
     return `${r.total} de ${r.maximo} pontos — ${n === 0 ? "nenhum item" : n === 1 ? "1 item" : `${n} itens`} com 2 ou 3 pontos`;
   }
+  if (r.protocolo === "Perceptiva") {
+    return r.alterados.length ? `Alterado: ${r.alterados.join(", ")}` : "Ressonância, pitch e loudness adequados";
+  }
   return `Registro ${r.registro}`;
+}
+
+/** "2026-10-27" → "27/10/2026" (sem fuso: a data da sessão é só o dia). */
+export function dataBR(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
+
+export function resumoSessao(r: ResultadoSessao): string {
+  const partes = [`Sessão ${r.numero} (${dataBR(r.data)})`];
+  if (r.objetivos) partes.push(`objetivo: ${r.objetivos.length > 60 ? `${r.objetivos.slice(0, 57)}…` : r.objetivos}`);
+  if (r.exercicios_lista?.length) partes.push(`${r.exercicios_lista.length} ${r.exercicios_lista.length === 1 ? "exercício" : "exercícios"}`);
+  return partes.join(" · ");
 }
 
 /** Resumo de uma avaliação salva (histórico do paciente). */
 export function resumoAvaliacao(a: Avaliacao): string {
   if (a.tipo === "pratica") return resumoPratica(a.resultado as ResultadoPratica);
+  if (a.tipo === "sessao") return resumoSessao(a.resultado as ResultadoSessao);
   if (a.tipo === "anamnese") return resumoAnamnese(a.resultado as Anamnese);
   if (a.tipo === "fonetograma") {
     const r = (a.resultado as ResultadoFonetograma).resumo;
@@ -578,6 +641,8 @@ export const ROTULO_TIPO: Record<TipoAvaliacao, string> = {
   ddk: "Diadococinesia",
   cepstral: "Análise cepstral",
   carga: "Carga vocal",
+  perceptiva: "Perceptiva",
+  sessao: "Sessão de terapia",
 };
 
 export const ROTULO_DDK: Record<TarefaDdk, string> = { pa: "/pa/", ta: "/ta/", ka: "/ka/", pataka: "/pataka/" };

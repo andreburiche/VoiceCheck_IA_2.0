@@ -18,7 +18,7 @@ DataUtc = Annotated[datetime, AfterValidator(_com_fuso)]
 
 TipoAvaliacao = Literal[
     "acustica", "idv10", "qvv", "grbasi", "easebr", "anamnese", "biofeedback", "jogo", "fonetograma", "pratica",
-    "dsi", "fala", "ddk", "cepstral", "carga",
+    "dsi", "fala", "ddk", "cepstral", "carga", "perceptiva", "sessao",
 ]
 JogoId = Literal["altitude", "trilha", "sopro", "surdo-sonoro", "som-silencio"]
 
@@ -437,3 +437,16 @@ class SincronizacaoOut(BaseModel):
     recebidas: list[str]
     #: Não combinam com o plano: o celular também apaga (reenviar não adianta).
     recusadas: list[SessaoRecusada]
+
+
+class SessaoEntrada(BaseModel):
+    """Registro de uma sessão de terapia vocal (evolução), como o histórico de terapia do iVox."""
+
+    paciente: str = Field(min_length=1, max_length=120)
+    data: date
+    objetivos: str | None = Field(default=None, max_length=1000)
+    #: um exercício ou procedimento por linha
+    exercicios: str | None = Field(default=None, max_length=2000)
+    resposta: str | None = Field(default=None, max_length=1000)
+    orientacoes: str | None = Field(default=None, max_length=1000)
+    observacoes: str | None = Field(default=None, max_length=2000)

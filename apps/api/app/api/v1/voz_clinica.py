@@ -35,6 +35,7 @@ from app.schemas.voz_clinica import (
     CadastroEntrada,
     CadastroOut,
     CargaEntrada,
+    SessaoEntrada,
     FonetogramaEntrada,
     JogoEntrada,
     AvaliacaoOut,
@@ -271,6 +272,35 @@ def salvar_biofeedback(entrada: BiofeedbackEntrada, user: CurrentUser, db: DbSes
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente para salvar a sessão")
     resultado = {**entrada.model_dump(exclude={"paciente"}), "fonte": "navegador"}
     salvo = _salvar(db, user, nome, "biofeedback", resultado)
+    return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
+
+
+@router.post("/sessoes", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
+def registrar_sessao(entrada: SessaoEntrada, user: CurrentUser, db: DbSession) -> ResultadoSalvo:
+    """Registro de uma sessão de terapia (evolução clínica): data, objetivos, exercícios,
+    resposta do paciente, orientações e observações. O número da sessão é contado por paciente."""
+    nome = _paciente(entrada.paciente)
+    if nome is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente da sessão")
+    hoje = datetime.now(timezone.utc).date()
+    if not (date(1900, 1, 1) <= entrada.data <= hoje + timedelta(days=1)):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Data da sessão inválida (no futuro?)")
+    campos = {k: (getattr(entrada, k) or "").strip() or None
+              for k in ("objetivos", "exercicios", "resposta", "orientacoes", "observacoes")}
+    if not any(campos.values()):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Preencha ao menos um campo da sessão")
+    anteriores = db.scalar(
+        select(func.count()).select_from(ClinicalEvaluation).where(
+            ClinicalEvaluation.owner_id == user.id, ClinicalEvaluation.patient_name == nome, ClinicalEvaluation.kind == "sessao"
+        )
+    ) or 0
+    resultado = {
+        "numero": int(anteriores) + 1,
+        "data": entrada.data.isoformat(),
+        **campos,
+        "exercicios_lista": [l.strip() for l in (campos["exercicios"] or "").splitlines() if l.strip()][:30],
+    }
+    salvo = _salvar(db, user, nome, "sessao", resultado)
     return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
 
 

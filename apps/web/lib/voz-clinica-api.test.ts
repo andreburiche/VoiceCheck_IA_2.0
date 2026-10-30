@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  OPCOES_PERCEPTIVA,
   ROTULO_TIPO,
+  dataBR,
   linhasAcusticas,
   numeroBR,
   resumoAvaliacao,
@@ -124,5 +126,31 @@ describe("resumoCadastro", () => {
     expect(resumoCadastro({ ...base, idade: 1 })).toBe("1 ano");
     expect(resumoCadastro({ ...base, profissional_da_voz: true })).toBe("voz profissional");
     expect(resumoCadastro(null)).toBe("");
+  });
+});
+
+describe("perceptiva complementar e sessões de terapia (iVox)", () => {
+  it("perceptiva: resume só o que está alterado", () => {
+    expect(resumoProtocolo({ protocolo: "Perceptiva", parametros: {}, alterados: ["ressonância hipernasal", "loudness reduzida (fraca)"], observacoes: null }))
+      .toBe("Alterado: ressonância hipernasal, loudness reduzida (fraca)");
+    expect(resumoProtocolo({ protocolo: "Perceptiva", parametros: {}, alterados: [], observacoes: null }))
+      .toBe("Ressonância, pitch e loudness adequados");
+  });
+
+  it("as opções obrigatórias começam pela adequada (o servidor usa a mesma regra)", () => {
+    expect(OPCOES_PERCEPTIVA.filter((p) => p.obrigatorio).map((p) => p.opcoes[0]![0])).toEqual(["equilibrada", "adequado", "adequada"]);
+  });
+
+  it("sessão: número, data brasileira, objetivo curto e contagem de exercícios", () => {
+    const a = {
+      id: "s1", paciente: "Ana", tipo: "sessao", motor: null, criado_em: "2026-10-27T13:00:00Z",
+      resultado: { numero: 3, data: "2026-10-27", objetivos: "reduzir a tensão laríngea durante a fala encadeada em sala de aula com muitos alunos",
+        exercicios: "a\nb", exercicios_lista: ["a", "b"], resposta: null, orientacoes: null, observacoes: null },
+    } as Avaliacao;
+    const r = resumoAvaliacao(a);
+    expect(r.startsWith("Sessão 3 (27/10/2026) · objetivo: reduzir a tensão")).toBe(true);
+    expect(r.endsWith("… · 2 exercícios")).toBe(true);
+    expect(ROTULO_TIPO.sessao).toBe("Sessão de terapia");
+    expect(dataBR("2026-01-05")).toBe("05/01/2026");
   });
 });
