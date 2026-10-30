@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { fixoBR, salvarJogo } from "@/lib/voz-clinica-api";
 import { medianaDe3, nivelDbfs, pitchYin, SILENCIO_DBFS, type Faixa } from "@/lib/voz-clinica-biofeedback";
 import { abrirMicrofoneAoVivo, gravadorSuportado } from "@/lib/voz-clinica-gravador";
+import { TEMA, coresDaCena, desenharFundo, desenharPersonagem } from "@/components/voz-clinica/jogos-cenas";
 import {
   JOGOS,
   VARIACOES,
@@ -105,10 +106,13 @@ function desenharPercurso(c: HTMLCanvasElement, p: Partida, t: number, tol: numb
   const x0 = w * 0.3;
   const x = (tt: number) => x0 + ((tt - t) / JANELA) * w;
   const y = (v: number) => h - 12 - v * (h - 24);
+  const tema = TEMA[p.variacao] ?? TEMA.patamares!;
+  const cores = coresDaCena(tema.cena);
+  desenharFundo(g, w, h, tema.cena, t);
 
   // faixa-alvo (alvo ± tolerância), amostrada ao longo do tempo
-  g.fillStyle = COR.alvo;
-  g.strokeStyle = COR.alvoBorda;
+  g.fillStyle = cores.faixa;
+  g.strokeStyle = cores.borda;
   g.lineWidth = 1;
   for (const s of p.percurso) {
     if (s.fim < t - JANELA * 0.3 || s.inicio > t + JANELA) continue;
@@ -148,8 +152,7 @@ function desenharPercurso(c: HTMLCanvasElement, p: Partida, t: number, tol: numb
   if (p.y !== null) {
     const alvo = alvoEm(p.percurso, t);
     const noAlvo = alvo !== null && Math.abs(p.y - alvo) <= tol;
-    g.fillStyle = noAlvo ? COR.pontoNoAlvo : COR.ponto;
-    g.beginPath(); g.arc(x0, y(p.y), noAlvo ? 10 : 8, 0, Math.PI * 2); g.fill();
+    desenharPersonagem(g, tema.personagem, x0, y(p.y), noAlvo, t);
   }
   if (t < (p.percurso[0]?.inicio ?? 0)) {
     g.fillStyle = COR.texto;
@@ -420,7 +423,10 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
             {VARIACOES[jogo].map((v) => <option key={v.id} value={v.id}>{v.rotulo}</option>)}
           </select>
         </div>
-        <p className="pb-2 text-xs text-ink-muted">{VARIACOES[jogo].find((v) => v.id === variacoes[jogo])?.descricao}</p>
+        <p className="pb-2 text-xs text-ink-muted">
+          {VARIACOES[jogo].find((v) => v.id === variacoes[jogo])?.descricao}
+          {TEMA[variacoes[jogo]] ? ` Cenário: ${TEMA[variacoes[jogo]]!.nome.toLowerCase()}.` : ""}
+        </p>
       </div>
       <p className="mt-3 max-w-[70ch] text-sm text-ink">{def.instrucao}</p>
 
@@ -473,7 +479,7 @@ export function JogosTerapia({ paciente, aoSalvar }: { paciente: string; aoSalva
             <>
               <div className="flex justify-between text-sm"><span className="text-ink">No alvo: <span className="text-data">{fixoBR(placar.pct, 0)}%</span></span><span className="text-ink-muted">{placar.texto}</span></div>
               <canvas ref={canvas} className="mt-2 block h-64 w-full rounded-xl bg-canvas-raised/60 ring-1 ring-inset ring-ink/10" role="img"
-                aria-label={jogo === "altitude" ? "Percurso de volume: mantenha o ponto dentro das faixas" : "Trilha de pitch: acompanhe a faixa com a voz"} />
+                aria-label={`${TEMA[variacoes[jogo]]?.nome ?? "Personagem"}: ${jogo === "altitude" ? "o volume da voz sobe e desce o personagem; mantenha-o dentro das faixas" : "o pitch da voz sobe e desce o personagem; acompanhe a faixa"}`} />
             </>
           ) : null}
 
