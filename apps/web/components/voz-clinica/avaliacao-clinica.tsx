@@ -26,6 +26,7 @@ import { montarDocxClinico, nomeArquivoDocx } from "@/lib/voz-clinica-docx";
 import { EditorAudio } from "@/components/voz-clinica/editor-audio";
 import { CargaVocal } from "@/components/voz-clinica/carga-vocal";
 import { ComparacaoAntesDepois } from "@/components/voz-clinica/comparacao";
+import { ComparacaoFonetogramas } from "@/components/voz-clinica/comparacao-campo";
 import { GraficosAnalise } from "@/components/voz-clinica/graficos-analise";
 import { ProtocoloVoz } from "@/components/voz-clinica/protocolo-voz";
 import { GraficoEvolucao } from "@/components/voz-clinica/grafico-evolucao";
@@ -1078,8 +1079,9 @@ export function AvaliacaoClinica() {
         </div>
       ) : null}
       {aba === "comparar" ? (
-        <div role="tabpanel" id={`${idPaciente}-painel-comparar`} aria-labelledby={`${idPaciente}-aba-comparar`}>
+        <div role="tabpanel" id={`${idPaciente}-painel-comparar`} aria-labelledby={`${idPaciente}-aba-comparar`} className="space-y-5">
           <ComparacaoAntesDepois paciente={nome} versao={versao} />
+          <ComparacaoFonetogramas paciente={nome} versao={versao} />
         </div>
       ) : null}
       {aba === "fonetograma" ? (
