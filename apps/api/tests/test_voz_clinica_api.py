@@ -22,7 +22,18 @@ def _registrar(c: httpx.Client, prefixo: str) -> None:
     c.headers["X-CSRF-Token"] = reg.json()["csrf_token"]
 
 
+_CLIENTES: dict[str, httpx.Client] = {}
+
+
 def _cliente(prefixo: str) -> httpx.Client:
+    """Um usuário por prefixo, reaproveitado entre os testes: o projeto limita os
+    cadastros a 20 por minuto, e esta bateria passaria disso criando um por teste."""
+    if prefixo not in _CLIENTES:
+        _CLIENTES[prefixo] = _cliente_novo(prefixo)
+    return _CLIENTES[prefixo]
+
+
+def _cliente_novo(prefixo: str) -> httpx.Client:
     c = httpx.Client(base_url=BASE, timeout=60.0)
     try:
         if c.get("/health").status_code != 200:
@@ -46,7 +57,7 @@ def test_status_lista_motores(client: httpx.Client) -> None:
     r = client.get("/api/v1/voz-clinica/status")
     assert r.status_code == 200, r.text
     assert "interno" in r.json()["motores"]
-    assert set(r.json()["protocolos"]) == {"idv10", "qvv", "grbasi"}
+    assert set(r.json()["protocolos"]) == {"idv10", "qvv", "grbasi", "easebr"}
 
 
 def test_analisar_sem_paciente_nao_salva(client: httpx.Client) -> None:
@@ -104,11 +115,11 @@ def test_erros_de_entrada(client: httpx.Client) -> None:
         files={"file": ("x.wav", io.BytesIO(b"isto nao e wav"), "audio/wav")},
     )
     assert nao_wav.status_code == 400
-    assert "WAV" in nao_wav.json()["detail"]
+    assert "WAV" in nao_wav.json()["message"]  # o projeto responde {"code", "message", "details"}
 
     item_ruim = client.post("/api/v1/voz-clinica/protocolos/idv10", json={"respostas": [0, 0, 9] + [0] * 7})
     assert item_ruim.status_code == 400
-    assert "item 3" in item_ruim.json()["detail"]
+    assert "item 3" in item_ruim.json()["message"]
 
     assert client.post("/api/v1/voz-clinica/protocolos/ease", json={"respostas": []}).status_code == 404
 
@@ -255,7 +266,7 @@ def _celular(token: str) -> httpx.Client:
     return httpx.Client(base_url=BASE, timeout=30.0, headers={"X-Pratica-Token": token})
 
 
-def _sessao(exercicio=0, reps=None, quando=None):
+def _sessao_pratica(exercicio=0, reps=None, quando=None):
     from datetime import datetime, timezone
     return {"id": str(uuid.uuid4()), "exercicio": exercicio,
             "feito_em": (quando or datetime.now(timezone.utc)).isoformat(),
@@ -271,9 +282,9 @@ def test_pratica_link_sincroniza_sem_duplicar(client: httpx.Client) -> None:
     with _celular(token) as cel:
         plano = cel.get("/api/v1/pratica-casa/plano").json()
         assert plano["saudacao"] == "Ana" and "paciente" not in plano and len(plano["exercicios"]) == 2
-        s1 = _sessao()
-        s2 = _sessao(1, [{"duracao_s": 10, "fonacao_s": 8, "dentro_pct": 75, "f0_mediana_hz": 120}])
-        ruim = _sessao(5)
+        s1 = _sessao_pratica()
+        s2 = _sessao_pratica(1, [{"duracao_s": 10, "fonacao_s": 8, "dentro_pct": 75, "f0_mediana_hz": 120}])
+        ruim = _sessao_pratica(5)
         ruim["exercicio"] = 4  # o plano só tem 2
         r = cel.post("/api/v1/pratica-casa/sessoes", json={"sessoes": [s1, s2, ruim]})
         assert r.status_code == 200, r.text
@@ -295,7 +306,7 @@ def test_pratica_link_sincroniza_sem_duplicar(client: httpx.Client) -> None:
     assert client.post(f"/api/v1/voz-clinica/pratica/{criado['id']}/revogar").json()["ativo"] is False
     with _celular(token) as cel:
         assert cel.get("/api/v1/pratica-casa/plano").status_code == 410
-        assert cel.post("/api/v1/pratica-casa/sessoes", json={"sessoes": [_sessao()]}).status_code == 410
+        assert cel.post("/api/v1/pratica-casa/sessoes", json={"sessoes": [_sessao_pratica()]}).status_code == 410
 
 
 def test_pratica_token_errado_e_outro_profissional(client: httpx.Client) -> None:
@@ -320,7 +331,7 @@ def test_pratica_teto_diario(client: httpx.Client) -> None:
     """Quem tem o link não consegue inundar o histórico: no máximo 24 sessões por dia."""
     criado = client.post("/api/v1/voz-clinica/pratica", json={**PLANO, "paciente": f"Teto {uuid.uuid4().hex[:6]}"}).json()
     with _celular(criado["token"]) as cel:
-        r = cel.post("/api/v1/pratica-casa/sessoes", json={"sessoes": [_sessao() for _ in range(26)]}).json()
+        r = cel.post("/api/v1/pratica-casa/sessoes", json={"sessoes": [_sessao_pratica() for _ in range(26)]}).json()
     assert len(r["recebidas"]) == 24
     assert len(r["recusadas"]) == 2 and "por dia" in r["recusadas"][0]["motivo"]
     lista = client.get("/api/v1/voz-clinica/pratica", params={"paciente": criado["paciente"]}).json()["items"]

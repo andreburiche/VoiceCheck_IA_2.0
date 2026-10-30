@@ -1,11 +1,14 @@
+from collections.abc import Sequence
 from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import structlog
 import hmac
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -226,9 +229,22 @@ async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse
     )
 
 
+def _erros_serializaveis(erros: Sequence[Any]) -> list[Any]:
+    """No pydantic 2, o "ctx" de um erro de validador traz o próprio ValueError, que não
+    vira JSON: a resposta 422 virava 500. Converte o que não for simples em texto."""
+    saida = []
+    for erro in erros:
+        erro = dict(erro)
+        ctx = erro.get("ctx")
+        if isinstance(ctx, dict):
+            erro["ctx"] = {k: v if isinstance(v, (str, int, float, bool, type(None))) else str(v) for k, v in ctx.items()}
+        saida.append(erro)
+    return jsonable_encoder(saida)
+
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
     return JSONResponse(
         status_code=422,
-        content={"code": "validation_error", "message": "Dados inválidos", "details": exc.errors()},
+        content={"code": "validation_error", "message": "Dados inválidos", "details": _erros_serializaveis(exc.errors())},
     )

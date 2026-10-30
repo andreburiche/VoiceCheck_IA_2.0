@@ -364,6 +364,9 @@ def listar_avaliacoes(user: CurrentUser, db: DbSession, paciente: str | None = N
 @router.delete(
     "/avaliacoes/{avaliacao_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    # explícito: com "from __future__ import annotations" o FastAPI lê "-> None" como o tipo
+    # NoneType e recusa a rota 204 ("must not have a response body") — a API nem sobe
+    response_model=None,
     dependencies=[Depends(verify_csrf)],
 )
 def excluir_avaliacao(avaliacao_id: str, user: CurrentUser, db: DbSession) -> None:

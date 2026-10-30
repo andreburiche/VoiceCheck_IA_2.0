@@ -134,6 +134,24 @@ IntegrityError tratado como "recebida" sem confirmar; iPhone perdia o link no ap
 downgrade das migrações falharia no MySQL. Os testes do navegador ainda acharam mais dois: a marca de "enviando" ficava presa quando a fila estava vazia
 (nenhum envio acontecia) e um link novo aberto com a página já aberta era ignorado.
 
+## Execução real (29/10/2026)
+
+A API foi executada de verdade (FastAPI 0.115.6, SQLAlchemy 2.0.36 e demais pacotes do `.venv` do projeto, com SQLite no lugar do MySQL)
+e as telas foram testadas no Chromium falando com ela, sem simulação: cadastro, gravação e análise acústica (motor interno),
+IDV-10, EASE-BR, anamnese, link de prática, paciente praticando no "celular", histórico, exportação e exclusão. Os 33 testes de
+rota (`tests/test_voz_clinica_api.py`) passam. O SQL das migrações 0009/0010 para MySQL foi gerado (`alembic upgrade --sql`) e conferido.
+
+Erros que só a execução revelou, corrigidos:
+- **A API não subia**: com `from __future__ import annotations`, o FastAPI lê `-> None` da rota 204 de excluir avaliação como o tipo
+  NoneType e recusa a rota ("must not have a response body"). Corrigido com `response_model=None`.
+- **Dado inválido respondia 500 em vez de 422**: o tratador de validação do projeto (`app/main.py`) devolvia `exc.errors()` cru; no
+  pydantic 2 o `ctx` traz o próprio `ValueError` do validador, que não vira JSON. Agora o `ctx` vira texto (afeta todo o projeto,
+  não só a voz clínica).
+- **Testes de rota**: criavam um usuário por teste e passavam do limite de 20 cadastros/minuto (429); esperavam `detail` em vez do
+  formato do projeto (`message`); um helper com nome repetido sobrescrevia outro.
+
+Ainda não executado: MySQL de verdade e o motor Praat (Parselmouth) — rodam no Docker.
+
 ## Pontos a conferir antes do uso clínico
 
 - QVV **conferido** com o algoritmo original do V-RQOL (Hogikyan et al., J Voice 2000, Apêndice B): escore padrão
