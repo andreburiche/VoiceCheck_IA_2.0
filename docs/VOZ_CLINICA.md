@@ -237,6 +237,16 @@ Corrigido:
 - **Servidor:** calibração incoerente recusada (o nível medido, referência − deslocamento, tem de ficar entre −60 e 0 dBFS); data sem fuso gravada como UTC.
 - Menores: o fonetograma usa a calibração do início do campo (e avisa se ela mudou depois); "Começar" fica desativado enquanto a calibração mede; a medição usa o relógio da página (não trava com o AudioContext suspenso); o relatório busca à parte todos os fonetogramas quando o histórico passa de 500 registros (`GET /avaliacoes?tipo=`).
 
+## Acessibilidade conferida (30/10/2026)
+
+Nas 13 abas, com histórico de exemplo (22 avaliações) e os blocos recolhíveis abertos:
+
+- **Nomes acessíveis** (árvore de acessibilidade do Chromium, a mesma dos leitores de tela): nenhum botão, campo, lista, caixa de seleção ou controle deslizante sem nome; nenhum gráfico sem descrição; nenhum id repetido.
+- **Teclado:** todos os elementos alcançados com Tab (de 93 a 153 por aba) mostram o foco.
+- **Contraste do texto:** todos acima do mínimo da WCAG AA (4,5:1; 3:1 para texto grande).
+
+Cada verificação foi conferida com um controle negativo (um botão sem nome e um texto de baixo contraste injetados de propósito, que ela precisou achar). Não substitui o teste com leitor de tela real (NVDA, VoiceOver).
+
 ## Rodar a v2 isolada no computador
 
 `infra/docker-compose.v2-local.yml` sobe site (http://localhost:3100), API (http://localhost:8110), MySQL e Redis
