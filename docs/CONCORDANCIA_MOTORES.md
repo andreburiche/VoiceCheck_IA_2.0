@@ -35,3 +35,26 @@ Vozes sintéticas (vogal com 3 formantes, 3 s). Valor sintetizado = o que foi ge
 | shimmer | 0,57 | 1,00 | 1,00 | 1,00 |
 | hnr | 1,89 | 0,98 | — | — |
 | cpps | 1,37 | 0,99 | — | — |
+
+## Gravações reais (PC-GITA, via DisVoice — licença MIT)
+
+Quatro gravações públicas de voz humana (16 kHz): /a/ sustentado de um homem (001_a1), /u/ sustentado de uma
+mulher (098_u1), uma leitura (001_readtext) e uma diadococinesia (001_ddk1). Os arquivos não ficam no
+repositório; foram baixados de github.com/jcvasquezc/DisVoice (pasta audios) e medidos no Docker com o Praat.
+
+| Gravação | Motor | F0 (Hz) | Jitter % | Shimmer % | HNR (dB) | CPPS (dB) |
+|---|---|---|---|---|---|---|
+| /a/ (homem) | Praat | 91,6 | 0,86 | 7,96 | 12,7 | 14,5 |
+| /a/ (homem) | interno (agora) | 93,0 | 0,79 | 7,64 | 12,5 | 12,2 |
+| /a/ (homem) | interno (antes do ajuste) | 93,0 | 3,17 | 9,24 | 12,5 | 12,2 |
+| /u/ (mulher) | Praat | 179,0 | 0,41 | 2,82 | 28,3 | 13,2 |
+| /u/ (mulher) | interno (agora) | 178,9 | 0,62 | 3,20 | 30,2 | 9,9 |
+| /u/ (mulher) | interno (antes do ajuste) | 178,9 | 1,17 | 4,91 | 30,2 | 9,9 |
+
+Leitura: F0 mediana 98,0 Hz (Praat) e 99,7 Hz (interno); a faixa p5–p95 sai maior no interno (9,3 contra 7,6
+semitons), por alguns quadros com F0 alta demais. Diadococinesia: 12 sílabas, 3,49 sílabas/s, ritmo (CV) 14,4 %.
+
+Conclusões: em voz real o ajuste levou o jitter do interno de 3,7× o do Praat para perto dele; o CPPS do interno
+fica 2–3 dB abaixo do Praat em voz real (mais que nas sintéticas), então nunca misture CPPS dos dois motores.
+Esta comparação também achou um defeito: a análise de fala com o motor interno quebrava nessa leitura
+(StopIteration num quadro sem periodicidade) — corrigido, com teste.

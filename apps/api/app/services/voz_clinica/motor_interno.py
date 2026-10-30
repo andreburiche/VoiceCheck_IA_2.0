@@ -79,6 +79,11 @@ def rastrear_pitch(audio: Audio, f0_min: float, f0_max: float):
             corrs.append(0.0)
             continue
         melhor = max(trecho[i] for i in candidatos)
+        if not melhor > LIMIAR_VOZEAMENTO:
+            # sem periodicidade (o pico pode até ser negativo, e aí "≥ 95 % do melhor" não acha nenhum)
+            f0s.append(np.nan)
+            corrs.append(float(max(melhor, 0.0)) if np.isfinite(melhor) else 0.0)
+            continue
         # prefere o menor atraso próximo do máximo (evita erro de oitava abaixo)
         i = next(i for i in candidatos if trecho[i] >= 0.95 * melhor)
         a, b, c = trecho[i - 1], trecho[i], trecho[i + 1]

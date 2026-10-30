@@ -148,3 +148,20 @@ def test_shimmer_ignora_saltos_de_amplitude_acima_de_1_6():
     amps[10] = 1.0  # salto de 2× (descartado)
     p = perturbacao([(instantes, amps)])
     assert p["shimmer_local_pct"] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_quadro_sem_periodicidade_com_picos_negativos_nao_quebra(monkeypatch):
+    """Leitura real (PC-GITA) quebrava a análise de fala: num quadro, todos os máximos da
+    autocorrelação eram negativos e "≥ 95 % do melhor" não achava nenhum (StopIteration)."""
+    from app.services.voz_clinica import motor_interno as mi
+
+    def autocorr_negativa(xw, nfft):
+        k = np.arange(nfft)
+        r = -0.5 + 0.1 * np.cos(2 * np.pi * k / 20)
+        r[0] = 1.0
+        return r
+
+    monkeypatch.setattr(mi, "_autocorr", autocorr_negativa)
+    x = 0.3 * np.random.default_rng(1).standard_normal(16000)
+    tempos, f0s, corrs = mi.rastrear_pitch(Audio(x, 16000), 60, 400)
+    assert len(tempos) > 0 and np.isnan(f0s).all() and (corrs >= 0).all()
