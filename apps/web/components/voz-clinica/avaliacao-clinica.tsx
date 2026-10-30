@@ -275,7 +275,7 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
           </label>
           <input id={idArquivo} type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg" className="sr-only"
             onChange={(e) => { void importar(e.target.files?.[0]); e.target.value = ""; }} data-testid="vc2-importar" />
-          <span className="ml-2 text-xs text-ink-faint">WAV de preferência; até 60 s.</span>
+          <span className="mt-1 block text-xs text-ink-faint sm:ml-2 sm:mt-0 sm:inline">WAV de preferência; até 60 s.</span>
         </div>
       ) : null}
 
@@ -857,7 +857,8 @@ function Abas({ ativa, onChange, base }: { ativa: Aba; onChange: (a: Aba) => voi
     refs.current[destino]?.focus();
   }
   return (
-    <div role="tablist" aria-label="Módulos" className="flex gap-1 overflow-x-auto rounded-xl bg-canvas-raised/60 p-1 ring-1 ring-inset ring-ink/10">
+    // celular: grade 3×3 (todas as abas à vista); telas maiores: uma linha com rolagem
+    <div role="tablist" aria-label="Módulos" className="grid grid-cols-3 gap-1 rounded-xl bg-canvas-raised/60 p-1 ring-1 ring-inset ring-ink/10 sm:flex sm:overflow-x-auto">
       {ABAS.map((a, i) => (
         <button
           key={a.id}
@@ -871,7 +872,7 @@ function Abas({ ativa, onChange, base }: { ativa: Aba; onChange: (a: Aba) => voi
           onClick={() => onChange(a.id)}
           onKeyDown={(e) => teclar(e, i)}
           className={cn(
-            "min-h-[40px] flex-1 whitespace-nowrap rounded-lg px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+            "min-h-[44px] flex-1 rounded-lg px-2 text-[13px] font-medium leading-tight transition-colors sm:min-h-[40px] sm:whitespace-nowrap sm:px-4 sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
             ativa === a.id ? "bg-canvas-card text-ink shadow-sm" : "text-ink-muted hover:text-ink",
           )}
           data-testid={`vc2-aba-${a.id}`}
