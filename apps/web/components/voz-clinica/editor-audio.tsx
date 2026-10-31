@@ -1,5 +1,6 @@
 "use client";
 
+import { corTema, useTemaAtivo } from "@/lib/tema";
 import { ClipboardPaste, Copy, Download, Play, Scissors, Square, Tag, Trash2, Undo2, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
@@ -14,7 +15,7 @@ import { codificarWav, recortar } from "@/lib/voz-clinica-wav";
 const ALTURA = 120;
 /** A análise aceita até 60 s: a edição não deixa passar disso. */
 const MAX_S = 60;
-const COR = { onda: "#20D9D2", fundo: "rgba(148,163,184,0.06)", selecao: "rgba(32,217,210,0.18)", borda: "rgba(32,217,210,0.8)", eixo: "#94A3B8", cursor: "#F8FAFC", marca: "rgba(232,184,74,0.22)", marcaBorda: "#E8B84A" };
+const COR = { get onda() { return corTema("accent"); }, get fundo() { return corTema("ink-muted", 0.06); }, get selecao() { return corTema("accent", 0.18); }, get borda() { return corTema("accent", 0.8); }, get eixo() { return corTema("ink-muted"); }, get cursor() { return corTema("ink"); }, get marca() { return corTema("warn", 0.22); }, get marcaBorda() { return corTema("warn"); } }; // getters: lidos na hora de desenhar, seguem o tema
 /** Faixa das marcações, abaixo da onda (como a camada do TextGrid no Praat). */
 const FAIXA = 22;
 
@@ -81,6 +82,7 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
   const duracao = audio ? audio.amostras.length / audio.taxa : gravacao.duracao;
 
   // desenho
+  const tema = useTemaAtivo();
   useEffect(() => {
     const c = canvas.current;
     if (!c || !audio) return;
@@ -154,7 +156,7 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
     g.fillText(`${segTexto(janela.ini)} s`, 2, ALTURA - 4);
     g.textAlign = "right";
     g.fillText(`${segTexto(janela.fim)} s`, w - 2, ALTURA - 4);
-  }, [audio, janela, sel, cursor, ponto, marcas]);
+  }, [audio, janela, sel, cursor, ponto, marcas, tema]);
 
   // cursor de reprodução
   useEffect(() => {
@@ -374,7 +376,7 @@ export function EditorAudio({ gravacao, aoMudar }: { gravacao: GravacaoClinica; 
       {marcas.length ? (
         <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Trechos marcados">
           {marcas.map((m) => (
-            <li key={`${m.ini}-${m.fim}`} className="inline-flex items-center rounded-lg text-sm ring-1 ring-inset ring-[#E8B84A]/50">
+            <li key={`${m.ini}-${m.fim}`} className="inline-flex items-center rounded-lg text-sm ring-1 ring-inset ring-signal-warn/50">
               <button type="button" onClick={() => ouvirMarca(m)} className="min-h-[36px] rounded-l-lg px-2.5 text-ink hover:bg-canvas-overlay/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 aria-label={`Ouvir ${m.texto}, de ${segTexto(m.ini)} a ${segTexto(m.fim)} s`}>
                 {m.texto} <span className="text-data text-xs text-ink-muted">{segTexto(m.ini)}–{segTexto(m.fim)} s</span>

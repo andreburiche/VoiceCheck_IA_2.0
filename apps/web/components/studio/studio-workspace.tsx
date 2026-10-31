@@ -1,5 +1,6 @@
 "use client";
 
+import { corTema } from "@/lib/tema";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import WaveSurfer from "wavesurfer.js";
@@ -178,7 +179,7 @@ export function StudioWorkspace({ projectId }: Props) {
             const ws = WaveSurfer.create({
               container: host,
               waveColor: STEM_COLORS[stem.stem_type] ?? "#888",
-              progressColor: "rgba(244,246,250,0.35)",
+              progressColor: corTema("ink", 0.35),
               cursorColor: "transparent",
               height: 64,
               interact: true,

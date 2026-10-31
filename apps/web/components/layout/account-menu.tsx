@@ -92,7 +92,7 @@ export function AccountMenu({ userName, onLogout }: { userName?: string; onLogou
           id={menuId}
           role="menu"
           aria-label="Conta"
-          className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-64 overflow-hidden rounded-xl border border-line bg-canvas-overlay py-1 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]"
+          className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-64 overflow-hidden rounded-xl border border-line bg-canvas-overlay py-1 shadow-[0_16px_40px_-12px_rgb(var(--c-sombra)/calc(0.7*var(--k-sombra)))]"
         >
           <div className="border-b border-line/70 px-3 py-2.5">
             <p className="truncate text-sm font-semibold text-ink">{name || "Sua conta"}</p>

@@ -41,7 +41,7 @@ export default function ProjectDetailPage() {
   }, [project.data?.id]);
 
   if (project.isLoading) {
-    return <div className="page-shell space-y-4" aria-busy="true"><div className="h-36 animate-pulse rounded-2xl bg-white/[0.035]" /><div className="h-64 animate-pulse rounded-2xl bg-white/[0.035]" /></div>;
+    return <div className="page-shell space-y-4" aria-busy="true"><div className="h-36 animate-pulse rounded-2xl bg-ink/[0.035]" /><div className="h-64 animate-pulse rounded-2xl bg-ink/[0.035]" /></div>;
   }
   if (project.isError || !project.data) {
     return (
@@ -105,7 +105,7 @@ export default function ProjectDetailPage() {
 
       <section className="space-y-3">
         <h2 className="font-display text-lg font-semibold text-ink">Arquivos enviados</h2>
-        {assets.isLoading ? <div className="h-16 animate-pulse rounded-xl bg-white/[0.035]" aria-hidden /> : null}
+        {assets.isLoading ? <div className="h-16 animate-pulse rounded-xl bg-ink/[0.035]" aria-hidden /> : null}
         {assets.data?.items.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-line px-6 py-10 text-center text-sm text-ink-faint">
             Nenhum arquivo enviado ainda. Use a importação acima para enviar o áudio desta música.

@@ -251,7 +251,7 @@ function ProjectsContent() {
               id="project-sort"
               value={sortKey}
               onChange={(e) => setSortKey(e.target.value as SortKey)}
-              className="h-10 rounded-xl border border-white/[0.08] bg-canvas-raised px-3 text-sm text-ink"
+              className="h-10 rounded-xl border border-ink/[0.08] bg-canvas-raised px-3 text-sm text-ink"
             >
               <option value="updated">Mais recentes</option>
               <option value="name-asc">Nome A–Z</option>

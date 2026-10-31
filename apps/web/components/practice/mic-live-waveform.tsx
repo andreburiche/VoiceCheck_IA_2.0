@@ -1,5 +1,6 @@
 "use client";
 
+import { corTema } from "@/lib/tema";
 import { useEffect, useRef } from "react";
 
 import { cn } from "@/lib/utils";
@@ -68,7 +69,7 @@ export function MicLiveWaveform({ analyser, stream, active, className }: Props) 
           if (ctx) {
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             ctx.clearRect(0, 0, w, h);
-            ctx.fillStyle = "rgba(20, 24, 32, 0.55)";
+            ctx.fillStyle = corTema("canvas", 0.55);
             ctx.fillRect(0, 0, w, h);
             const mid = h / 2;
             const n = peaks.length;
@@ -77,10 +78,10 @@ export function MicLiveWaveform({ analyser, stream, active, className }: Props) 
               const amp = peaks[i] ?? 0;
               const bar = Math.max(1, amp * (h * 0.45));
               ctx.fillStyle =
-                amp > 0.35 ? "rgba(38, 139, 255, 0.75)" : "rgba(32, 217, 210, 0.55)";
+                amp > 0.35 ? corTema("brand-blue", 0.75) : corTema("accent", 0.55);
               ctx.fillRect(x, mid - bar, 1, bar * 2);
             }
-            ctx.fillStyle = "rgba(32, 217, 210, 0.95)";
+            ctx.fillStyle = corTema("accent", 0.95);
             ctx.fillRect(w - 2, 4, 2, h - 8);
           }
         }

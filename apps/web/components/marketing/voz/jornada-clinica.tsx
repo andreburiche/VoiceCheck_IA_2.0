@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
+import { useTemaAtivo } from "@/lib/tema";
 import { ciclosDoExemplo, envoltoria, medidasExemplo, obterExemplo, type MedidasExemplo } from "@/lib/landing-voz";
 import { svgCampos, type PontoDb } from "@/lib/voz-clinica-comparacao-campo";
 import { quadrante, svgDdf, type PontoDdf } from "@/lib/voz-clinica-ddf";
@@ -65,18 +66,18 @@ function VisualGravar({ ativo }: { ativo: boolean }) {
   return (
     <figure className="w-full">
       <svg viewBox={`0 0 ${w} ${hE}`} className="w-full" role="img" aria-label="Forma de onda da frase de exemplo, com o trecho ampliado marcado">
-        <polygon points={contorno} fill="#94A3B8" fillOpacity={0.35} />
-        <rect x={xZoom} y={0} width={Math.max(3, (0.024 / voz.duracao) * w)} height={hE} fill="#20D9D2" />
+        <polygon points={contorno} fill="rgb(var(--c-ink-muted))" fillOpacity={0.35} />
+        <rect x={xZoom} y={0} width={Math.max(3, (0.024 / voz.duracao) * w)} height={hE} fill="rgb(var(--c-accent))" />
       </svg>
       <svg viewBox={`0 0 ${w} ${hZ + 22}`} className="mt-3 w-full" role="img"
         aria-label={`24 milissegundos ampliados da nota sustentada: ${c.picos.length} ciclos da voz, cada um com cerca de ${fmt(c.periodos_ms[0] ?? 0, 2)} milissegundos`}>
         {c.picos.map((p, i) => (
-          <line key={i} x1={xs(p)} x2={xs(p)} y1={4} y2={hZ - 4} stroke="rgba(148,163,184,0.28)" strokeDasharray="3 4" />
+          <line key={i} x1={xs(p)} x2={xs(p)} y1={4} y2={hZ - 4} stroke="rgb(var(--c-ink-muted) / 0.28)" strokeDasharray="3 4" />
         ))}
-        <path d={onda} fill="none" stroke="#20D9D2" strokeWidth={2} strokeLinejoin="round" pathLength={1}
+        <path d={onda} fill="none" stroke="rgb(var(--c-accent))" strokeWidth={2} strokeLinejoin="round" pathLength={1}
           strokeDasharray={1} strokeDashoffset={ativo ? 0 : 1} className="transition-[stroke-dashoffset] duration-[1600ms] ease-out motion-reduce:transition-none" />
         {c.periodos_ms.map((ms, i) => (
-          <text key={i} x={(xs(c.picos[i]!) + xs(c.picos[i + 1]!)) / 2} y={hZ + 16} textAnchor="middle" fontSize={12} fill="#94A3B8"
+          <text key={i} x={(xs(c.picos[i]!) + xs(c.picos[i + 1]!)) / 2} y={hZ + 16} textAnchor="middle" fontSize={12} fill="rgb(var(--c-ink-muted))"
             fontFamily="ui-monospace, Consolas, monospace">{fmt(ms, 2)}</text>
         ))}
       </svg>
@@ -128,7 +129,7 @@ function VisualMedir({ ativo, m }: { ativo: boolean; m: MedidasExemplo }) {
 function Papel({ children, legenda }: { children: React.ReactNode; legenda: string }) {
   return (
     <figure className="w-full">
-      <div className="rounded-xl bg-white p-4 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)]">{children}</div>
+      <div className="rounded-xl bg-white p-4 shadow-[0_24px_60px_-20px_rgb(var(--c-sombra)/calc(0.8*var(--k-sombra)))]">{children}</div>
       <figcaption className="mt-3 text-sm text-ink-muted">{legenda}</figcaption>
     </figure>
   );
@@ -145,7 +146,8 @@ function VisualCampo({ ativo }: { ativo: boolean }) {
 }
 
 function VisualComparar({ ativo }: { ativo: boolean }) {
-  const svg = useMemo(() => svgDdf(sessoesExemplo(), "escuro", 340), []);
+  const tema = useTemaAtivo();
+  const svg = useMemo(() => svgDdf(sessoesExemplo(), tema, 340), [tema]);
   return (
     <figure className="mx-auto w-full max-w-sm">
       <div className={cn("transition-opacity duration-700 [&_svg]:h-auto [&_svg]:w-full", ativo ? "opacity-100" : "opacity-0")}

@@ -35,9 +35,9 @@ export function LastAnalysisCard() {
         aria-label="Curva de afinação de exemplo: 5 de 7 notas no centro, Lá4 abaixo"
         className="mt-4 block h-[60px] w-full"
       >
-        <polyline points={POINTS} fill="none" stroke="#20D9D2" strokeWidth="2" />
-        <polyline points="126,8 196,8" fill="none" stroke="#FF7A1A" strokeWidth="2.5" />
-        <polyline points="306,50 350,50" fill="none" stroke="#FF7A1A" strokeWidth="2.5" />
+        <polyline points={POINTS} fill="none" stroke="rgb(var(--c-accent))" strokeWidth="2" />
+        <polyline points="126,8 196,8" fill="none" stroke="rgb(var(--c-flare))" strokeWidth="2.5" />
+        <polyline points="306,50 350,50" fill="none" stroke="rgb(var(--c-flare))" strokeWidth="2.5" />
       </svg>
     </div>
   );

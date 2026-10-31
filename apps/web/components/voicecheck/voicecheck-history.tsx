@@ -349,7 +349,7 @@ export function VoiceCheckHistory({
                         "rounded-full px-2 py-0.5 text-xs",
                         stage.tone === "done" && "bg-accent/10 text-accent",
                         stage.tone === "mid" && "bg-brand-blue/15 text-sky-300",
-                        stage.tone === "start" && "bg-white/[0.05] text-ink-muted",
+                        stage.tone === "start" && "bg-ink/[0.05] text-ink-muted",
                       )}
                     >
                       {stage.label}

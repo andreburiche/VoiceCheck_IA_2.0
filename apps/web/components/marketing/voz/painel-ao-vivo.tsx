@@ -1,5 +1,6 @@
 "use client";
 
+import { corTema, useTemaAtivo } from "@/lib/tema";
 import { useEffect, useRef, useState } from "react";
 
 import { medirExemplo, notaDe, vozDeExemplo, type LeituraExemplo } from "@/lib/landing-voz";
@@ -56,26 +57,26 @@ function desenhar(c: HTMLCanvasElement, d: Dados, p: number) {
   const x = (t: number) => PE + (t / d.duracao) * aw;
 
   // espectrograma, revelado até o cursor
-  g.fillStyle = "#0b1120";
+  g.fillStyle = corTema("painel");
   g.fillRect(PE, PT, aw, hEsp);
   g.imageSmoothingEnabled = true;
   const sw = Math.max(1, Math.round(d.img.width * p));
   g.drawImage(d.img, 0, 0, sw, d.img.height, PE, PT, aw * (sw / d.img.width), hEsp);
   g.font = "11px ui-monospace, Consolas, monospace";
-  g.fillStyle = "#94A3B8";
+  g.fillStyle = corTema("ink-muted");
   g.textAlign = "right"; g.textBaseline = "middle";
   for (let khz = 1; khz <= FMAX / 1000; khz++) g.fillText(`${khz}k`, PE - 6, PT + (1 - (khz * 1000) / FMAX) * hEsp);
 
   // faixa da F0 (Hz), com as notas da frase como guias
   const y0 = PT + hEsp + 10;
   const yF0 = (hz: number) => y0 + (1 - (hz - F0_MIN) / (F0_MAX - F0_MIN)) * faixaF0;
-  g.strokeStyle = "rgba(148,163,184,0.14)"; g.lineWidth = 1;
+  g.strokeStyle = corTema("ink-muted", 0.14); g.lineWidth = 1;
   for (const hz of [196, 247, 294]) {
     g.beginPath(); g.moveTo(PE, yF0(hz)); g.lineTo(w - PD, yF0(hz)); g.stroke();
     g.fillText(notaDe(hz), PE - 6, yF0(hz));
   }
   const ate = p * d.duracao;
-  g.strokeStyle = "#268BFF"; g.lineWidth = 2; g.lineJoin = "round"; g.beginPath();
+  g.strokeStyle = corTema("brand-blue"); g.lineWidth = 2; g.lineJoin = "round"; g.beginPath();
   let aberto = false;
   for (const l of d.leituras) {
     if (l.t > ate) break;
@@ -85,10 +86,10 @@ function desenhar(c: HTMLCanvasElement, d: Dados, p: number) {
   g.stroke();
 
   // eixo de tempo e cursor de leitura
-  g.textAlign = "center"; g.textBaseline = "alphabetic"; g.fillStyle = "#94A3B8";
+  g.textAlign = "center"; g.textBaseline = "alphabetic"; g.fillStyle = corTema("ink-muted");
   for (let s = 0; s <= Math.floor(d.duracao); s++) g.fillText(`${s} s`, Math.min(w - 16, Math.max(PE + 10, x(s))), h - 4);
   if (p < 1) {
-    g.strokeStyle = "rgba(248,250,252,0.85)"; g.lineWidth = 1.5;
+    g.strokeStyle = corTema("ink", 0.85); g.lineWidth = 1.5;
     g.beginPath(); g.moveTo(x(ate), PT); g.lineTo(x(ate), y0 + faixaF0); g.stroke();
   }
 }
@@ -109,6 +110,7 @@ export function PainelAoVivo({ compacto = false }: { compacto?: boolean } = {}) 
   const dados = useRef<Dados | null>(null);
   const [leitura, setLeitura] = useState<{ hz: number | null; db: number; t: number } | null>(null);
   const [estado, setEstado] = useState<"preparando" | "medindo" | "pronto">("preparando");
+  const tema = useTemaAtivo();
 
   useEffect(() => {
     const c = canvas.current;
@@ -175,7 +177,7 @@ export function PainelAoVivo({ compacto = false }: { compacto?: boolean } = {}) 
     const ro = new ResizeObserver(() => { if (dados.current && (reduzir || !visivel)) desenhar(c, dados.current, 1); });
     ro.observe(c);
     return () => { vivo = false; io.disconnect(); ro.disconnect(); cancelAnimationFrame(quadro); };
-  }, []);
+  }, [tema]);
 
   const f0 = leitura?.hz ?? null;
   const rotuloF0 = estado === "pronto" ? "F0 mediana" : "F0";

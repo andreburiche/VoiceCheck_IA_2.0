@@ -110,7 +110,7 @@ export function ProjectRowCard({ project, onEdit, onDelete }: ProjectRowCardProp
               id={menuId}
               role="menu"
               style={{ top: menuPos.top, left: menuPos.left }}
-              className="fixed z-[80] min-w-[11rem] rounded-xl border border-line bg-canvas-overlay py-1 shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)]"
+              className="fixed z-[80] min-w-[11rem] rounded-xl border border-line bg-canvas-overlay py-1 shadow-[0_16px_40px_-12px_rgb(var(--c-sombra)/calc(0.7*var(--k-sombra)))]"
             >
               <li role="none">
                 <Link

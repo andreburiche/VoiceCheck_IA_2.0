@@ -79,7 +79,7 @@ export function ConfirmDialog({
         // clique no fundo (fora do cartão) cancela
         if (e.target === dialogRef.current && !busy) onCancel();
       }}
-      className="fixed inset-0 !m-auto h-fit max-h-[85vh] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl border border-line bg-canvas-raised p-0 text-ink shadow-[0_24px_60px_-20px_rgba(0,0,0,0.8)] backdrop:bg-black/60"
+      className="fixed inset-0 !m-auto h-fit max-h-[85vh] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl border border-line bg-canvas-raised p-0 text-ink shadow-[0_24px_60px_-20px_rgb(var(--c-sombra)/calc(0.8*var(--k-sombra)))] backdrop:bg-black/60"
     >
       {open ? (
         <div className="p-5">

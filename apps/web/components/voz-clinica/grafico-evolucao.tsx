@@ -69,7 +69,7 @@ export function GraficoEvolucao({ serie }: { serie: SerieEvolucao }) {
         <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} className="block w-full" role="group" aria-label={`${serie.titulo} ao longo das sessões`}>
           {marcas.map((m) => (
             <g key={m} aria-hidden>
-              <line x1={PE} x2={W - PD} y1={r1(y(m))} y2={r1(y(m))} stroke="rgba(148,163,184,0.12)" />
+              <line x1={PE} x2={W - PD} y1={r1(y(m))} y2={r1(y(m))} stroke="rgb(var(--c-ink-muted) / 0.12)" />
               <text x={PE - 6} y={r1(y(m)) + 4} textAnchor="end" fontSize={11} className="fill-ink-faint" fontFamily="var(--font-mono)">
                 {numeroBR(m, 2)}
               </text>
@@ -80,7 +80,7 @@ export function GraficoEvolucao({ serie }: { serie: SerieEvolucao }) {
             <g aria-hidden>
               <line
                 x1={PE} x2={W - PD} y1={r1(y(serie.corte.valor))} y2={r1(y(serie.corte.valor))}
-                stroke="#94A3B8" strokeWidth={1} strokeDasharray="4 4"
+                stroke="rgb(var(--c-ink-muted))" strokeWidth={1} strokeDasharray="4 4"
               />
               <text x={PE + 4} y={r1(y(serie.corte.valor)) + (y(serie.corte.valor) - PT < 16 ? 13 : -4)} textAnchor="start" fontSize={11} className="fill-ink-muted">
                 {serie.corte.rotulo}
@@ -89,10 +89,10 @@ export function GraficoEvolucao({ serie }: { serie: SerieEvolucao }) {
           ) : null}
 
           {pontoAtivo && ativo !== null ? (
-            <line aria-hidden x1={r1(x(ativo))} x2={r1(x(ativo))} y1={PT} y2={H - PB} stroke="rgba(148,163,184,0.35)" />
+            <line aria-hidden x1={r1(x(ativo))} x2={r1(x(ativo))} y1={PT} y2={H - PB} stroke="rgb(var(--c-ink-muted) / 0.35)" />
           ) : null}
 
-          <polyline aria-hidden points={linha} fill="none" stroke="#20D9D2" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+          <polyline aria-hidden points={linha} fill="none" stroke="rgb(var(--c-accent))" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
 
           {serie.pontos.map((p, i) => (
             <g key={p.data + i}>
@@ -105,7 +105,7 @@ export function GraficoEvolucao({ serie }: { serie: SerieEvolucao }) {
               />
               <circle
                 cx={r1(x(i))} cy={r1(y(p.valor))} r={ativo === i ? 5.5 : 4}
-                fill="#20D9D2" stroke="#0E1524" strokeWidth={2}
+                fill="rgb(var(--c-accent))" stroke="rgb(var(--c-canvas))" strokeWidth={2}
                 tabIndex={0}
                 role="img"
                 aria-label={`${dataHora(p.data)}: ${formatar(p.valor)}`}

@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 
 import { fixoBR, type Avaliacao } from "@/lib/voz-clinica-api";
+import { useTemaAtivo } from "@/lib/tema";
 import { LIMITES_DDF, ROTULO_QUADRANTE, pontosDdf, svgDdf } from "@/lib/voz-clinica-ddf";
 
 function dia(iso: string) {
@@ -13,9 +14,10 @@ function dia(iso: string) {
 /** Diagrama irregularidade × ruído das análises acústicas (inspirado no DDF; ver lib/voz-clinica-ddf.ts). */
 export function DiagramaDesvio({ itens }: { itens: Avaliacao[] }) {
   const pontos = useMemo(() => pontosDdf(itens), [itens]);
+  const tema = useTemaAtivo();
   if (!pontos.length) return null;
   const ultimo = pontos[pontos.length - 1]!;
-  const svg = svgDdf(pontos, "escuro", 320);
+  const svg = svgDdf(pontos, tema, 320);
   const descricao = `Diagrama de irregularidade por ruído com ${pontos.length} ${pontos.length === 1 ? "análise" : "análises"}. A mais recente está ${ROTULO_QUADRANTE[ultimo.quadrante]}.`;
   return (
     <section className="mt-4 rounded-xl p-4 ring-1 ring-inset ring-ink/10" aria-label="Diagrama de Desvio Fonatório: evolução do paciente" data-testid="vc2-ddf">

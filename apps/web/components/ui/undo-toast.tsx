@@ -26,7 +26,7 @@ export function UndoToast({ message, durationMs = 8000, onUndo, onClose }: UndoT
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-x-4 bottom-4 z-[90] mx-auto flex max-w-md items-center gap-3 rounded-xl border border-line bg-canvas-overlay px-4 py-3 text-sm text-ink shadow-[0_16px_40px_-12px_rgba(0,0,0,0.7)] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2"
+      className="fixed inset-x-4 bottom-4 z-[90] mx-auto flex max-w-md items-center gap-3 rounded-xl border border-line bg-canvas-overlay px-4 py-3 text-sm text-ink shadow-[0_16px_40px_-12px_rgb(var(--c-sombra)/calc(0.7*var(--k-sombra)))] sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2"
     >
       <span className="min-w-0 flex-1 truncate">{message}</span>
       <button

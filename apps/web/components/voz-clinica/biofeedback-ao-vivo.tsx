@@ -1,5 +1,6 @@
 "use client";
 
+import { corTema } from "@/lib/tema";
 import { ArrowDown, ArrowUp, Check, Mic, Square } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
@@ -27,7 +28,7 @@ import { abrirMicrofoneAoVivo, gravadorSuportado } from "@/lib/voz-clinica-grava
 
 const JANELA_S = 8; // segundos visíveis na curva
 const LIMITE_SESSAO_S = 600;
-const COR = { linha: "#20D9D2", faixa: "rgba(32,217,210,0.13)", borda: "rgba(32,217,210,0.45)", grade: "rgba(148,163,184,0.12)", texto: "#94A3B8" };
+const COR = { get linha() { return corTema("accent"); }, get faixa() { return corTema("accent", 0.13); }, get borda() { return corTema("accent", 0.45); }, get grade() { return corTema("ink-muted", 0.12); }, get texto() { return corTema("ink-muted"); } }; // getters: lidos na hora de desenhar, seguem o tema
 
 const TEXTO_POSICAO: Record<Posicao, string> = { abaixo: "Abaixo da faixa", dentro: "Dentro da faixa", acima: "Acima da faixa" };
 

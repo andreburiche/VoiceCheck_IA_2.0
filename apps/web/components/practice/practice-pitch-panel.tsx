@@ -1,5 +1,6 @@
 "use client";
 
+import { corTema, useTemaAtivo } from "@/lib/tema";
 import { useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ export function PracticePitchPanel({
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  const tema = useTemaAtivo();
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !analysis?.chartPoints.length) return;
@@ -49,7 +51,7 @@ export function PracticePitchPanel({
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = "rgba(12, 14, 20, 0.55)";
+    ctx.fillStyle = corTema("canvas", 0.55);
     ctx.fillRect(0, 0, w, h);
 
     const midis = pts
@@ -66,7 +68,7 @@ export function PracticePitchPanel({
     const xOf = (t: number) => ((t - t0) / span) * w;
 
     // Grade de semitons
-    ctx.strokeStyle = "rgba(255,255,255,0.06)";
+    ctx.strokeStyle = corTema("ink", 0.06);
     ctx.lineWidth = 1;
     for (let m = Math.ceil(lo); m <= Math.floor(hi); m++) {
       const y = yOf(m);
@@ -77,7 +79,7 @@ export function PracticePitchPanel({
     }
 
     // Referência (linha)
-    ctx.strokeStyle = "rgba(32, 217, 210, 0.75)";
+    ctx.strokeStyle = corTema("accent", 0.75);
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     let started = false;
@@ -101,11 +103,11 @@ export function PracticePitchPanel({
       const x = xOf(p.songSec);
       const y = yOf(p.sungMidi);
       ctx.fillStyle = p.inTol
-        ? "rgba(38, 139, 255, 0.85)"
-        : "rgba(255, 90, 90, 0.9)";
+        ? corTema("brand-blue", 0.85)
+        : corTema("err", 0.9);
       ctx.fillRect(x - 1, y - 1.5, 2, 3);
     }
-  }, [analysis]);
+  }, [analysis, tema]);
 
   return (
     <section

@@ -1,7 +1,9 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
 
 const config: Config = {
-  darkMode: ["class"],
+  // tema claro/escuro por html[data-theme] (lib/tema.ts); "claro:" para ajustes pontuais
+  darkMode: ["selector", '[data-theme="dark"]'],
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./lib/**/*.{ts,tsx}"],
   theme: {
     extend: {
@@ -9,53 +11,58 @@ const config: Config = {
         content: "80rem", // 1280px
         app: "110rem", // 1760px — páginas internas usam a largura disponível
       },
+      /**
+       * Cores do tema: variáveis CSS em canais RGB (app/globals.css), com valores para o tema
+       * escuro (padrão) e o claro (html[data-theme="light"]). O "/<alpha-value>" mantém as
+       * opacidades do Tailwind (bg-accent/15, ring-ink/10...).
+       */
       colors: {
         canvas: {
-          DEFAULT: "#070B14",
-          raised: "#0B1120",
-          overlay: "#111827",
-          card: "#151D2E",
+          DEFAULT: "rgb(var(--c-canvas) / <alpha-value>)",
+          raised: "rgb(var(--c-canvas-raised) / <alpha-value>)",
+          overlay: "rgb(var(--c-canvas-overlay) / <alpha-value>)",
+          card: "rgb(var(--c-canvas-card) / <alpha-value>)",
         },
         ink: {
-          DEFAULT: "#F8FAFC",
-          muted: "#94A3B8",
-          faint: "#7B8AA0",
+          DEFAULT: "rgb(var(--c-ink) / <alpha-value>)",
+          muted: "rgb(var(--c-ink-muted) / <alpha-value>)",
+          faint: "rgb(var(--c-ink-faint) / <alpha-value>)",
         },
         accent: {
-          DEFAULT: "#20D9D2",
-          soft: "#5EEAE4",
-          deep: "#17BDB8",
+          DEFAULT: "rgb(var(--c-accent) / <alpha-value>)",
+          soft: "rgb(var(--c-accent-soft) / <alpha-value>)",
+          deep: "rgb(var(--c-accent-deep) / <alpha-value>)",
         },
         brand: {
-          blue: "#268BFF",
+          blue: "rgb(var(--c-brand-blue) / <alpha-value>)",
         },
         /** Laranja neon: só para "ao vivo", picos, destaques e alertas. Ações seguem em accent. */
         flare: {
-          DEFAULT: "#FF7A1A",
-          soft: "#FF9C55",
-          deep: "#E5600A",
+          DEFAULT: "rgb(var(--c-flare) / <alpha-value>)",
+          soft: "rgb(var(--c-flare-soft) / <alpha-value>)",
+          deep: "rgb(var(--c-flare-deep) / <alpha-value>)",
         },
         /** Legado: "violet" agora aponta para o Signal Blue (segunda cor de dados do DESIGN.md). */
         violet: {
-          DEFAULT: "#268BFF",
-          soft: "#5FA9FF",
-          deep: "#1A6FD6",
+          DEFAULT: "rgb(var(--c-brand-blue) / <alpha-value>)",
+          soft: "rgb(var(--c-violet-soft) / <alpha-value>)",
+          deep: "rgb(var(--c-violet-deep) / <alpha-value>)",
         },
         signal: {
-          ok: "#20D9D2",
-          warn: "#E8B84A",
-          err: "#E85D6F",
-          meter: "#20D9D2",
+          ok: "rgb(var(--c-accent) / <alpha-value>)",
+          warn: "rgb(var(--c-warn) / <alpha-value>)",
+          err: "rgb(var(--c-err) / <alpha-value>)",
+          meter: "rgb(var(--c-accent) / <alpha-value>)",
         },
         stem: {
-          vocals: "#20D9D2",
-          drums: "#268BFF",
+          vocals: "rgb(var(--c-accent) / <alpha-value>)",
+          drums: "rgb(var(--c-brand-blue) / <alpha-value>)",
           bass: "#3DDB8A",
-          other: "#94A3B8",
+          other: "rgb(var(--c-ink-muted) / <alpha-value>)",
           guitar: "#F0A05A",
-          keys: "#5FA9FF",
+          keys: "rgb(var(--c-violet-soft) / <alpha-value>)",
         },
-        line: "#263247",
+        line: "rgb(var(--c-line) / <alpha-value>)",
       },
       fontFamily: {
         display: ["var(--font-display)", "Manrope", "system-ui", "sans-serif"],
@@ -70,17 +77,17 @@ const config: Config = {
       },
       boxShadow: {
         /** Seleção: anel fino, sem halo (ver "No Glow Rule" no DESIGN.md). */
-        glow: "0 0 0 1px rgba(32, 217, 210, 0.25)",
-        "glow-violet": "0 8px 24px -12px rgba(0, 0, 0, 0.6)",
-        panel: "0 10px 32px rgba(0, 0, 0, 0.4)",
-        "panel-lift": "0 16px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(32, 217, 210, 0.08)",
+        glow: "0 0 0 1px rgb(var(--c-accent) / 0.25)",
+        "glow-violet": "0 8px 24px -12px rgb(var(--c-sombra) / 0.6)",
+        panel: "0 10px 32px rgb(var(--c-sombra) / 0.4)",
+        "panel-lift": "0 16px 40px rgb(var(--c-sombra) / 0.5), 0 0 0 1px rgb(var(--c-accent) / 0.08)",
         "glow-flare": "0 0 18px rgba(255, 122, 26, 0.45)",
-        hud: "0 24px 60px -24px rgba(0, 0, 0, 0.75)",
+        hud: "0 24px 60px -24px rgb(var(--c-sombra) / 0.75)",
       },
       backgroundImage: {
         "hero-grain":
-          "radial-gradient(ellipse 85% 65% at 72% 18%, rgba(38,139,255,0.18), transparent 55%), radial-gradient(ellipse 55% 45% at 12% 78%, rgba(32,217,210,0.14), transparent 50%), linear-gradient(155deg, #0B1120 0%, #070B14 52%, #05080F 100%)",
-        "panel-sheen": "linear-gradient(145deg, rgba(255,255,255,0.05), transparent 42%)",
+          "radial-gradient(ellipse 85% 65% at 72% 18%, rgba(38,139,255,0.18), transparent 55%), radial-gradient(ellipse 55% 45% at 12% 78%, rgba(32,217,210,0.14), transparent 50%), linear-gradient(155deg, rgb(var(--c-canvas-raised)) 0%, rgb(var(--c-canvas)) 52%, rgb(var(--c-canvas)) 100%)",
+        "panel-sheen": "linear-gradient(145deg, rgb(var(--c-brilho) / 0.05), transparent 42%)",
         "wave-mesh":
           "radial-gradient(ellipse 70% 80% at 80% 40%, rgba(38,139,255,0.22), transparent 55%), radial-gradient(ellipse 50% 60% at 20% 70%, rgba(32,217,210,0.18), transparent 50%)",
         aurora:
@@ -153,7 +160,12 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // claro:… aplica só no tema claro (ex.: claro:shadow-sm); o padrão é o escuro
+    plugin(({ addVariant }) => {
+      addVariant("claro", 'html[data-theme="light"] &');
+    }),
+  ],
 };
 
 export default config;

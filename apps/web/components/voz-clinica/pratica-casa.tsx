@@ -130,7 +130,7 @@ function LinkCriado({ plano, link, aoFechar }: { plano: PlanoPratica; link: stri
         <a
           href={`https://wa.me/?text=${encodeURIComponent(mensagemWhatsApp(link, plano.saudacao))}`}
           target="_blank" rel="noopener noreferrer"
-          className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs font-medium text-ink ring-1 ring-inset ring-line hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs font-medium text-ink ring-1 ring-inset ring-line hover:bg-ink/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           Enviar pelo WhatsApp
         </a>

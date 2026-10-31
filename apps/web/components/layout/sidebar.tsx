@@ -68,7 +68,7 @@ export function Sidebar({
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-40 flex shrink-0 flex-col border-r border-white/[0.06]",
+        "fixed inset-y-0 left-0 z-40 flex shrink-0 flex-col border-r border-ink/[0.06]",
         "bg-canvas-raised/75 backdrop-blur-xl",
         "transition-transform duration-300 ease-out motion-reduce:transition-none md:transition-none",
         "md:sticky md:top-0 md:h-screen md:translate-x-0",
@@ -80,7 +80,7 @@ export function Sidebar({
     >
       <div
         className={cn(
-          "relative flex h-[4.25rem] items-center overflow-hidden border-b border-white/[0.06]",
+          "relative flex h-[4.25rem] items-center overflow-hidden border-b border-ink/[0.06]",
           rail ? "justify-center px-1.5" : "px-4",
         )}
       >
@@ -115,11 +115,11 @@ export function Sidebar({
         />
       </nav>
 
-      <div className={cn("border-t border-white/[0.06]", rail ? "p-1.5" : "p-3")}>
+      <div className={cn("border-t border-ink/[0.06]", rail ? "p-1.5" : "p-3")}>
         <button
           type="button"
           className={cn(
-            "hidden h-10 w-full items-center gap-2 rounded-lg px-3 text-xs text-ink-muted transition-colors hover:bg-white/[0.04] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 md:inline-flex",
+            "hidden h-10 w-full items-center gap-2 rounded-lg px-3 text-xs text-ink-muted transition-colors hover:bg-ink/[0.04] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 md:inline-flex",
             rail && "justify-center px-0",
           )}
           onClick={() => onCollapsedChange?.(!collapsed)}
@@ -173,7 +173,7 @@ function NavGroup({
                 collapsed ? "h-10 w-full justify-center px-0" : "gap-3 px-3 py-2.5",
                 active
                   ? "bg-accent/10 font-medium text-ink"
-                  : "text-ink-muted hover:bg-white/[0.04] hover:text-ink",
+                  : "text-ink-muted hover:bg-ink/[0.04] hover:text-ink",
               )}
               aria-current={active ? "page" : undefined}
               aria-label={collapsed ? itemLabel : undefined}

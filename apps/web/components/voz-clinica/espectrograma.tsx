@@ -1,5 +1,6 @@
 "use client";
 
+import { corTema, useTemaAtivo } from "@/lib/tema";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
@@ -55,7 +56,7 @@ function desenhar(c: HTMLCanvasElement, e: Dados, duracaoAudio: number, f0: { t:
   const x = (t: number) => PE + (t / duracao) * aw;
   const y = (hz: number) => PT + (1 - hz / fTopo) * ah;
   g.font = "11px ui-monospace, Consolas, monospace";
-  g.fillStyle = "#94A3B8";
+  g.fillStyle = corTema("ink-muted");
   g.textAlign = "right"; g.textBaseline = "middle";
   for (let khz = 0; khz <= Math.floor(fTopo / 1000); khz++) g.fillText(`${khz}k`, PE - 6, y(khz * 1000));
   g.textAlign = "center"; g.textBaseline = "alphabetic";
@@ -64,7 +65,7 @@ function desenhar(c: HTMLCanvasElement, e: Dados, duracaoAudio: number, f0: { t:
 
   if (f0) {
     // contorno de F0: linha clara com borda escura, interrompida sem voz
-    for (const [cor, larg] of [["#070B14", 4], ["#F8FAFC", 2]] as const) {
+    for (const [cor, larg] of [[corTema("canvas"), 4], [corTema("ink"), 2]] as const) {
       g.strokeStyle = cor; g.lineWidth = larg; g.lineJoin = "round"; g.beginPath();
       let aberto = false;
       for (const p of f0) {
@@ -125,6 +126,7 @@ export function Espectrograma({ wav, eixoS, aoDuracao }: {
     return () => { vivo = false; };
   }, [wav]);
 
+  const tema = useTemaAtivo();
   useEffect(() => {
     const a = audio.current;
     const c = canvas.current;
@@ -136,7 +138,7 @@ export function Espectrograma({ wav, eixoS, aoDuracao }: {
       desenhar(c, e, a.amostras.length / a.taxa, comF0 ? f0.current : null, faixa, ganho, eixoS);
     }, 0);
     return () => window.clearTimeout(t);
-  }, [estado, modo, comF0, ganho, faixa, eixoS]);
+  }, [estado, modo, comF0, ganho, faixa, eixoS, tema]);
 
   return (
     <figure className="mt-4" aria-labelledby={`${id}-t`} data-testid="vc2-espectro">

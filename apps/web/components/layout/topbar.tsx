@@ -8,6 +8,7 @@ import { Menu, PanelLeftClose, PanelLeftOpen, Plus, Search, X } from "lucide-rea
 
 import { LiveBadge } from "@/components/hud";
 import { AccountMenu } from "@/components/layout/account-menu";
+import { SeletorTema } from "@/components/layout/seletor-tema";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { authApi, usageApi } from "@/lib/api";
@@ -22,7 +23,7 @@ type TopbarProps = {
 };
 
 const iconButton =
-  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-white/[0.05] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60";
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-ink/[0.05] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60";
 
 export function Topbar({
   userName,
@@ -63,7 +64,7 @@ export function Topbar({
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-[4.25rem] items-center gap-3 border-b border-white/[0.06] bg-canvas/70 px-3 backdrop-blur-xl md:px-6">
+    <header className="sticky top-0 z-30 flex h-[4.25rem] items-center gap-3 border-b border-ink/[0.06] bg-canvas/70 px-3 backdrop-blur-xl md:px-6">
       <button
         type="button"
         className={cn(iconButton, "md:hidden")}
@@ -102,7 +103,7 @@ export function Topbar({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Buscar músicas, faixas, setlists…"
-          className="border-white/[0.08] bg-white/[0.03] pl-9"
+          className="border-ink/[0.08] bg-ink/[0.03] pl-9"
           aria-label="Busca global"
         />
       </form>
@@ -121,6 +122,7 @@ export function Topbar({
           <span className="sm:hidden">Nova</span>
         </Link>
 
+        <SeletorTema />
         <AccountMenu userName={userName} onLogout={() => void handleLogout()} />
       </div>
     </header>

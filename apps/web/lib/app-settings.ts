@@ -60,7 +60,7 @@ export function saveAppSettings(settings: AppSettings): void {
 export function applyAppearance(settings: AppSettings): void {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
-  root.dataset.theme = "dark";
+  // o tema (claro/escuro/sistema) tem preferência própria: lib/tema.ts
   root.classList.toggle("reduce-motion", settings.reducedMotion);
   root.classList.toggle("compact-ui", settings.compactUi);
   // Brilho em formas de onda foi retirado (DESIGN.md: "No Glow Rule")

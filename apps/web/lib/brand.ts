@@ -12,6 +12,8 @@ export const BRAND = {
   logoSrc: "/brand/voicecheck-lockup-v3.png",
   /** PNG com o fundo escuro da aplicação — impressão / tema claro */
   logoSrcDark: "/brand/voicecheck-lockup-v3-dark.png",
+  /** Mesma arte com as letras em grafite — tema claro e papel (1200×252, mesma proporção) */
+  logoSrcPapel: "/brand/voicecheck-lockup-v3-papel.png",
   /** Emblema isolado transparente */
   markSrc: "/brand/voicecheck-mark-v3.png",
   /** Ícone para iOS (180×180) */

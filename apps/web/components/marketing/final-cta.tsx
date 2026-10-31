@@ -23,7 +23,7 @@ export function FinalCta() {
             href="/register"
             className={buttonVariants({
               size: "lg",
-              className: "shrink-0 rounded-full px-8 shadow-[0_12px_28px_-14px_rgba(0,0,0,0.8)]",
+              className: "shrink-0 rounded-full px-8 shadow-[0_12px_28px_-14px_rgb(var(--c-sombra)/calc(0.8*var(--k-sombra)))]",
             })}
           >
             Criar conta grátis

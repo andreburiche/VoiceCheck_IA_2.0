@@ -13,7 +13,7 @@ const LINKS = [
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-white/5 bg-canvas-raised px-5 pb-10 pt-20 sm:px-8" aria-label="Rodapé">
+    <footer className="border-t border-ink/5 bg-canvas-raised px-5 pb-10 pt-20 sm:px-8" aria-label="Rodapé">
       <div className="mx-auto max-w-content">
         <nav aria-label="Rodapé">
           <ul className="flex flex-wrap gap-x-8 gap-y-3">

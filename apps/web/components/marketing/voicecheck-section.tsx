@@ -84,7 +84,7 @@ export function VoiceCheckSection() {
           </Reveal>
         </div>
 
-        <ul className="mt-5 grid gap-px overflow-hidden rounded-2xl bg-white/5 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="mt-5 grid gap-px overflow-hidden rounded-2xl bg-ink/5 sm:grid-cols-2 lg:grid-cols-3">
           {MEASURES.map((m, i) => (
             <Reveal as="li" key={m.term} delay={(i % 3) * 80} className="bg-canvas-raised p-6">
               <span className="flex items-baseline justify-between gap-3">

@@ -1,5 +1,6 @@
 "use client";
 
+import { corTema, useTemaAtivo } from "@/lib/tema";
 import { useEffect, useRef } from "react";
 
 import { LiveBadge } from "@/components/hud";
@@ -27,6 +28,7 @@ export function VoiceCheckVoiceTraits({
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  const tema = useTemaAtivo();
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !report?.pitch_track.length) return;
@@ -40,14 +42,14 @@ export function VoiceCheckVoiceTraits({
     if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = "rgba(12, 14, 20, 0.55)";
+    ctx.fillStyle = corTema("canvas", 0.55);
     ctx.fillRect(0, 0, w, h);
 
     const midis = pts
       .map((p) => p.midi_note)
       .filter((m): m is number => m != null && Number.isFinite(m));
     if (!midis.length) {
-      ctx.fillStyle = "rgba(160,170,180,0.7)";
+      ctx.fillStyle = corTema("ink-muted", 0.7);
       ctx.font = "12px sans-serif";
       ctx.fillText("Sem trechos de voz para desenhar", 16, h / 2);
       return;
@@ -60,7 +62,7 @@ export function VoiceCheckVoiceTraits({
     const yOf = (m: number) => h - ((m - lo) / (hi - lo)) * (h - 16) - 8;
     const xOf = (t: number) => ((t - t0) / span) * w;
 
-    ctx.strokeStyle = "rgba(255,255,255,0.06)";
+    ctx.strokeStyle = corTema("ink", 0.06);
     for (let m = Math.ceil(lo); m <= Math.floor(hi); m++) {
       const y = yOf(m);
       ctx.beginPath();
@@ -69,7 +71,7 @@ export function VoiceCheckVoiceTraits({
       ctx.stroke();
     }
 
-    ctx.strokeStyle = "rgba(38, 139, 255, 0.9)";
+    ctx.strokeStyle = corTema("brand-blue", 0.9);
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     let started = false;
@@ -86,7 +88,7 @@ export function VoiceCheckVoiceTraits({
       } else ctx.lineTo(x, y);
     }
     ctx.stroke();
-  }, [report]);
+  }, [report, tema]);
 
   return (
     <section className="space-y-4 panel-glass rounded-2xl p-4 md:p-5">

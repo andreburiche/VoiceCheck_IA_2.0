@@ -11,7 +11,7 @@ export function TrendChart({
   min = 0,
   max = 100,
   unit = "",
-  color = "#20D9D2",
+  color = "rgb(var(--c-accent))",
   height = 180,
   className,
   title,
@@ -51,8 +51,8 @@ export function TrendChart({
     <svg viewBox={`0 0 ${W} ${H}`} className={cn("block h-auto w-full", className)} role="img" aria-label={title}>
       {ticks.map((t) => (
         <g key={t}>
-          <line x1={PL} x2={W - PR} y1={r(y(t))} y2={r(y(t))} stroke="rgba(148,163,184,0.12)" strokeDasharray="3 5" />
-          <text x={PL - 8} y={r(y(t)) + 4} textAnchor="end" fontSize={12} fill="#94A3B8" fontFamily="var(--font-mono)">
+          <line x1={PL} x2={W - PR} y1={r(y(t))} y2={r(y(t))} stroke="rgb(var(--c-ink-muted) / 0.12)" strokeDasharray="3 5" />
+          <text x={PL - 8} y={r(y(t)) + 4} textAnchor="end" fontSize={12} fill="rgb(var(--c-ink-muted))" fontFamily="var(--font-mono)">
             {t}
           </text>
         </g>
@@ -74,17 +74,17 @@ export function TrendChart({
         </>
       ) : null}
       {pts.map(([a, b], i) => (
-        <circle key={i} cx={a} cy={b} r={i === pts.length - 1 ? 4.5 : 2.5} fill={i === pts.length - 1 && hot ? "#FF7A1A" : color} />
+        <circle key={i} cx={a} cy={b} r={i === pts.length - 1 ? 4.5 : 2.5} fill={i === pts.length - 1 && hot ? "rgb(var(--c-flare))" : color} />
       ))}
       {last && lastPoint ? (
-        <text x={last[0]} y={last[1] - 12} textAnchor="end" fontSize={12} fontWeight={600} fill={hot ? "#FF9C55" : "#94A3B8"} fontFamily="var(--font-mono)">
+        <text x={last[0]} y={last[1] - 12} textAnchor="end" fontSize={12} fontWeight={600} fill={hot ? "rgb(var(--c-flare-soft))" : "rgb(var(--c-ink-muted))"} fontFamily="var(--font-mono)">
           {lastPoint.value}
           {unit}
         </text>
       ) : null}
       {points.map((p, i) =>
         (i % step === 0 || i === points.length - 1) && pts[i] ? (
-          <text key={i} x={pts[i]![0]} y={H - 6} textAnchor="middle" fontSize={12} fill="#94A3B8" fontFamily="var(--font-mono)">
+          <text key={i} x={pts[i]![0]} y={H - 6} textAnchor="middle" fontSize={12} fill="rgb(var(--c-ink-muted))" fontFamily="var(--font-mono)">
             {p.label}
           </text>
         ) : null,

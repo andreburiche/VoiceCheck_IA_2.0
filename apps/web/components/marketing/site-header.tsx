@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 
 import { BrandLogo } from "@/components/brand/brand-logo";
+import { SeletorTema } from "@/components/layout/seletor-tema";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +42,7 @@ export function SiteHeader() {
       className={cn(
         "fixed inset-x-0 top-0 z-50 transition-colors duration-ui",
         scrolled || open
-          ? "border-b border-white/5 bg-canvas/75 backdrop-blur-xl"
+          ? "border-b border-ink/5 bg-canvas/75 backdrop-blur-xl"
           : "border-b border-transparent bg-transparent",
       )}
     >
@@ -60,6 +61,8 @@ export function SiteHeader() {
           ))}
         </nav>
 
+        <div className="flex items-center gap-2 sm:gap-4">
+        <SeletorTema />
         <div className="hidden items-center gap-5 md:flex">
           <Link href="/login" className="text-sm text-ink transition-colors duration-ui hover:text-accent">
             Entrar
@@ -79,6 +82,7 @@ export function SiteHeader() {
         >
           {open ? <X className="h-5 w-5" aria-hidden /> : <Menu className="h-5 w-5" aria-hidden />}
         </button>
+        </div>
       </div>
 
       {open ? (

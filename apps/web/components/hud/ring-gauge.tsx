@@ -21,7 +21,7 @@ export function RingGauge({
   const v = Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
-  const color = v >= warnAt ? "#FF7A1A" : "#20D9D2";
+  const color = v >= warnAt ? "rgb(var(--c-flare))" : "rgb(var(--c-accent))";
   return (
     <div
       className={cn("relative inline-flex shrink-0 items-center justify-center", className)}
@@ -33,7 +33,7 @@ export function RingGauge({
       aria-valuenow={Math.round(v * 100)}
     >
       <svg width={size} height={size} className="-rotate-90" aria-hidden>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(148,163,184,0.14)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgb(var(--c-ink-muted) / 0.14)" strokeWidth={stroke} />
         <circle
           cx={size / 2}
           cy={size / 2}

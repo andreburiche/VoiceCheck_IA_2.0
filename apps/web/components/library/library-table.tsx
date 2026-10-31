@@ -43,7 +43,7 @@ export function LibraryTable({
   return (
     <div className="panel-glass overflow-x-auto rounded-2xl">
       <table className="w-full min-w-[720px] text-left text-sm">
-        <thead className="hud-label border-b border-white/[0.06]">
+        <thead className="hud-label border-b border-ink/[0.06]">
           <tr>
             <th className="px-3 py-3 font-medium">Projeto</th>
             <th className="px-3 py-3 font-medium">Duração</th>
@@ -57,11 +57,11 @@ export function LibraryTable({
             </th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-white/[0.05]">
+        <tbody className="divide-y divide-ink/[0.05]">
           {items.map((item) => {
             const fav = favorites.has(item.projectId);
             return (
-              <tr key={item.projectId} className="transition-colors hover:bg-white/[0.03]">
+              <tr key={item.projectId} className="transition-colors hover:bg-ink/[0.03]">
                 <td className="px-3 py-3">
                   <div className="flex items-center gap-3">
                     <CoverArt seed={item.projectId} title={item.name} className="h-9 w-9 text-xs" />
@@ -93,7 +93,7 @@ export function LibraryTable({
                           ? "bg-flare/15 text-flare-soft"
                           : item.processing === "failed"
                             ? "bg-red-500/15 text-red-300"
-                            : "bg-white/[0.05] text-ink-muted",
+                            : "bg-ink/[0.05] text-ink-muted",
                     )}
                   >
                     {statusLabel(item.processing)}

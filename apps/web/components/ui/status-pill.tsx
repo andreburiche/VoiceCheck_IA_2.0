@@ -14,7 +14,7 @@ export function StatusPill({ status, className }: { status: string; className?: 
         tone === "ok" && "bg-accent/10 text-accent",
         tone === "busy" && "bg-flare/15 text-flare-soft",
         tone === "err" && "bg-signal-err/15 text-signal-err",
-        tone === "idle" && "bg-white/[0.05] text-ink-muted",
+        tone === "idle" && "bg-ink/[0.05] text-ink-muted",
         className,
       )}
     >

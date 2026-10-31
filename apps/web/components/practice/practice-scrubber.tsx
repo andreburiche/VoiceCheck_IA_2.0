@@ -1,5 +1,6 @@
 "use client";
 
+import { corTema } from "@/lib/tema";
 import { useEffect, useRef } from "react";
 
 import { extractPeaks } from "@/lib/audio-peaks";
@@ -34,7 +35,7 @@ export function PracticeScrubber({
   disabled,
   onSeek,
   className,
-  waveColor = "rgba(46, 230, 214, 0.35)",
+  waveColor,
   playheadColor = "rgba(46, 230, 214, 0.95)",
   hideClock = false,
   ariaLabel = "Posição na faixa",
@@ -55,7 +56,7 @@ export function PracticeScrubber({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
     if (!peaks?.length) return;
-    ctx.fillStyle = waveColor;
+    ctx.fillStyle = waveColor ?? corTema("accent", 0.35);
     const mid = h / 2;
     const step = Math.max(1, Math.floor(peaks.length / w));
     for (let x = 0; x < w; x++) {

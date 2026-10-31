@@ -21,12 +21,12 @@ function CurvaCq({ r }: { r: ResultadoEgg }) {
     <svg viewBox={`0 0 ${w} ${h}`} className="mt-3 w-full max-w-xl" role="img" aria-label={`Quociente de contato por ciclo: média ${fixoBR(r.cq_media_pct, 1)}%`}>
       {[0, 50, 100].map((v) => (
         <g key={v}>
-          <line x1={e} x2={w} y1={y(v)} y2={y(v)} stroke="rgba(148,163,184,0.25)" />
-          <text x={e - 6} y={y(v) + 4} textAnchor="end" fontSize="10" fill="#94A3B8">{v}%</text>
+          <line x1={e} x2={w} y1={y(v)} y2={y(v)} stroke="rgb(var(--c-ink-muted) / 0.25)" />
+          <text x={e - 6} y={y(v) + 4} textAnchor="end" fontSize="10" fill="rgb(var(--c-ink-muted))">{v}%</text>
         </g>
       ))}
-      <path d={d} fill="none" stroke="#20D9D2" strokeWidth={1.2} />
-      <text x={w - 4} y={h - 4} textAnchor="end" fontSize="10" fill="#94A3B8">{fixoBR(tMax, 1)} s</text>
+      <path d={d} fill="none" stroke="rgb(var(--c-accent))" strokeWidth={1.2} />
+      <text x={w - 4} y={h - 4} textAnchor="end" fontSize="10" fill="rgb(var(--c-ink-muted))">{fixoBR(tMax, 1)} s</text>
     </svg>
   );
 }

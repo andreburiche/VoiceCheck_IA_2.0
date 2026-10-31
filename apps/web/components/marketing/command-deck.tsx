@@ -35,13 +35,13 @@ export function CommandDeck() {
             Com as faixas separadas, o estúdio vira sala de ensaio: tire a sua voz do original e cante
             por cima, no seu andamento.
           </p>
-          <ul className="panel-glass mt-10 grid divide-white/5 overflow-hidden rounded-2xl sm:grid-cols-2 sm:divide-x">
+          <ul className="panel-glass mt-10 grid divide-ink/5 overflow-hidden rounded-2xl sm:grid-cols-2 sm:divide-x">
             {TOOLS.map((t, i) => (
               <Reveal
                 as="li"
                 key={t.term}
                 delay={(i % 2) * 80}
-                className={`px-5 py-4 ${i >= 2 ? "border-t border-white/5" : ""} ${i === 1 ? "border-t border-white/5 sm:border-t-0" : ""}`}
+                className={`px-5 py-4 ${i >= 2 ? "border-t border-ink/5" : ""} ${i === 1 ? "border-t border-ink/5 sm:border-t-0" : ""}`}
               >
                 <span className="flex items-baseline justify-between gap-3">
                   <span className="text-base font-semibold text-ink">{t.term}</span>

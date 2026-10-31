@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono, Manrope } from "next/font/google";
 
 import { Providers } from "@/components/providers";
 import { BRAND } from "@/lib/brand";
+import { SCRIPT_TEMA } from "@/lib/tema-script";
 
 import "./globals.css";
 
@@ -39,7 +40,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
+    // data-theme é definido pelo script antes da pintura (tema salvo neste navegador)
+    <html lang="pt-BR" data-theme="dark" suppressHydrationWarning className={`${display.variable} ${sans.variable} ${mono.variable}`}>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+      </head>
       <body className="font-sans">
         <a
           href="#conteudo-principal"

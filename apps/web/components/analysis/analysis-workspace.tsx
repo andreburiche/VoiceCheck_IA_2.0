@@ -1,5 +1,6 @@
 "use client";
 
+import { corTema } from "@/lib/tema";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pause, Play, Square, Wand2, Save } from "lucide-react";
 import Link from "next/link";
@@ -162,7 +163,7 @@ export function AnalysisWorkspace({ projectId }: Props) {
           const ws = WaveSurfer.create({
             container: waveHost.current,
             waveColor: STEM_COLORS[guideType] ?? "#268BFF",
-            progressColor: "rgba(51,214,202,0.55)",
+            progressColor: corTema("accent", 0.55),
             cursorColor: "#F4F6FA",
             height: 120,
             interact: true,

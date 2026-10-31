@@ -113,7 +113,7 @@ export function LibraryCard({
 
         <div className="mt-auto flex flex-wrap items-center gap-2 border-t border-line/60 pt-3 text-xs">
           {item.format ? (
-            <span className="text-data rounded-md bg-white/[0.05] px-2 py-0.5 uppercase text-ink-muted">
+            <span className="text-data rounded-md bg-ink/[0.05] px-2 py-0.5 uppercase text-ink-muted">
               {item.format}
             </span>
           ) : null}

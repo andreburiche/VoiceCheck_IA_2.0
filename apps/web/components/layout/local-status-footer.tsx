@@ -28,7 +28,7 @@ export function LocalStatusFooter() {
 
   return (
     <footer
-      className="border-t border-white/[0.06] bg-canvas/60 px-4 py-2.5 backdrop-blur md:px-6"
+      className="border-t border-ink/[0.06] bg-canvas/60 px-4 py-2.5 backdrop-blur md:px-6"
       aria-label="Recursos locais"
     >
       <ul className="flex flex-wrap items-center gap-x-6 gap-y-1.5 text-xs text-ink-muted">

@@ -41,13 +41,13 @@ function Curva({ r }: { r: ResultadoNasalancia }) {
     <svg viewBox={`0 0 ${w} ${h}`} className="mt-3 w-full max-w-xl" role="img" aria-label={`Nasalância ao longo da leitura: média ${fixoBR(r.media_pct, 1)}%`}>
       {[0, 50, 100].map((v) => (
         <g key={v}>
-          <line x1={44} x2={w} y1={y(v)} y2={y(v)} stroke="rgba(148,163,184,0.25)" />
-          <text x={38} y={y(v) + 4} textAnchor="end" fontSize="10" fill="#94A3B8">{v}%</text>
+          <line x1={44} x2={w} y1={y(v)} y2={y(v)} stroke="rgb(var(--c-ink-muted) / 0.25)" />
+          <text x={38} y={y(v) + 4} textAnchor="end" fontSize="10" fill="rgb(var(--c-ink-muted))">{v}%</text>
         </g>
       ))}
-      <line x1={44} x2={w} y1={y(r.media_pct)} y2={y(r.media_pct)} stroke="#E8B84A" strokeDasharray="4 3" />
-      <path d={d} fill="none" stroke="#20D9D2" strokeWidth={1.5} />
-      <text x={w - 4} y={h - 4} textAnchor="end" fontSize="10" fill="#94A3B8">{fixoBR(tMax, 1)} s</text>
+      <line x1={44} x2={w} y1={y(r.media_pct)} y2={y(r.media_pct)} stroke="rgb(var(--c-warn))" strokeDasharray="4 3" />
+      <path d={d} fill="none" stroke="rgb(var(--c-accent))" strokeWidth={1.5} />
+      <text x={w - 4} y={h - 4} textAnchor="end" fontSize="10" fill="rgb(var(--c-ink-muted))">{fixoBR(tMax, 1)} s</text>
     </svg>
   );
 }

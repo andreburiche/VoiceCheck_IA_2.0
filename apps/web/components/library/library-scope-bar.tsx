@@ -86,7 +86,7 @@ export function LibraryScopeBar({
                   "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors",
                   active
                     ? "border-accent/40 bg-accent/10 text-accent"
-                    : "border-white/[0.08] bg-white/[0.02] text-ink-muted hover:border-accent/30 hover:text-ink",
+                    : "border-ink/[0.08] bg-ink/[0.02] text-ink-muted hover:border-accent/30 hover:text-ink",
                 )}
               >
                 <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -98,7 +98,7 @@ export function LibraryScopeBar({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.06] pt-3">
+      <div className="flex flex-wrap items-center gap-2 border-t border-ink/[0.06] pt-3">
         <p className="hud-label mr-1">Coleções e setlists</p>
 
         {collections.map((c) => {
@@ -110,7 +110,7 @@ export function LibraryScopeBar({
                 "group inline-flex items-center gap-1 rounded-xl border pl-3 pr-1 py-1 text-sm",
                 active
                   ? "border-violet/40 bg-violet/15 text-violet"
-                  : "border-white/[0.08] bg-white/[0.02] text-ink-muted",
+                  : "border-ink/[0.08] bg-ink/[0.02] text-ink-muted",
               )}
             >
               <button
@@ -143,7 +143,7 @@ export function LibraryScopeBar({
                 "group inline-flex items-center gap-1 rounded-xl border pl-3 pr-1 py-1 text-sm",
                 active
                   ? "border-accent/40 bg-accent/15 text-accent"
-                  : "border-white/[0.08] bg-white/[0.02] text-ink-muted",
+                  : "border-ink/[0.08] bg-ink/[0.02] text-ink-muted",
               )}
             >
               <button
@@ -203,7 +203,7 @@ export function LibraryScopeBar({
       {creating ? (
         <form
           onSubmit={submit}
-          className="flex flex-wrap items-end gap-2 rounded-xl bg-white/[0.03] p-3 ring-1 ring-white/[0.06]"
+          className="flex flex-wrap items-end gap-2 rounded-xl bg-ink/[0.03] p-3 ring-1 ring-ink/[0.06]"
         >
           <div className="min-w-[12rem] flex-1">
             <label htmlFor="library-scope-name" className="sr-only">

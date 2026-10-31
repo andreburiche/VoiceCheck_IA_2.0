@@ -1,5 +1,6 @@
 "use client";
 
+import { corTema, useTemaAtivo } from "@/lib/tema";
 import { Mic, Pause, RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
@@ -15,7 +16,7 @@ import { abrirMicrofoneAoVivo, gravadorSuportado } from "@/lib/voz-clinica-grava
 
 const DB_MIN = -60;
 const DB_MAX = 0;
-const COR = { campo: "rgba(32,217,210,0.22)", contorno: "#20D9D2", grade: "rgba(148,163,184,0.12)", texto: "#94A3B8", atual: "#F8FAFC" };
+const COR = { get campo() { return corTema("accent", 0.22); }, get contorno() { return corTema("accent"); }, get grade() { return corTema("ink-muted", 0.12); }, get texto() { return corTema("ink-muted"); }, get atual() { return corTema("ink"); } }; // getters: lidos na hora de desenhar, seguem o tema
 
 /** `desloc`: 0 para dBFS; com calibração, os rótulos do eixo saem em dB SPL (dBFS + desloc). */
 function desenharCampo(c: HTMLCanvasElement, pontos: PontoCampo[], atual: { midi: number; db: number } | null, desloc = 0) {
@@ -114,9 +115,10 @@ export function Fonetograma({ paciente, aoSalvar }: { paciente: string; aoSalvar
   const quadro = useRef<number | null>(null);
 
   useEffect(() => setSuportado(gravadorSuportado()), []);
+  const tema = useTemaAtivo();
   useEffect(() => {
     if (canvas.current) desenharCampo(canvas.current, pontos, gravando ? leitura : null, desloc);
-  }, [pontos, leitura, gravando, desloc]);
+  }, [pontos, leitura, gravando, desloc, tema]);
 
   const pausar = useCallback(() => {
     if (quadro.current !== null) cancelAnimationFrame(quadro.current);

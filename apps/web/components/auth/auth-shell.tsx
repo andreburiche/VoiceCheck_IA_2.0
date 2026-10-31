@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
+import { SeletorTema } from "@/components/layout/seletor-tema";
 import { BrandLogo } from "@/components/brand/brand-logo";
 
 /**
@@ -56,9 +57,10 @@ export function AuthShell({
             <div className="lg:hidden">
               <BrandLogo href="/" variant="light" size="md" layout="horizontal" />
             </div>
+            <SeletorTema className="ml-auto" />
             <Link
               href={back.href}
-              className="group -mx-2 ml-auto inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-ink-muted transition-colors duration-ui hover:bg-canvas-overlay/70 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="group -mr-2 inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-ink-muted transition-colors duration-ui hover:bg-canvas-overlay/70 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <ArrowLeft
                 className="h-4 w-4 transition-transform duration-ui group-hover:-translate-x-0.5 motion-reduce:transition-none"
@@ -75,7 +77,7 @@ export function AuthShell({
               {title}
               {highlight ? <span className="text-accent"> {highlight}</span> : null}
             </p>
-            <div className="rounded-3xl border border-line/80 bg-canvas-raised p-6 shadow-[0_24px_60px_-30px_rgb(0_0_0/0.6)] sm:p-8">
+            <div className="rounded-3xl border border-line/80 bg-canvas-raised p-6 shadow-[0_24px_60px_-30px_rgb(var(--c-sombra)/calc(0.6*var(--k-sombra)))] sm:p-8">
               {children}
             </div>
           </div>

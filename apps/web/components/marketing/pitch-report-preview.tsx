@@ -104,7 +104,7 @@ export function PitchReportPreview({ className, live = false }: { className?: st
       className={cn("panel-glass overflow-hidden rounded-2xl text-ink", className)}
       aria-label="Exemplo de relatório de afinação do VoiceCheck IA"
     >
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-white/5 px-5 py-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-ink/5 px-5 py-3.5">
         <div className="min-w-0">
           <p className="text-sm font-semibold">Afinação por nota</p>
           <p className="hud-label mt-0.5 normal-case tracking-normal">Frase 3 de 8 · referência MIDI · exemplo</p>
@@ -125,7 +125,7 @@ export function PitchReportPreview({ className, live = false }: { className?: st
                 x2={W - PAD_R}
                 y1={y(g.semi)}
                 y2={y(g.semi)}
-                stroke="rgba(148,163,184,0.14)"
+                stroke="rgb(var(--c-ink-muted) / 0.14)"
                 strokeDasharray="2 6"
               />
               <text x={PAD_L - 8} y={y(g.semi) + 4} textAnchor="end" fontSize={13} fill="#8392A8" fontFamily="var(--font-mono)">
@@ -146,7 +146,7 @@ export function PitchReportPreview({ className, live = false }: { className?: st
                 width={x1 - x0}
                 height={14}
                 rx={3}
-                fill={off ? "#FF7A1A" : "#F8FAFC"}
+                fill={off ? "rgb(var(--c-flare))" : "rgb(var(--c-ink))"}
                 fillOpacity={off ? 0.16 : 0.1}
               />
             );
@@ -156,7 +156,7 @@ export function PitchReportPreview({ className, live = false }: { className?: st
               key={i}
               d={s.d}
               fill="none"
-              stroke={s.off ? "#FF7A1A" : "#20D9D2"}
+              stroke={s.off ? "rgb(var(--c-flare))" : "rgb(var(--c-accent))"}
               strokeWidth={2.5}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -173,10 +173,10 @@ export function PitchReportPreview({ className, live = false }: { className?: st
               }
             />
           ))}
-          <text x={PAD_L} y={H - 8} fontSize={13} fill="#64748B" fontFamily="var(--font-mono)">
+          <text x={PAD_L} y={H - 8} fontSize={13} fill="rgb(var(--c-ink-muted))" fontFamily="var(--font-mono)">
             0:00
           </text>
-          <text x={W - PAD_R} y={H - 8} fontSize={13} fill="#64748B" textAnchor="end" fontFamily="var(--font-mono)">
+          <text x={W - PAD_R} y={H - 8} fontSize={13} fill="rgb(var(--c-ink-muted))" textAnchor="end" fontFamily="var(--font-mono)">
             0:{String(Math.round(totalBeats * SECONDS_PER_BEAT)).padStart(2, "0")}
           </text>
         </svg>
@@ -209,7 +209,7 @@ export function PitchReportPreview({ className, live = false }: { className?: st
         </span>
       </div>
 
-      <dl className="grid grid-cols-3 divide-x divide-white/5 border-t border-white/5">
+      <dl className="grid grid-cols-3 divide-x divide-ink/5 border-t border-ink/5">
         <div className="px-3 py-3 sm:px-5">
           <dt className="hud-label">No centro</dt>
           <dd className="text-data mt-1 text-lg font-semibold sm:text-xl">

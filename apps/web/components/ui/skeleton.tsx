@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 /** Bloco de carregamento no formato do conteúdo final (evita "pulo" de layout). */
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("animate-pulse rounded-xl bg-white/[0.045] motion-reduce:animate-none", className)} aria-hidden />;
+  return <div className={cn("animate-pulse rounded-xl bg-ink/[0.045] motion-reduce:animate-none", className)} aria-hidden />;
 }
 
 /** Esqueleto de página: título + bloco principal + linha de cartões. */

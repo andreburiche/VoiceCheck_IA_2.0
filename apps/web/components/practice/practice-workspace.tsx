@@ -1,5 +1,6 @@
 "use client";
 
+import { corTema } from "@/lib/tema";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BookmarkPlus,
@@ -712,7 +713,7 @@ export function PracticeWorkspace({ projectId }: Props) {
               disabled={!ready}
               onSeek={seekTo}
               hideClock
-              waveColor="rgba(38, 139, 255, 0.45)"
+              waveColor={corTema("brand-blue", 0.45)}
               playheadColor="rgba(38, 139, 255, 0.95)"
               ariaLabel="Posição na faixa da voz"
             />
@@ -960,7 +961,7 @@ export function PracticeWorkspace({ projectId }: Props) {
             className={cn(
               "rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-ui",
               tab === t.id
-                ? "bg-canvas-card text-ink shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_4px_12px_-6px_rgba(0,0,0,0.6)]"
+                ? "bg-canvas-card text-ink shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_4px_12px_-6px_rgb(var(--c-sombra)/calc(0.6*var(--k-sombra)))]"
                 : "text-ink-muted hover:text-ink",
             )}
           >

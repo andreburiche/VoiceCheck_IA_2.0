@@ -1,5 +1,6 @@
 "use client";
 
+import { SeletorTema } from "@/components/layout/seletor-tema";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -21,7 +22,7 @@ import {
   type DevicePreference,
   type OutputDevice,
 } from "@/lib/app-settings";
-import { authApi, systemApi, usageApi } from "@/lib/api";
+import { ROTULO_PERFIL, authApi, systemApi, usageApi } from "@/lib/api";
 import { formatBytes } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { PageSkeleton } from "@/components/ui/skeleton";
@@ -168,7 +169,7 @@ export function SettingsWorkspace() {
               <dl className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
                 <Row label="Nome" value={me.data.name} />
                 <Row label="E-mail" value={me.data.email} />
-                <Row label="Perfil" value={me.data.role === "admin" ? "Administrador" : "Músico"} />
+                <Row label="Perfil" value={me.data.role === "admin" ? "Administrador" : (me.data.perfil ? ROTULO_PERFIL[me.data.perfil] : "Não definido")} />
               </dl>
             ) : (
               <p className="rounded-xl border border-dashed border-line px-3 py-3 text-ink-muted">
@@ -428,13 +429,13 @@ export function SettingsWorkspace() {
           <section className="space-y-4 text-sm">
             <h2 className="text-lg font-semibold text-ink">Aparência</h2>
             <p className="text-ink-muted">
-              Tema escuro premium é o único tema do produto (#10131D / #1B2231). Preferências visuais
-              abaixo são locais.
+              Escolha o tema claro, o escuro ou o do sistema (acompanha o computador ou o celular).
+              Estas preferências ficam salvas neste navegador.
             </p>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked disabled readOnly />
-              Tema escuro (obrigatório)
-            </label>
+            <div>
+              <p className="mb-2 font-medium text-ink">Tema</p>
+              <SeletorTema modo="segmentos" />
+            </div>
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"

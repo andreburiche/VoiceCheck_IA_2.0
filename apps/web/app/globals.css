@@ -2,21 +2,89 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+:root,
+[data-theme="dark"] {
   color-scheme: dark;
-  --canvas: #070b14;
-  --canvas-raised: #0b1120;
-  --canvas-overlay: #111827;
-  --canvas-card: #151d2e;
-  --accent: #20d9d2;
-  --accent-hover: #17bdb8;
-  --brand-blue: #268bff;
-  --ink: #f8fafc;
-  --ink-muted: #94a3b8;
-  --ink-faint: #7b8aa0;
-  --line: #263247;
-  /* Usada por sliders (accent-color); antes não existia e caía na cor do navegador. */
-  --violet: #20d9d2;
+  /* Canais RGB (Tailwind usa rgb(var(--c-…) / alfa)). Tema escuro: o padrão do produto. */
+  --c-canvas: 7 11 20;
+  --c-canvas-raised: 11 17 32;
+  --c-canvas-overlay: 17 24 39;
+  --c-canvas-card: 21 29 46;
+  --c-ink: 248 250 252;
+  --c-ink-muted: 148 163 184;
+  --c-ink-faint: 123 138 160;
+  --c-line: 38 50 71;
+  --c-accent: 32 217 210;
+  --c-accent-soft: 94 234 228;
+  --c-accent-deep: 23 189 184;
+  --c-brand-blue: 38 139 255;
+  --c-violet-soft: 95 169 255;
+  --c-violet-deep: 26 111 214;
+  --c-flare: 255 122 26;
+  --c-flare-soft: 255 156 85;
+  --c-flare-deep: 229 96 10;
+  --c-warn: 232 184 74;
+  --c-err: 232 93 111;
+  /* sombra (preto no escuro, azul-grafite suave no claro) e reflexo de borda */
+  --c-sombra: 0 0 0;
+  --k-sombra: 1; /* multiplica a opacidade das sombras soltas (shadow-[…]) */
+  --c-brilho: 255 255 255;
+  /* superfície dos painéis (.panel-glass) e do topo/menus */
+  --c-painel: 14 21 36;
+  --c-vidro: 15 22 38;
+  --sombra-painel: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 12px 32px -18px rgb(0 0 0 / 0.7);
+  --borda-painel: rgb(148 163 184 / 0.12);
+  --grade: rgb(148 163 184 / 0.06);
+
+  /* Nomes antigos (cor completa), usados em estilos inline e accent-color */
+  --canvas: rgb(var(--c-canvas));
+  --canvas-raised: rgb(var(--c-canvas-raised));
+  --canvas-overlay: rgb(var(--c-canvas-overlay));
+  --canvas-card: rgb(var(--c-canvas-card));
+  --accent: rgb(var(--c-accent));
+  --accent-hover: rgb(var(--c-accent-deep));
+  --brand-blue: rgb(var(--c-brand-blue));
+  --ink: rgb(var(--c-ink));
+  --ink-muted: rgb(var(--c-ink-muted));
+  --ink-faint: rgb(var(--c-ink-faint));
+  --line: rgb(var(--c-line));
+  /* Usada por sliders (accent-color) */
+  --violet: rgb(var(--c-accent));
+}
+
+/*
+ * Tema claro: papel frio e tinta grafite. O turquesa e o laranja escurecem para manter o
+ * contraste de texto (WCAG AA ≥ 4,5:1 sobre o branco); o turquesa do botão segue com texto claro.
+ */
+[data-theme="light"] {
+  color-scheme: light;
+  --c-canvas: 241 244 248;
+  --c-canvas-raised: 255 255 255;
+  --c-canvas-overlay: 233 238 244;
+  --c-canvas-card: 255 255 255;
+  --c-ink: 14 26 36;
+  --c-ink-muted: 74 90 105;
+  --c-ink-faint: 98 113 128;
+  --c-line: 208 217 227;
+  --c-accent: 10 128 123;
+  --c-accent-soft: 8 112 108;
+  --c-accent-deep: 7 98 94;
+  --c-brand-blue: 26 111 214;
+  --c-violet-soft: 37 99 198;
+  --c-violet-deep: 21 86 170;
+  --c-flare: 200 80 0;
+  --c-flare-soft: 186 74 0;
+  --c-flare-deep: 160 62 0;
+  --c-warn: 158 102 0;
+  --c-err: 194 51 74;
+  --c-sombra: 30 41 59;
+  --k-sombra: 0.3;
+  --c-brilho: 255 255 255;
+  --c-painel: 255 255 255;
+  --c-vidro: 255 255 255;
+  --sombra-painel: 0 1px 2px rgb(30 41 59 / 0.06), 0 10px 28px -18px rgb(30 41 59 / 0.22);
+  --borda-painel: rgb(14 26 36 / 0.10);
+  --grade: rgb(14 26 36 / 0.06);
 }
 
 html,
@@ -34,18 +102,18 @@ body {
 }
 
 ::selection {
-  background: rgba(32, 217, 210, 0.32);
-  color: #f8fafc;
+  background: rgb(var(--c-accent) / 0.32);
+  color: rgb(var(--c-ink));
 }
 
 /* Superfícies do navegador também seguem a paleta */
 input,
 textarea {
-  caret-color: #20d9d2;
+  caret-color: rgb(var(--c-accent));
 }
 
 html {
-  scrollbar-color: #263247 transparent;
+  scrollbar-color: rgb(var(--c-line)) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -54,14 +122,14 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #263247;
+  background: rgb(var(--c-line));
   border: 2px solid transparent;
   border-radius: 999px;
   background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #3d4b63;
+  background-color: rgb(var(--c-ink-faint) / 0.6);
 }
 
 ::-webkit-scrollbar-track {
@@ -69,29 +137,46 @@ html {
 }
 
 *:focus-visible {
-  outline: 2px solid rgba(32, 217, 210, 0.8);
+  outline: 2px solid rgb(var(--c-accent) / 0.8);
   outline-offset: 2px;
 }
 
 @layer utilities {
   /** Superfície opaca (antigo "vidro"): sem blur, para leitura e desempenho. */
   .bg-glass {
-    background-color: #0f1626;
+    background-color: rgb(var(--c-vidro));
   }
 
   .ring-tech {
     box-shadow:
-      0 0 0 1px rgba(148, 163, 184, 0.12),
-      0 8px 24px -12px rgba(0, 0, 0, 0.6);
+      0 0 0 1px var(--borda-painel),
+      0 8px 24px -12px rgb(var(--c-sombra) / 0.6);
   }
 
   .media-copy-safe {
-    text-shadow: 0 1px 16px rgba(7, 11, 20, 0.7);
+    text-shadow: 0 1px 16px rgb(var(--c-canvas) / 0.7);
   }
 
   /* Remove fundo preto do PNG da marca sobre UI escura (sem redesenhar) */
   .logo-knockout {
     mix-blend-mode: screen;
+  }
+  [data-theme="light"] .logo-knockout {
+    mix-blend-mode: normal;
+  }
+
+  /* Logo: a versão clara do lockup só aparece no tema claro (e vice-versa) */
+  .so-escuro {
+    display: block;
+  }
+  .so-claro {
+    display: none;
+  }
+  [data-theme="light"] .so-escuro {
+    display: none;
+  }
+  [data-theme="light"] .so-claro {
+    display: block;
   }
 
   .section-pad {
@@ -105,11 +190,9 @@ html {
    * (O nome ficou por compatibilidade; o blur saiu — vidro só em topbar, menu e sobreposições.)
    */
   .panel-glass {
-    background-color: #0e1524;
-    border: 1px solid rgba(148, 163, 184, 0.12);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.04),
-      0 12px 32px -18px rgba(0, 0, 0, 0.7);
+    background-color: rgb(var(--c-painel));
+    border: 1px solid var(--borda-painel);
+    box-shadow: var(--sombra-painel);
   }
 
   /** Leitura numérica de instrumento: mono + algarismos tabulares. */
@@ -125,14 +208,14 @@ html {
     line-height: 1rem;
     font-weight: 500;
     letter-spacing: 0;
-    color: #94a3b8;
+    color: rgb(var(--c-ink-muted));
   }
 
   /** Grade técnica de fundo, com fade nas bordas. */
   .hud-grid {
     background-image:
-      linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+      linear-gradient(var(--grade) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grade) 1px, transparent 1px);
     background-size: 32px 32px;
     mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, black 30%, transparent 80%);
   }
@@ -212,4 +295,11 @@ html.compact-ui .shadow-panel {
     opacity: 1;
     transform: none;
   }
+}
+
+/* Ao trocar o tema (lib/tema.ts liga esta classe por um instante): cores mudam suavemente */
+html.tema-transicao *,
+html.tema-transicao *::before,
+html.tema-transicao *::after {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease, fill 0.25s ease, stroke 0.25s ease !important;
 }

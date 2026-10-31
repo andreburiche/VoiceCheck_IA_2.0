@@ -69,17 +69,32 @@ export function BrandLogo({
       {layout === "mark" ? (
         mark
       ) : (
-        <Image
-          src={lockupSrc}
-          alt={`${BRAND.name}${showTagline ? "" : ` — ${BRAND.slogan}`}`}
-          width={BRAND.logoWidth}
-          height={BRAND.logoHeight}
-          className="h-auto w-auto max-w-full object-contain object-left"
-          style={{ maxHeight: maxH, width: "auto", height: "auto" }}
-          sizes={`(max-width: 640px) ${Math.round(maxH * (BRAND.logoWidth / BRAND.logoHeight))}px, ${Math.round(maxH * (BRAND.logoWidth / BRAND.logoHeight))}px`}
-          priority
-          quality={95}
-        />
+        <>
+          <Image
+            src={lockupSrc}
+            alt={`${BRAND.name}${showTagline ? "" : ` — ${BRAND.slogan}`}`}
+            width={BRAND.logoWidth}
+            height={BRAND.logoHeight}
+            className={cn("h-auto w-auto max-w-full object-contain object-left", variant === "light" && "so-escuro")}
+            style={{ maxHeight: maxH, width: "auto", height: "auto" }}
+            sizes={`(max-width: 640px) ${Math.round(maxH * (BRAND.logoWidth / BRAND.logoHeight))}px, ${Math.round(maxH * (BRAND.logoWidth / BRAND.logoHeight))}px`}
+            priority
+            quality={95}
+          />
+          {variant === "light" ? (
+            // Tema claro: letras em grafite (a arte branca some no fundo claro).
+            <Image
+              src={BRAND.logoSrcPapel}
+              alt={`${BRAND.name}${showTagline ? "" : ` — ${BRAND.slogan}`}`}
+              width={BRAND.logoWidth}
+              height={BRAND.logoHeight}
+              className="so-claro h-auto w-auto max-w-full object-contain object-left"
+              style={{ maxHeight: maxH, width: "auto", height: "auto" }}
+              sizes={`${Math.round(maxH * (BRAND.logoWidth / BRAND.logoHeight))}px`}
+              quality={95}
+            />
+          ) : null}
+        </>
       )}
       {showTagline ? (
         <span className="font-mono text-xs uppercase tracking-[0.18em] text-ink-muted">

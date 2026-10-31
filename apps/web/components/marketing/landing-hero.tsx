@@ -44,7 +44,7 @@ export function LandingHero() {
               href="/register"
               className={buttonVariants({
                 size: "lg",
-                className: "rounded-full px-7 shadow-[0_12px_28px_-14px_rgba(0,0,0,0.8)]",
+                className: "rounded-full px-7 shadow-[0_12px_28px_-14px_rgb(var(--c-sombra)/calc(0.8*var(--k-sombra)))]",
               })}
             >
               Criar conta grátis
@@ -64,12 +64,12 @@ export function LandingHero() {
         </div>
       </div>
 
-      <div className="border-y border-white/5 bg-canvas/60 backdrop-blur-md">
+      <div className="border-y border-ink/5 bg-canvas/60 backdrop-blur-md">
         <dl className="mx-auto grid max-w-content grid-cols-2 px-5 sm:px-8 lg:grid-cols-4">
           {TELEMETRY.map((t, i) => (
             <div
               key={t.label}
-              className={`py-6 lg:py-8 ${i % 2 === 1 ? "pl-5 sm:pl-8" : ""} ${i > 0 ? "lg:border-l lg:border-white/5 lg:pl-8" : ""} ${i >= 2 ? "border-t border-white/5 lg:border-t-0" : ""}`}
+              className={`py-6 lg:py-8 ${i % 2 === 1 ? "pl-5 sm:pl-8" : ""} ${i > 0 ? "lg:border-l lg:border-ink/5 lg:pl-8" : ""} ${i >= 2 ? "border-t border-ink/5 lg:border-t-0" : ""}`}
             >
               <dt className="sr-only">{t.label}</dt>
               <dd>

@@ -80,7 +80,7 @@ export function StudioPreview({ className }: { className?: string }) {
 
   return (
     <div data-ui className={cn("panel-glass overflow-hidden rounded-2xl text-ink", className)}>
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-white/5 px-5 py-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-ink/5 px-5 py-3.5">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">ensaio-coral.wav</p>
           <p className="hud-label mt-0.5 normal-case tracking-normal">4 faixas · Demucs htdemucs · exemplo</p>
@@ -92,7 +92,7 @@ export function StudioPreview({ className }: { className?: string }) {
         </div>
       </div>
 
-      <ul className="divide-y divide-white/5">
+      <ul className="divide-y divide-ink/5">
         {STEMS.map((stem) => {
           const on = audible(stem.id);
           return (
@@ -155,7 +155,7 @@ export function StudioPreview({ className }: { className?: string }) {
         })}
       </ul>
 
-      <div className="text-data flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-white/5 px-5 py-3 text-xs text-ink-muted">
+      <div className="text-data flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-ink/5 px-5 py-3 text-xs text-ink-muted">
         <span>1:23 / 3:38</span>
         <span>Loop A–B 1:12 → 1:31 · 85% da velocidade, mesmo tom</span>
       </div>
