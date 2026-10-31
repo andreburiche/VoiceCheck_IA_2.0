@@ -76,6 +76,12 @@ services:
     image: ollama/ollama:latest
     container_name: vc2l-ollama
     restart: unless-stopped
+    environment:
+      # um modelo por vez e fora da memória 60 s depois do último uso (o computador tem pouca RAM)
+      OLLAMA_KEEP_ALIVE: "60s"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_NUM_PARALLEL: "1"
+    mem_limit: 4g
     volumes:
       - vc2l_ollama:/root/.ollama
     ports:

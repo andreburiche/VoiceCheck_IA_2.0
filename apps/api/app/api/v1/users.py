@@ -121,6 +121,56 @@ def apagar_foto(user: CurrentUser, db: DbSession) -> UserResponse:
     return UserResponse.model_validate(user)
 
 
+@router.get("/me/exportar")
+def exportar_minha_conta(request: Request, user: CurrentUser, db: DbSession) -> Response:
+    """LGPD art. 18, II e V (acesso e portabilidade) para o próprio profissional: os dados da conta,
+    o perfil, o aceite da política, as músicas e os resumos de uso. Dados de pacientes saem pela
+    exportação de cada paciente (que leva gravações e documentos)."""
+    import json
+    from datetime import UTC, datetime
+
+    from sqlalchemy import func, select
+
+    from app.models import ClinicalAppointment, ClinicalEvaluation, Project, VoicePatient
+    from app.services.audit import write_audit
+
+    enforce_rate_limit(request, bucket="conta_exportar", limit=5, window_sec=600)
+    projetos = db.scalars(select(Project).where(Project.owner_id == user.id, Project.deleted_at.is_(None))
+                          .order_by(Project.created_at)).all()
+
+    def contar(modelo, *filtros) -> int:
+        return int(db.scalar(select(func.count()).select_from(modelo).where(*filtros)) or 0)
+
+    corpo = {
+        "formato": "voicecheck-conta/1",
+        "exportado_em": datetime.now(UTC).isoformat(),
+        "conta": {
+            "id": user.id, "nome": user.name, "email": user.email, "papel": user.role.value,
+            "criada_em": user.created_at.isoformat() if user.created_at else None,
+            "perfil": user.profile_kind, "perfil_dados": user.profile_data or {},
+            "verificacao_clinica": user.clinical_status, "tem_foto": user.has_photo,
+            "privacidade_aceita_em": user.privacy_accepted_at.isoformat() if user.privacy_accepted_at else None,
+            "privacidade_versao": user.privacy_version,
+        },
+        "musicas": [{"id": p.id, "nome": p.name, "descricao": p.description,
+                     "criada_em": p.created_at.isoformat() if p.created_at else None} for p in projetos],
+        "area_clinica": {
+            "pacientes_cadastrados": contar(VoicePatient, VoicePatient.owner_id == user.id),
+            "registros": contar(ClinicalEvaluation, ClinicalEvaluation.owner_id == user.id),
+            "consultas_na_agenda": contar(ClinicalAppointment, ClinicalAppointment.owner_id == user.id),
+            "observacao": "Os dados de cada paciente saem pela exportação do paciente (Pacientes > Exportar dados).",
+        },
+    }
+    write_audit(db, action="conta.exportada", resource_type="user", resource_id=user.id, actor_id=user.id,
+                request=request, commit=True)
+    return Response(
+        json.dumps(corpo, ensure_ascii=False, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="voicecheck-minha-conta-{datetime.now(UTC):%Y%m%d}.json"',
+                 "Cache-Control": "no-store"},
+    )
+
+
 @router.get("/me/usage", response_model=UsageResponse)
 def my_usage(user: CurrentUser, db: DbSession) -> UsageResponse:
     snap = get_usage_snapshot(db, user.id)

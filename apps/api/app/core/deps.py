@@ -33,8 +33,10 @@ def get_current_user(
     changed = user.password_changed_at
     if changed is not None:
         changed_ts = (changed if changed.tzinfo else changed.replace(tzinfo=UTC)).timestamp()
-        if float(payload.get("iat", 0)) < changed_ts - 1:
-            # Senha trocada depois que esta sessão foi criada
+        # gravado em segundos inteiros (sem fração: o MySQL arredondaria para o segundo seguinte e
+        # derrubaria a sessão nova emitida logo depois); sessões emitidas antes desse segundo caem
+        if float(payload.get("iat", 0)) < changed_ts:
+            # Senha trocada (ou "sair de todos os aparelhos") depois que esta sessão foi criada
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sessão expirada")
     return user
 

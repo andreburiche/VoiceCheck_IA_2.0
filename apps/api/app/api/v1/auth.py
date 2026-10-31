@@ -17,6 +17,7 @@ from app.models import PasswordResetToken, Plan, Subscription, User
 from app.models.entities import SubscriptionStatus, UserRole
 from app.schemas.auth import (
     AuthResponse,
+    ChangePasswordRequest,
     ForgotPasswordRequest,
     ForgotPasswordResponse,
     LoginRequest,
@@ -261,8 +262,47 @@ def reset_password(payload: ResetPasswordRequest, db: DbSession, request: Reques
     if user is None or user.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Conta não encontrada.")
     user.password_hash = hash_password(payload.password)
-    user.password_changed_at = now  # encerra sessões abertas com a senha antiga
+    user.password_changed_at = now.replace(microsecond=0)  # encerra sessões abertas com a senha antiga
     row.used_at = now
     write_audit(db, action="auth.password_reset", resource_type="user", resource_id=user.id, actor_id=user.id, request=request)
     db.commit()
     return MessageResponse(message="Senha alterada. Entre com a nova senha.")
+
+
+# ---------------------------------------------------------------------------
+# Senha e sessões com o usuário logado
+# ---------------------------------------------------------------------------
+
+
+@router.post("/password/change", response_model=AuthResponse, dependencies=[Depends(verify_csrf)])
+def change_password(payload: ChangePasswordRequest, user: CurrentUser, response: Response, db: DbSession,
+                    request: Request) -> AuthResponse:
+    """Troca a senha conferindo a atual. Encerra as sessões nos outros aparelhos; esta continua."""
+    enforce_rate_limit(request, bucket="senha_troca", limit=5, window_sec=900, chave=_chave_conta(user.email))
+    if not verify_password(payload.senha_atual, user.password_hash):
+        write_audit(db, action="auth.password_change_failed", resource_type="user", resource_id=user.id,
+                    actor_id=user.id, request=request, commit=True)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A senha atual não confere")
+    if payload.nova_senha == payload.senha_atual:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A nova senha precisa ser diferente da atual")
+    user.password_hash = hash_password(payload.nova_senha)
+    user.password_changed_at = datetime.now(UTC).replace(microsecond=0)  # tokens emitidos antes (outros aparelhos) deixam de valer
+    write_audit(db, action="auth.password_change", resource_type="user", resource_id=user.id, actor_id=user.id,
+                request=request)
+    db.commit()
+    db.refresh(user)
+    token = create_access_token(subject=user.id, extra={"role": user.role.value})
+    csrf = generate_csrf_token()
+    _set_auth_cookies(response, access_token=token, csrf_token=csrf)
+    return AuthResponse(user=UserResponse.model_validate(user), csrf_token=csrf)
+
+
+@router.post("/logout-all", response_model=MessageResponse, dependencies=[Depends(verify_csrf)])
+def logout_all(user: CurrentUser, response: Response, db: DbSession, request: Request) -> MessageResponse:
+    """Sai de todos os aparelhos: toda sessão emitida até agora deixa de valer (inclusive esta)."""
+    user.password_changed_at = datetime.now(UTC).replace(microsecond=0)
+    write_audit(db, action="auth.logout_all", resource_type="user", resource_id=user.id, actor_id=user.id,
+                request=request)
+    db.commit()
+    _clear_auth_cookies(response)
+    return MessageResponse(message="Todas as sessões foram encerradas")

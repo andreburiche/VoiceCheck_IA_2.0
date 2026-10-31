@@ -64,6 +64,13 @@ class ResetPasswordRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
 
+class ChangePasswordRequest(BaseModel):
+    """Trocar a senha estando logado (confere a atual)."""
+
+    senha_atual: str = Field(min_length=1, max_length=128)
+    nova_senha: str = Field(min_length=8, max_length=128)
+
+
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

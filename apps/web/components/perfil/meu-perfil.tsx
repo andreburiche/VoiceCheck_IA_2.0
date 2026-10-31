@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { ROTULO_PERFIL, authApi, perfilApi, type PerfilDados, type PerfilProfissional, type User } from "@/lib/api";
 import { friendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
+import { SegurancaConta } from "@/components/perfil/seguranca-conta";
 
 const PAINEL = "rounded-2xl bg-canvas-raised/60 p-5 ring-1 ring-inset ring-ink/10 sm:p-6";
 
@@ -208,6 +209,7 @@ export function MeuPerfil() {
           </div>
         </aside>
       </form>
+      <SegurancaConta />
     </div>
   );
 }

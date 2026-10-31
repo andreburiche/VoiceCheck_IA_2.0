@@ -150,3 +150,41 @@ def test_painel_de_conformidade_so_para_admin() -> None:
     corpo = m.json()
     assert {"acesso", "contas", "dados_de_pacientes"} <= set(corpo)
     assert corpo["acesso"]["acessos_clinicos_registrados_7d"] >= 0
+
+
+def test_trocar_senha_logado_encerra_outros_aparelhos() -> None:
+    c, reg = _novo()
+    email = reg.json()["user"]["email"]
+    outro = httpx.Client(base_url=BASE, timeout=60.0)
+    r = outro.post("/api/v1/auth/login", json={"email": email, "password": "senha12345"})
+    assert r.status_code == 200
+    outro.cookies.update(r.cookies)
+    import time
+
+    time.sleep(1.2)  # o token guarda o horário em segundos
+    assert c.post("/api/v1/auth/password/change", json={"senha_atual": "errada123", "nova_senha": "novaSenha123"}).status_code == 400
+    r = c.post("/api/v1/auth/password/change", json={"senha_atual": "senha12345", "nova_senha": "novaSenha123"})
+    assert r.status_code == 200, r.text
+    c.cookies.update(r.cookies)
+    c.headers["X-CSRF-Token"] = r.json()["csrf_token"]
+    assert c.get("/api/v1/users/me").status_code == 200  # este aparelho continua
+    assert outro.get("/api/v1/users/me").status_code == 401  # o outro saiu
+    assert httpx.post(f"{BASE}/api/v1/auth/login", json={"email": email, "password": "novaSenha123"}).status_code == 200
+
+
+def test_sair_de_todos_os_aparelhos_e_exportar_a_conta() -> None:
+    c, reg = _novo({"aceite_privacidade": True})
+    exp = c.get("/api/v1/users/me/exportar")
+    assert exp.status_code == 200 and "attachment" in exp.headers["content-disposition"]
+    corpo = exp.json()
+    assert corpo["conta"]["email"] == reg.json()["user"]["email"] and corpo["conta"]["privacidade_versao"]
+    assert "area_clinica" in corpo and isinstance(corpo["musicas"], list)
+    import time
+
+    time.sleep(1.2)
+    r = c.post("/api/v1/auth/logout-all")
+    assert r.status_code == 200
+    c.cookies.clear()
+    c2 = httpx.Client(base_url=BASE, timeout=60.0)
+    c2.cookies.update(reg.cookies)
+    assert c2.get("/api/v1/users/me").status_code == 401

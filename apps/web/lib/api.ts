@@ -294,6 +294,11 @@ export const authApi = {
   login: (body: { email: string; password: string }) =>
     apiFetch<AuthResponse>("/api/v1/auth/login", { method: "POST", json: body }),
   logout: () => apiFetch<{ message: string }>("/api/v1/auth/logout", { method: "POST" }),
+  /** Troca a senha (confere a atual); os outros aparelhos saem, este continua. */
+  changePassword: (senha_atual: string, nova_senha: string) =>
+    apiFetch<AuthResponse>("/api/v1/auth/password/change", { method: "POST", json: { senha_atual, nova_senha } }),
+  /** Encerra todas as sessões, inclusive esta. */
+  logoutAll: () => apiFetch<{ message: string }>("/api/v1/auth/logout-all", { method: "POST" }),
   me: () => apiFetch<User>("/api/v1/users/me"),
   forgotPassword: (email: string) =>
     apiFetch<{ message: string; dev_reset_url?: string | null }>("/api/v1/auth/password/forgot", {

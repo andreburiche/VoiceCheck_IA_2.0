@@ -213,6 +213,9 @@ def gerar(settings, acao: str, texto: str, modelo_documento: str, pedido: str | 
                 json={
                     "model": conf["modelo"],
                     "stream": False,
+                    # tira o modelo da memória 60 s depois do uso: no computador com pouca RAM, deixá-lo
+                    # carregado travou a API (sem memória) e o login parou de responder
+                    "keep_alive": "60s",
                     "options": {"temperature": 0.3, "num_ctx": 8192},
                     "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
                 },
