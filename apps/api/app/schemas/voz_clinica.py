@@ -18,7 +18,11 @@ DataUtc = Annotated[datetime, AfterValidator(_com_fuso)]
 
 TipoAvaliacao = Literal[
     "acustica", "idv10", "qvv", "grbasi", "easebr", "anamnese", "biofeedback", "jogo", "fonetograma", "pratica",
-    "dsi", "fala", "ddk", "cepstral", "carga", "perceptiva", "sessao", "midia", "nasalancia", "egg",
+    "dsi", "fala", "ddk", "cepstral", "carga", "perceptiva", "sessao", "midia", "nasalancia", "egg", "documento",
+]
+ModeloDocumento = Literal[
+    "devolutiva", "relatorio", "encaminhamento_orl", "encaminhamento", "comparecimento", "atestado",
+    "plano", "orientacoes", "consentimento",
 ]
 JogoId = Literal["altitude", "trilha", "sopro", "surdo-sonoro", "som-silencio"]
 
@@ -478,6 +482,30 @@ class SessaoEntrada(BaseModel):
     resposta: str | None = Field(default=None, max_length=1000)
     orientacoes: str | None = Field(default=None, max_length=1000)
     observacoes: str | None = Field(default=None, max_length=2000)
+
+
+class ProfissionalDocumento(BaseModel):
+    """Quem emite o documento (fica gravado junto: o histórico mostra quem assinou)."""
+
+    nome: str = Field(min_length=1, max_length=120)
+    #: ex.: "CRFa 2-12345"
+    registro: str | None = Field(default=None, max_length=60)
+    #: consultório, endereço ou telefone, numa linha
+    contato: str | None = Field(default=None, max_length=200)
+    cidade: str | None = Field(default=None, max_length=80)
+
+
+class DocumentoEntrada(BaseModel):
+    """Documento emitido para o paciente (devolutiva, encaminhamento, declaração, atestado...).
+
+    O texto é escrito/revisado pelo profissional na tela; o servidor só guarda (texto puro,
+    nunca HTML: a impressão escapa tudo)."""
+
+    paciente: str = Field(min_length=1, max_length=120)
+    modelo: ModeloDocumento
+    titulo: str = Field(min_length=1, max_length=120)
+    corpo: str = Field(min_length=1, max_length=20000)
+    profissional: ProfissionalDocumento
 
 
 class NasalanciaEntrada(BaseModel):

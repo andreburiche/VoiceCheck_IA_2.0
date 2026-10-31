@@ -694,6 +694,34 @@ def test_sessoes_de_terapia_numeradas(client: httpx.Client) -> None:
     assert client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente}).json()["avaliacoes_excluidas"] == 2
 
 
+def test_documento_emitido_fica_no_prontuario(client: httpx.Client) -> None:
+    """Devolutiva, encaminhamento, declaração...: texto revisado na tela, guardado com quem emitiu."""
+    paciente = f"Documento {uuid.uuid4().hex[:6]}"
+    prof = {"nome": "  Ana Fono ", "registro": "CRFa 2-12345", "contato": "", "cidade": "Recife"}
+    r = client.post("/api/v1/voz-clinica/documentos", json={
+        "paciente": paciente, "modelo": "encaminhamento_orl", "titulo": " Encaminhamento ",
+        "corpo": "Encaminho a paciente <b>para</b> avaliação.", "profissional": prof})
+    assert r.status_code == 200, r.text
+    d = r.json()["resultado"]
+    assert d["titulo"] == "Encaminhamento" and d["modelo"] == "encaminhamento_orl"
+    assert d["corpo"] == "Encaminho a paciente <b>para</b> avaliação."  # texto puro: quem imprime escapa
+    assert d["profissional"] == {"nome": "Ana Fono", "registro": "CRFa 2-12345", "contato": None, "cidade": "Recife"}
+    assert d["emitido_em"]
+    lista = client.get("/api/v1/voz-clinica/avaliacoes", params={"paciente": paciente}).json()["items"]
+    assert [a["tipo"] for a in lista] == ["documento"]
+    # modelo desconhecido, texto vazio, sem profissional ou sem paciente: recusados
+    base = {"paciente": paciente, "modelo": "atestado", "titulo": "Atestado", "corpo": "Atesto que...", "profissional": prof}
+    assert client.post("/api/v1/voz-clinica/documentos", json={**base, "modelo": "receita"}).status_code == 422
+    assert client.post("/api/v1/voz-clinica/documentos", json={**base, "corpo": "   "}).status_code == 400
+    assert client.post("/api/v1/voz-clinica/documentos", json={**base, "profissional": {"nome": "  "}}).status_code == 400
+    assert client.post("/api/v1/voz-clinica/documentos", json={**base, "corpo": "x" * 20001}).status_code == 422
+    assert client.post("/api/v1/voz-clinica/documentos", json={**base, "paciente": "  "}).status_code in (400, 422)
+    # entra na exportação LGPD e sai com a exclusão do paciente
+    dados = client.get("/api/v1/voz-clinica/pacientes/exportar", params={"paciente": paciente}).json()
+    assert [a["tipo"] for a in dados["avaliacoes"]] == ["documento"]
+    assert client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente}).json()["avaliacoes_excluidas"] == 1
+
+
 def _png(lado: int = 8) -> bytes:
     """PNG válido de verdade (cinza), sem depender de biblioteca de imagem."""
     import struct

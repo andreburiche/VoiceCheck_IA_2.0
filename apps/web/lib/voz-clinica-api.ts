@@ -10,7 +10,7 @@ import { JOGOS, VARIACOES, type ResultadoJogo } from "@/lib/voz-clinica-jogos";
 import { resumoPratica, type ExercicioPratica, type ResultadoPratica } from "@/lib/voz-clinica-pratica";
 
 
-export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica" | "dsi" | "fala" | "ddk" | "cepstral" | "carga" | "perceptiva" | "sessao" | "midia" | "nasalancia" | "egg";
+export type TipoAvaliacao = "acustica" | "idv10" | "qvv" | "grbasi" | "easebr" | "anamnese" | "biofeedback" | "jogo" | "fonetograma" | "pratica" | "dsi" | "fala" | "ddk" | "cepstral" | "carga" | "perceptiva" | "sessao" | "midia" | "nasalancia" | "egg" | "documento";
 export type Protocolo = "idv10" | "qvv" | "grbasi" | "easebr" | "perceptiva";
 
 /** Resumo de sessão de biofeedback salvo (medido no navegador). */
@@ -448,6 +448,25 @@ export function salvarBiofeedback(paciente: string, resumo: ResumoBiofeedback, c
   });
 }
 
+/** Documento emitido para o paciente (aba Documentos): texto revisado na tela + quem emitiu. */
+export type DocumentoSalvo = {
+  modelo: string;
+  titulo: string;
+  corpo: string;
+  profissional: { nome: string; registro: string | null; contato: string | null; cidade: string | null };
+  emitido_em: string;
+};
+
+export function emitirDocumento(entrada: {
+  paciente: string;
+  modelo: string;
+  titulo: string;
+  corpo: string;
+  profissional: { nome: string; registro?: string; contato?: string; cidade?: string };
+}) {
+  return apiFetch<Salvo<DocumentoSalvo>>(`${BASE}/documentos`, { method: "POST", json: entrada });
+}
+
 export function registrarSessao(entrada: EntradaSessao) {
   return apiFetch<Salvo<ResultadoSessao>>(`${BASE}/sessoes`, { method: "POST", json: entrada });
 }
@@ -716,6 +735,10 @@ export function resumoSessao(r: ResultadoSessao): string {
 
 /** Resumo de uma avaliação salva (histórico do paciente). */
 export function resumoAvaliacao(a: Avaliacao): string {
+  if (a.tipo === "documento") {
+    const d = a.resultado as unknown as DocumentoSalvo;
+    return `${d.titulo}${d.profissional?.nome ? ` · emitido por ${d.profissional.nome}` : ""}`;
+  }
   if (a.tipo === "pratica") return resumoPratica(a.resultado as ResultadoPratica);
   if (a.tipo === "sessao") return resumoSessao(a.resultado as ResultadoSessao);
   if (a.tipo === "midia") return resumoMidia(a.resultado as ResultadoMidia);
@@ -819,6 +842,7 @@ export const ROTULO_TIPO: Record<TipoAvaliacao, string> = {
   midia: "Mídia",
   nasalancia: "Nasalância",
   egg: "Eletroglotografia",
+  documento: "Documento",
 };
 
 export const ROTULO_DDK: Record<TarefaDdk, string> = { pa: "/pa/", ta: "/ta/", ka: "/ka/", pataka: "/pataka/" };

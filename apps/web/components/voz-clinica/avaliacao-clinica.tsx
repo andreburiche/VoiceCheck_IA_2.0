@@ -22,6 +22,7 @@ import { MidiasPaciente } from "@/components/voz-clinica/midias-paciente";
 import { Eletroglotografia } from "@/components/voz-clinica/eletroglotografia";
 import { Nasalancia } from "@/components/voz-clinica/nasalancia";
 import { SessoesTerapia } from "@/components/voz-clinica/sessoes-terapia";
+import { DocumentosPaciente } from "@/components/voz-clinica/documentos-paciente";
 import { montarDocxClinico, nomeArquivoDocx } from "@/lib/voz-clinica-docx";
 import { EditorAudio } from "@/components/voz-clinica/editor-audio";
 import { CargaVocal } from "@/components/voz-clinica/carga-vocal";
@@ -954,6 +955,7 @@ const ABAS = [
   { id: "midias", rotulo: "Mídias" },
   { id: "ferramentas", rotulo: "Ferramentas" },
   { id: "pratica", rotulo: "Prática em casa" },
+  { id: "documentos", rotulo: "Documentos" },
 ] as const;
 type Aba = (typeof ABAS)[number]["id"];
 
@@ -1149,6 +1151,18 @@ export function AvaliacaoClinica() {
       <div role="tabpanel" id={`${idPaciente}-painel-pratica`} aria-labelledby={`${idPaciente}-aba-pratica`} hidden={aba !== "pratica"}>
         <PraticaCasa paciente={nome} ativo={aba === "pratica"} aoMudar={aoSalvar} />
       </div>
+
+      {aba === "documentos" ? (
+        <div role="tabpanel" id={`${idPaciente}-painel-documentos`} aria-labelledby={`${idPaciente}-aba-documentos`}>
+          {nome ? (
+            <DocumentosPaciente key={nome} paciente={nome} versao={versao} aoSalvar={aoSalvar} />
+          ) : (
+            <p className="mt-6 rounded-xl border border-dashed border-ink/15 px-4 py-4 text-sm text-ink-muted">
+              Preencha o nome do paciente para emitir documentos com os dados do prontuário.
+            </p>
+          )}
+        </div>
+      ) : null}
 
       <Historico paciente={nome} versao={versao} aoExcluirPaciente={aoSalvar} />
     </div>

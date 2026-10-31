@@ -38,6 +38,7 @@ from app.schemas.voz_clinica import (
     CadastroEntrada,
     CadastroOut,
     CargaEntrada,
+    DocumentoEntrada,
     EggEntrada,
     NasalanciaEntrada,
     TipoAvaliacao,
@@ -478,6 +479,30 @@ def registrar_sessao(entrada: SessaoEntrada, user: CurrentUser, db: DbSession) -
     salvo = row.id
     db.commit()
     return ResultadoSalvo(avaliacao_id=salvo, resultado=resultado)
+
+
+@router.post("/documentos", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
+def emitir_documento(entrada: DocumentoEntrada, user: CurrentUser, db: DbSession) -> ResultadoSalvo:
+    """Guarda no prontuário o documento emitido (texto revisado pelo profissional), com quem emitiu
+    e quando. Entra no histórico, no relatório, na exportação e na exclusão (LGPD)."""
+    nome = _paciente(entrada.paciente)
+    if nome is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente")
+    titulo = entrada.titulo.strip()
+    corpo = entrada.corpo.strip()
+    if not titulo or not corpo:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Documento sem título ou sem texto")
+    prof = {k: (v.strip() if isinstance(v, str) else v) or None for k, v in entrada.profissional.model_dump().items()}
+    if not prof.get("nome"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o nome do profissional")
+    resultado = {
+        "modelo": entrada.modelo,
+        "titulo": titulo,
+        "corpo": corpo,
+        "profissional": prof,
+        "emitido_em": datetime.now(timezone.utc).isoformat(),
+    }
+    return ResultadoSalvo(avaliacao_id=_salvar(db, user, nome, "documento", resultado), resultado=resultado)
 
 
 @router.post("/nasalancia", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
