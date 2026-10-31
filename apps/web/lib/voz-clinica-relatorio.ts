@@ -31,6 +31,10 @@ export type OpcoesRelatorio = {
   geradoEm?: Date;
   /** Idade, sexo e profissão do cadastro (contatos não entram no relatório). */
   dadosPaciente?: string | null;
+  /** PDF: URL absoluta da logo para papel (a página é escrita num iframe). */
+  logoUrl?: string | null;
+  /** Word: bytes do PNG da logo para papel (1200×252). */
+  logoPng?: Uint8Array | null;
 };
 
 function dataHora(iso: string): string {
@@ -254,6 +258,10 @@ function css(): string {
     body { font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: ${BRAND.ink}; background: #fff;
            font-size: 9.5pt; line-height: 1.4; margin: 0; }
     h1 { font-size: 16pt; margin: 0 0 2pt; }
+    .marca { display: flex; align-items: center; justify-content: space-between; gap: 12pt;
+             border-bottom: 1.5pt solid ${BRAND.teal}; padding-bottom: 7pt; margin-bottom: 12pt; }
+    .marca img { height: 32pt; width: auto; display: block; }
+    .marca span { color: ${BRAND.muted}; font-size: 8.5pt; text-align: right; }
     h2 { font-size: 11pt; color: ${BRAND.tealDark}; margin: 14pt 0 6pt; border-bottom: 1.5pt solid ${BRAND.teal};
          padding-bottom: 3pt; page-break-after: avoid; }
     .sub { color: ${BRAND.muted}; margin: 0 0 8pt; }
@@ -319,6 +327,7 @@ export function montarRelatorioClinico(paciente: string, itens: Avaliacao[], opc
 </head>
 <body>
   <div class="actions"><button type="button" onclick="window.print()">Salvar PDF</button></div>
+  ${opcoes.logoUrl ? `<div class="marca"><img src="${esc(opcoes.logoUrl)}" alt="VoiceCheck IA" /><span>Avaliação clínica da voz</span></div>` : ""}
   <h1>Relatório de avaliação vocal</h1>
   <p class="sub">VoiceCheck IA · avaliação clínica da voz</p>
   <div class="meta">

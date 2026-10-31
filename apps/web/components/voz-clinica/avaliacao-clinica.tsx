@@ -33,6 +33,7 @@ import { ProtocoloVoz } from "@/components/voz-clinica/protocolo-voz";
 import { GraficoEvolucao } from "@/components/voz-clinica/grafico-evolucao";
 import { MAX_PONTOS, seriesEvolucao } from "@/lib/voz-clinica-evolucao";
 import { imprimirRelatorioClinico } from "@/lib/voz-clinica-relatorio";
+import { LOGO_PAPEL } from "@/lib/voz-clinica-documentos";
 import { GravadorClinico, gravadorSuportado, type GravacaoClinica } from "@/lib/voz-clinica-gravador";
 import { importarAudio } from "@/lib/voz-clinica-importar";
 import { historicoCsv } from "@/lib/voz-clinica-planilha";
@@ -617,7 +618,9 @@ function Relatorio({ paciente, itens: recentes }: { paciente: string; itens: Ava
     e.preventDefault();
     setErro(null);
     try {
-      imprimirRelatorioClinico(paciente, itens, { profissional, observacoes, dadosPaciente, geradoEm: new Date() });
+      imprimirRelatorioClinico(paciente, itens, {
+        profissional, observacoes, dadosPaciente, geradoEm: new Date(), logoUrl: `${window.location.origin}${LOGO_PAPEL}`,
+      });
       setAberto(false);
     } catch (err) {
       setErro(friendlyError(err, "Não foi possível gerar o relatório."));
@@ -625,11 +628,17 @@ function Relatorio({ paciente, itens: recentes }: { paciente: string; itens: Ava
   }
 
   /** Mesmo conteúdo em Word (.docx), para editar (como o iVox); os gráficos ficam só no PDF. */
-  function gerarDocx() {
+  async function gerarDocx() {
     setErro(null);
+    // a logo vai embutida no .docx; se não carregar, o relatório sai sem ela
+    let logoPng: Uint8Array | null = null;
+    try {
+      const r = await fetch(LOGO_PAPEL);
+      if (r.ok) logoPng = new Uint8Array(await r.arrayBuffer());
+    } catch { /* sem logo */ }
     try {
       const agora = new Date();
-      const dados = montarDocxClinico(paciente, itens, { profissional, observacoes, dadosPaciente, geradoEm: agora });
+      const dados = montarDocxClinico(paciente, itens, { profissional, observacoes, dadosPaciente, geradoEm: agora, logoPng });
       const url = URL.createObjectURL(new Blob([dados], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }));
       const a = document.createElement("a");
       a.href = url;
@@ -669,7 +678,7 @@ function Relatorio({ paciente, itens: recentes }: { paciente: string; itens: Ava
           </div>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" size="sm">Gerar PDF</Button>
-            <Button type="button" size="sm" variant="secondary" onClick={gerarDocx} data-testid="vc2-relatorio-docx">Word (.docx)</Button>
+            <Button type="button" size="sm" variant="secondary" onClick={() => void gerarDocx()} data-testid="vc2-relatorio-docx">Word (.docx)</Button>
             <Button type="button" size="sm" variant="ghost" onClick={() => setAberto(false)}>Cancelar</Button>
           </div>
           <p className="text-xs text-ink-faint">Na janela de impressão, escolha “Salvar como PDF”.</p>

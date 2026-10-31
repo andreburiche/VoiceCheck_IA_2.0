@@ -132,6 +132,12 @@ describe("campo vocal no relatório", () => {
     expect(dois).toContain('stroke-dasharray="5 3"');
   });
 
+  it("logo no topo do PDF quando informada (URL escapada); sem ela, nada", () => {
+    const com = montarRelatorioClinico("Ana", [acustica(3, 1.8)], { logoUrl: "http://localhost:3100/brand/logo.png?a=1&b=2" });
+    expect(com).toContain('<div class="marca"><img src="http://localhost:3100/brand/logo.png?a=1&amp;b=2" alt="VoiceCheck IA" />');
+    expect(montarRelatorioClinico("Ana", [acustica(3, 1.8)]).includes('class="marca"')).toBe(false);
+  });
+
   it("sem fonetograma, sem a seção", () => {
     expect(montarRelatorioClinico("Ana", [acustica(3, 1.8)]).includes("Campo vocal")).toBe(false);
   });

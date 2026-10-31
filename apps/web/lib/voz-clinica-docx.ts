@@ -156,6 +156,7 @@ const ESTILOS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 const TIPOS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="png" ContentType="image/png"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
   <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
@@ -168,10 +169,26 @@ const RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
 </Relationships>`;
 
-const RELS_DOC = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+function relsDoc(comLogo: boolean): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>${comLogo ? `
+  <Relationship Id="rIdLogo" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/logo.png"/>` : ""}
 </Relationships>`;
+}
+
+/** Logo no topo (imagem em linha, 6 cm de largura; o PNG para papel é 1200×252). */
+export function paragrafoLogo(larguraCm = 6, proporcao = 252 / 1200): string {
+  const cx = Math.round(larguraCm * 360000);
+  const cy = Math.round(cx * proporcao);
+  return `<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="12" w:space="6" w:color="0E8F8A"/></w:pBdr><w:spacing w:after="200"/></w:pPr><w:r><w:drawing>`
+    + `<wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="1" name="Logo VoiceCheck IA" descr="VoiceCheck IA"/>`
+    + `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>`
+    + `<pic:nvPicPr><pic:cNvPr id="1" name="logo.png"/><pic:cNvPicPr/></pic:nvPicPr>`
+    + `<pic:blipFill><a:blip r:embed="rIdLogo"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>`
+    + `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>`
+    + `</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+}
 
 /** Corpo do documento (só o XML de <w:body>), separado para teste. */
 export function corpoDocx(paciente: string, itens: Avaliacao[], opcoes: OpcoesRelatorio = {}): string {
@@ -278,9 +295,10 @@ export function corpoDocx(paciente: string, itens: Avaliacao[], opcoes: OpcoesRe
 }
 
 export function montarDocxClinico(paciente: string, itens: Avaliacao[], opcoes: OpcoesRelatorio = {}): Uint8Array<ArrayBuffer> {
-  const corpo = corpoDocx(paciente, itens, opcoes);
+  const logo = opcoes.logoPng && opcoes.logoPng.length > 0 ? opcoes.logoPng : null;
+  const corpo = (logo ? paragrafoLogo() : "") + corpoDocx(paciente, itens, opcoes);
   const documento = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${corpo}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1000" w:right="900" w:bottom="1000" w:left="900" w:header="500" w:footer="500" w:gutter="0"/></w:sectPr></w:body></w:document>`;
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${corpo}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1000" w:right="900" w:bottom="1000" w:left="900" w:header="500" w:footer="500" w:gutter="0"/></w:sectPr></w:body></w:document>`;
   const agora = (opcoes.geradoEm ?? new Date()).toISOString().replace(/\.\d{3}Z$/, "Z");
   const core = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -291,7 +309,8 @@ export function montarDocxClinico(paciente: string, itens: Avaliacao[], opcoes: 
     { nome: "[Content_Types].xml", dados: enc.encode(TIPOS) },
     { nome: "_rels/.rels", dados: enc.encode(RELS) },
     { nome: "word/document.xml", dados: enc.encode(documento) },
-    { nome: "word/_rels/document.xml.rels", dados: enc.encode(RELS_DOC) },
+    { nome: "word/_rels/document.xml.rels", dados: enc.encode(relsDoc(!!logo)) },
+    ...(logo ? [{ nome: "word/media/logo.png", dados: logo }] : []),
     { nome: "word/styles.xml", dados: enc.encode(ESTILOS) },
     { nome: "docProps/core.xml", dados: enc.encode(core) },
   ]);

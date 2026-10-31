@@ -51,4 +51,17 @@ describe("relatório em Word (.docx)", () => {
     for (const parte of ["[Content_Types].xml", "word/document.xml", "word/styles.xml", "_rels/.rels"]) expect(texto.includes(parte)).toBe(true);
     expect(nomeArquivoDocx("Ana Lúcia", new Date("2026-10-30T12:00:00Z"))).toBe("voicecheck-relatorio-ana-lucia-20261030.docx");
   });
+
+  it("logo no topo do Word: imagem embutida, relação e tipo PNG; sem logo, nada disso", () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    const com = new TextDecoder().decode(montarDocxClinico("Ana", ITENS, { logoPng: png }));
+    expect(com.includes("word/media/logo.png")).toBe(true);
+    expect(com.includes('Target="media/logo.png"')).toBe(true);
+    expect(com.includes('<Default Extension="png" ContentType="image/png"/>')).toBe(true);
+    expect(com.includes('r:embed="rIdLogo"')).toBe(true);
+    expect(com.includes('<wp:extent cx="2160000" cy="453600"/>')).toBe(true);
+    const sem = new TextDecoder().decode(montarDocxClinico("Ana", ITENS));
+    expect(sem.includes("word/media/logo.png")).toBe(false);
+    expect(sem.includes("rIdLogo")).toBe(false);
+  });
 });
