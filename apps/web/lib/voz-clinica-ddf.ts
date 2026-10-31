@@ -46,15 +46,39 @@ export function quadrante(x: number, y: number): Quadrante {
   return "ambos";
 }
 
+/** Posição no diagrama a partir de jitter (%), shimmer (%) e GNE. */
+export function xyDdf(j: number, s: number, g: number): { x: number; y: number; quadrante: Quadrante } {
+  // o maior, não a média: um jitter alto com shimmer baixo não pode cair "dentro dos limites"
+  const x = Math.max(j / LIMITES_DDF.jitter_pct, s / LIMITES_DDF.shimmer_pct);
+  const y = Math.max(0, 1 - g) / (1 - LIMITES_DDF.gne);
+  return { x, y, quadrante: quadrante(x, y) };
+}
+
 export function pontoDdf(r: AnaliseAcustica, criado_em = ""): PontoDdf | null {
   const j = r.perturbacao?.jitter_local_pct;
   const s = r.perturbacao?.shimmer_local_pct;
   const g = r.excitacao?.gne;
   if (!ok(j) || !ok(s) || !ok(g)) return null;
-  // o maior, não a média: um jitter alto com shimmer baixo não pode cair "dentro dos limites"
-  const x = Math.max(j / LIMITES_DDF.jitter_pct, s / LIMITES_DDF.shimmer_pct);
-  const y = Math.max(0, 1 - g) / (1 - LIMITES_DDF.gne);
-  return { x, y, quadrante: quadrante(x, y), jitter: j, shimmer: s, gne: g, criado_em };
+  return { ...xyDdf(j, s, g), jitter: j, shimmer: s, gne: g, criado_em };
+}
+
+export type PontoTrecho = PontoDdf & { inicio_s: number; fim_s: number };
+
+/** Nuvem de pontos: um por trecho de 0,5 s (vazia em análises antigas, feitas antes dos trechos). */
+export function pontosTrechos(r: AnaliseAcustica): PontoTrecho[] {
+  return (r.ddf_segmentos ?? [])
+    .filter((t) => ok(t.jitter_pct) && ok(t.shimmer_pct) && ok(t.gne))
+    .map((t) => ({ ...xyDdf(t.jitter_pct, t.shimmer_pct, t.gne), jitter: t.jitter_pct, shimmer: t.shimmer_pct, gne: t.gne, criado_em: "", inicio_s: t.inicio_s, fim_s: t.fim_s }));
+}
+
+/** Espalhamento da nuvem (desvio-padrão de x e de y); null com menos de 3 trechos. */
+export function dispersao(pts: { x: number; y: number }[]): { x: number; y: number } | null {
+  if (pts.length < 3) return null;
+  const dp = (v: number[]) => {
+    const m = v.reduce((a, b) => a + b, 0) / v.length;
+    return Math.sqrt(v.reduce((a, b) => a + (b - m) ** 2, 0) / (v.length - 1));
+  };
+  return { x: dp(pts.map((p) => p.x)), y: dp(pts.map((p) => p.y)) };
 }
 
 /** Pontos das análises acústicas, da mais antiga para a mais recente. */

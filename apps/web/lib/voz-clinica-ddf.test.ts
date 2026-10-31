@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { AnaliseAcustica, Avaliacao } from "@/lib/voz-clinica-api";
-import { pontoDdf, pontosDdf, quadrante, svgDdf } from "@/lib/voz-clinica-ddf";
+import { dispersao, pontoDdf, pontosDdf, pontosTrechos, quadrante, svgDdf } from "@/lib/voz-clinica-ddf";
 
 const ac = (jitter: number, shimmer: number, gne: number, quando: string) =>
   ({ id: quando, paciente: "Ana", tipo: "acustica", motor: "praat", criado_em: quando,
@@ -41,5 +41,27 @@ describe("diagrama irregularidade × ruído", () => {
     expect(svg.startsWith("<svg")).toBe(true);
     expect(svg.includes("NaN")).toBe(false);
     expect(svg.includes('cx="310.0"')).toBe(true); // x = 3 (borda direita: 34 + 276)
+  });
+
+  it("nuvem por trecho: mesma escala do ponto da gravação; análise antiga sem trechos fica vazia", () => {
+    const r = { ddf_segmentos: [
+      { inicio_s: 0, fim_s: 0.5, jitter_pct: 0.3, shimmer_pct: 3.25, gne: 0.75 },
+      { inicio_s: 0.5, fim_s: 1, jitter_pct: 1.2, shimmer_pct: 2, gne: 0.4 },
+      { inicio_s: 1, fim_s: 1.5, jitter_pct: Number.NaN, shimmer_pct: 2, gne: 0.4 },
+    ] } as unknown as AnaliseAcustica;
+    const pts = pontosTrechos(r);
+    expect(pts.length).toBe(2);
+    expect(pts[0]!.x).toBeCloseTo(0.5, 6);
+    expect(pts[0]!.y).toBeCloseTo(0.5, 6);
+    expect(pts[1]!.quadrante).toBe("ambos");
+    expect(pts[1]!.inicio_s).toBe(0.5);
+    expect(pontosTrechos({} as AnaliseAcustica)).toEqual([]);
+  });
+
+  it("dispersão da nuvem: zero para pontos iguais, null com menos de 3", () => {
+    expect(dispersao([{ x: 1, y: 1 }, { x: 1, y: 1 }])).toBeNull();
+    const d = dispersao([{ x: 1, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 1 }])!;
+    expect(d.x).toBe(0);
+    expect(dispersao([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }])!.x).toBeCloseTo(1, 6);
   });
 });

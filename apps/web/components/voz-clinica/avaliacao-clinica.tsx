@@ -332,7 +332,9 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
       {resultado && !resultado.f0 ? <Erro texto={resultado.avisos[0] ?? "Não foi encontrada voz suficiente."} /> : null}
       {linhas.length ? (
         <div className="mt-4" aria-live="polite">
-          <table className="w-full text-sm" data-testid="vc2-tabela-acustica">
+          {/* como no VoxMetria: o Diagrama de Desvio Fonatório abre primeiro; a tabela vem logo abaixo */}
+          {resultado?.graficos ? <GraficosAnalise dados={resultado.graficos} formantes={resultado.formantes} resultado={resultado} /> : null}
+          <table className="mt-5 w-full text-sm" data-testid="vc2-tabela-acustica">
             <thead>
               <tr className="border-b border-line text-left text-xs text-ink-faint">
                 <th className="py-2 font-medium">Medida</th>
@@ -352,7 +354,6 @@ function PainelAcustico({ paciente, aoSalvar }: { paciente: string; aoSalvar: ()
             Medido pelo motor {resultado?.motor === "praat" ? `Praat ${resultado.versao_praat ?? ""}` : "interno"}. Não é diagnóstico médico.
           </p>
           <Avisos itens={resultado?.avisos ?? []} />
-          {resultado?.graficos ? <GraficosAnalise dados={resultado.graficos} formantes={resultado.formantes} /> : null}
         </div>
       ) : null}
     </section>

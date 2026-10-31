@@ -72,11 +72,15 @@ export type AnaliseAcustica = {
   /** Medidas do GHD: GNE (0–1, excitação glótica × ruído) e MWC (0–1, semelhança entre ciclos). */
   excitacao?: { gne?: number; gne_janelas?: number; mwc?: number };
   formantes?: { f1_hz: number | null; f2_hz: number | null; f3_hz: number | null };
+  /** Um ponto por trecho de 0,5 s da vogal (nuvem do Diagrama de Desvio Fonatório), do mesmo motor. */
+  ddf_segmentos?: TrechoDdf[];
   fonacao?: { tmf_s: number; fracao_surdos_pct: number; quebras_de_voz: number };
   /** Dados reduzidos para os gráficos (onda, contorno de F0/intensidade, espectro FFT + LPC). */
   graficos?: GraficosAnalise;
   avisos: string[];
 };
+
+export type TrechoDdf = { inicio_s: number; fim_s: number; jitter_pct: number; shimmer_pct: number; gne: number };
 
 export type GraficosAnalise = {
   onda: { duracao_s: number; min: number[]; max: number[]; voz: boolean[] };

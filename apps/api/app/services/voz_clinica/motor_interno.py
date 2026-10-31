@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from . import excitacao, graficos
+from . import ddf_segmentos, excitacao, graficos
 from .audio import Audio, reamostrar
 
 PASSO = 0.01  # s entre quadros de pitch
@@ -536,6 +536,12 @@ def analisar(audio: Audio, f0_min=75.0, f0_max=600.0) -> dict:
     ciclos = marcar_ciclos(audio, tempos, f0s)
     pert = perturbacao(ciclos)
     exc = excitacao.medir(audio.amostras, audio.taxa, _trechos_vozeados(tempos, f0s), ciclos)
+    try:  # nuvem de pontos do Diagrama de Desvio Fonatório (um ponto por trecho de 0,5 s)
+        segmentos = ddf_segmentos.medir(audio.amostras, audio.taxa, _trechos_vozeados(tempos, f0s),
+                                        ddf_segmentos.perturbacao_interna(ciclos, perturbacao))
+    except Exception as erro:  # medida extra: nunca derruba a análise
+        avisos.append(f"Diagrama de desvio por trecho: não calculado ({erro.__class__.__name__}).")
+        segmentos = []
     if not pert:
         avisos.append("Ciclos insuficientes para jitter e shimmer; use vogal sustentada de 3 s ou mais.")
     if np.max(np.abs(audio.amostras)) >= 0.999:
@@ -555,6 +561,7 @@ def analisar(audio: Audio, f0_min=75.0, f0_max=600.0) -> dict:
         "ruido": {"hnr_db": hnr_db},
         "cpps_db": cpps(audio),
         "excitacao": exc,
+        "ddf_segmentos": segmentos,
         "graficos": graficos.montar(audio, tempos, f0s),
         "formantes": formantes(audio, tempos, f0s),
         "fonacao": medidas_fonacao(tempos, f0s, f0_min),

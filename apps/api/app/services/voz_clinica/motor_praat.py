@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 
 from .audio import Audio
-from . import excitacao, graficos
+from . import ddf_segmentos, excitacao, graficos
 from .motor_interno import _trechos_vozeados, estatisticas_f0, marcar_ciclos, medidas_fonacao
 
 try:  # importação opcional
@@ -118,6 +118,18 @@ def analisar(audio: Audio, f0_min=75.0, f0_max=600.0) -> dict:
     except Exception as erro:  # a análise principal não pode cair por causa de uma medida extra
         avisos.append(f"GNE/MWC: não calculado ({erro.__class__.__name__}).")
         exc = {}
+    # nuvem de pontos do Diagrama de Desvio Fonatório: jitter e shimmer do PRÓPRIO Praat em cada trecho
+    def pert_trecho(a: float, b: float):
+        j = call(pp, "Get jitter (local)", a, b, *PERT[2:])
+        s = call([snd, pp], "Get shimmer (local)", a, b, *PERT[2:], 1.6)
+        ok = lambda v: v is not None and not (isinstance(v, float) and np.isnan(v))  # noqa: E731
+        return (100 * j if ok(j) else None, 100 * s if ok(s) else None)
+
+    try:
+        segmentos = ddf_segmentos.medir(audio.amostras, audio.taxa, _trechos_vozeados(tempos, f0s), pert_trecho)
+    except Exception as erro:
+        avisos.append(f"Diagrama de desvio por trecho: não calculado ({erro.__class__.__name__}).")
+        segmentos = []
     try:
         graf = graficos.montar(audio, tempos, f0s)
     except Exception as erro:  # os gráficos nunca derrubam a análise
@@ -141,6 +153,7 @@ def analisar(audio: Audio, f0_min=75.0, f0_max=600.0) -> dict:
         "ruido": {"hnr_db": _r(hnr, 2)},
         "cpps_db": _r(cpps, 2),
         "excitacao": exc,
+        "ddf_segmentos": segmentos,
         **({"graficos": graf} if graf else {}),
         "formantes": {"f1_hz": mediana_formante(1), "f2_hz": mediana_formante(2), "f3_hz": mediana_formante(3)},
         "fonacao": medidas_fonacao(tempos, f0s, f0_min),

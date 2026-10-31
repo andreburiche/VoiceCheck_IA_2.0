@@ -2,11 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { DiagramaDesvioFonatorio } from "@/components/voz-clinica/diagrama-desvio-fonatorio";
 import { cn } from "@/lib/utils";
-import { fixoBR, type GraficosAnalise as Dados } from "@/lib/voz-clinica-api";
+import { fixoBR, type AnaliseAcustica, type GraficosAnalise as Dados } from "@/lib/voz-clinica-api";
+import { pontoDdf } from "@/lib/voz-clinica-ddf";
 import { caminhoSvg, dominioArredondado, histogramaF0 } from "@/lib/voz-clinica-graficos";
 
 const VISTAS = [
+  { id: "ddf", rotulo: "Desvio fonatório" },
   { id: "sinal", rotulo: "Sinal" },
   { id: "contorno", rotulo: "F0 e intensidade" },
   { id: "histograma", rotulo: "Histograma da F0" },
@@ -218,14 +221,19 @@ function PlanoVogal({ formantes, w }: { formantes: Formantes; w: number }) {
   );
 }
 
-/** Gráficos da análise acústica: sinal com voz/sem voz, F0 e intensidade, histograma da F0 e espectro. */
-export function GraficosAnalise({ dados, formantes }: { dados: Dados; formantes?: Formantes }) {
-  const [vista, setVista] = useState<Vista>("sinal");
+/**
+ * Gráficos da análise acústica (como as telas do VoxMetria): Diagrama de Desvio Fonatório
+ * (abre primeiro quando há jitter, shimmer e GNE), sinal, F0 e intensidade, histograma da F0,
+ * espectro e vogal.
+ */
+export function GraficosAnalise({ dados, formantes, resultado }: { dados: Dados; formantes?: Formantes; resultado?: AnaliseAcustica }) {
+  const temDdf = !!resultado && pontoDdf(resultado) !== null;
+  const [vista, setVista] = useState<Vista>(temDdf ? "ddf" : "sinal");
   const [ref, w] = useLargura();
   return (
     <div className="mt-5" data-testid="vc2-graficos">
       <div className="flex flex-wrap gap-1" role="group" aria-label="Gráfico">
-        {VISTAS.map((v) => (
+        {VISTAS.filter((v) => v.id !== "ddf" || temDdf).map((v) => (
           <button key={v.id} type="button" aria-pressed={vista === v.id} onClick={() => setVista(v.id)}
             className={cn("min-h-[36px] rounded-lg px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
               vista === v.id ? "bg-canvas-card text-ink ring-1 ring-inset ring-ink/15" : "text-ink-muted hover:text-ink")}
@@ -235,6 +243,7 @@ export function GraficosAnalise({ dados, formantes }: { dados: Dados; formantes?
         ))}
       </div>
       <div ref={ref} className="mt-2 w-full overflow-hidden text-ink">
+        {vista === "ddf" && resultado ? <DiagramaDesvioFonatorio resultado={resultado} graficos={dados} /> : null}
         {vista === "sinal" ? <Sinal d={dados} w={w} /> : null}
         {vista === "contorno" ? <Contorno d={dados} w={w} /> : null}
         {vista === "histograma" ? <Histograma d={dados} w={w} /> : null}

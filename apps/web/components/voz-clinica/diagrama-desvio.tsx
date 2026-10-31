@@ -18,8 +18,8 @@ export function DiagramaDesvio({ itens }: { itens: Avaliacao[] }) {
   const svg = svgDdf(pontos, "escuro", 320);
   const descricao = `Diagrama de irregularidade por ruído com ${pontos.length} ${pontos.length === 1 ? "análise" : "análises"}. A mais recente está ${ROTULO_QUADRANTE[ultimo.quadrante]}.`;
   return (
-    <section className="mt-4 rounded-xl p-4 ring-1 ring-inset ring-ink/10" aria-label="Diagrama de irregularidade e ruído" data-testid="vc2-ddf">
-      <h3 className="font-display text-base font-semibold text-ink">Irregularidade × ruído</h3>
+    <section className="mt-4 rounded-xl p-4 ring-1 ring-inset ring-ink/10" aria-label="Diagrama de Desvio Fonatório: evolução do paciente" data-testid="vc2-ddf">
+      <h3 className="font-display text-base font-semibold text-ink">Diagrama de Desvio Fonatório — evolução</h3>
       <div className="mt-3 flex flex-wrap items-start gap-4">
         {/* SVG montado só com números e rótulos fixos (lib/voz-clinica-ddf.ts) */}
         <div className="max-w-full shrink-0" role="img" aria-label={descricao} dangerouslySetInnerHTML={{ __html: svg }} />

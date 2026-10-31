@@ -204,7 +204,7 @@ function secaoDdf(itens: Avaliacao[]): string {
   if (!pontos.length) return "";
   const ult = pontos[pontos.length - 1]!;
   const lista = pontos.map((p, i) => `<li>${i + 1}. ${esc(dataDia(p.criado_em))} — ${esc(ROTULO_QUADRANTE[p.quadrante])}</li>`).join("");
-  return `<section><h2>Irregularidade × ruído</h2>
+  return `<section><h2>Diagrama de Desvio Fonatório</h2>
     <div class="ddf"><div>${svgDdf(pontos, "claro", 300)}</div>
     <div><p>Mais recente: <strong>${esc(ROTULO_QUADRANTE[ult.quadrante])}</strong> (jitter ${esc(fixo(ult.jitter, 2))} %, shimmer ${esc(fixo(ult.shimmer, 2))} %, GNE ${esc(fixo(ult.gne, 2))}).</p>
     <ol class="muted ddf-lista">${lista}</ol>
