@@ -336,7 +336,14 @@ function corpoHtml(corpo: string): string {
     .join("\n");
 }
 
-export function htmlDocumento(doc: DocumentoEmitido, paciente: string): string {
+/** Logo da aplicação para papel branco (partes brancas do lockup em grafite). */
+export const LOGO_PAPEL = "/brand/voicecheck-lockup-v3-papel.png";
+
+/**
+ * Página A4 do documento. `logoUrl` deve ser absoluta (a página é escrita num iframe):
+ * na tela, `${location.origin}${LOGO_PAPEL}`; sem ela, o cabeçalho sai só com o texto.
+ */
+export function htmlDocumento(doc: DocumentoEmitido, paciente: string, logoUrl?: string): string {
   const prof = doc.profissional;
   const quando = doc.emitido_em ? new Date(doc.emitido_em) : new Date();
   const local = `${prof.cidade ? `${prof.cidade}, ` : ""}${dataExtenso(quando)}.`;
@@ -351,8 +358,12 @@ export function htmlDocumento(doc: DocumentoEmitido, paciente: string): string {
   <style>
     @page { size: A4; margin: 22mm 20mm; }
     body { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: #0E1A24; font-size: 11.5pt; line-height: 1.55; margin: 0; }
-    header { border-bottom: 1.5pt solid #0E8F8A; padding-bottom: 8pt; margin-bottom: 26pt; }
-    header strong { font-size: 13pt; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 18pt;
+             border-bottom: 1.5pt solid #0E8F8A; padding-bottom: 9pt; margin-bottom: 26pt; }
+    header img { height: 38pt; width: auto; display: block; }
+    header .prof { text-align: right; }
+    header .prof.so { text-align: left; }
+    header strong { font-size: 12.5pt; }
     header p { margin: 1pt 0; color: #4E6170; font-size: 9.5pt; }
     h1 { text-align: center; font-size: 15pt; letter-spacing: .02em; text-transform: uppercase; margin: 0 0 22pt; }
     p { margin: 0 0 10pt; text-align: justify; }
@@ -373,9 +384,12 @@ export function htmlDocumento(doc: DocumentoEmitido, paciente: string): string {
 <body>
   <div class="actions"><button type="button" onclick="window.print()">Imprimir ou salvar PDF</button></div>
   <header>
-    <strong>${esc(prof.nome)}</strong>
-    <p>Fonoaudiólogo(a)${prof.registro ? ` · ${esc(prof.registro)}` : ""}</p>
-    ${prof.contato ? `<p>${esc(prof.contato)}</p>` : ""}
+    ${logoUrl ? `<img src="${esc(logoUrl)}" alt="VoiceCheck IA" />` : ""}
+    <div class="prof${logoUrl ? "" : " so"}">
+      <strong>${esc(prof.nome)}</strong>
+      <p>Fonoaudiólogo(a)${prof.registro ? ` · ${esc(prof.registro)}` : ""}</p>
+      ${prof.contato ? `<p>${esc(prof.contato)}</p>` : ""}
+    </div>
   </header>
   <h1>${esc(doc.titulo)}</h1>
   ${corpoHtml(doc.corpo)}

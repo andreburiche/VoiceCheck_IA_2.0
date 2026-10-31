@@ -19,6 +19,7 @@ import {
 } from "@/lib/voz-clinica-api";
 import {
   ESPECIALIDADES,
+  LOGO_PAPEL,
   MODELOS,
   PROFISSIONAL_VAZIO,
   gerarRascunho,
@@ -124,7 +125,7 @@ export function DocumentosPaciente({ paciente, versao, aoSalvar }: { paciente: s
   function imprimir(doc: DocumentoSalvo | null) {
     const d = doc ?? { modelo, titulo, corpo, profissional: { nome: prof.nome || "[profissional]", registro: prof.registro, contato: prof.contato, cidade: prof.cidade } };
     try {
-      printHtmlDocument(htmlDocumento(d as Parameters<typeof htmlDocumento>[0], paciente));
+      printHtmlDocument(htmlDocumento(d as Parameters<typeof htmlDocumento>[0], paciente, `${window.location.origin}${LOGO_PAPEL}`));
     } catch (e) {
       setErro(friendlyError(e, "Não foi possível abrir a impressão."));
     }

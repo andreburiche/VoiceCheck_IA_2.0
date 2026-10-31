@@ -77,7 +77,7 @@ describe("documentos para o paciente", () => {
     const html = htmlDocumento({
       modelo: "consentimento", titulo: "Termo <x>", corpo: "Parágrafo com <script>alert(1)</script>.\n\nItens:\n• um\n• dois\n\n1. a\n2. b",
       profissional: { nome: "Ana Fono", registro: "CRFa 2-12345", contato: null, cidade: "Recife" }, emitido_em: "2026-10-30T15:00:00Z",
-    }, "Bia & Cia");
+    }, "Bia & Cia", "https://exemplo.test/brand/voicecheck-lockup-v3-papel.png");
     expect(html.includes("<script>alert")).toBe(false);
     expect(html.includes("&lt;script&gt;")).toBe(true);
     expect(html.includes("<p>Itens:</p><ul><li>um</li><li>dois</li></ul>")).toBe(true);
@@ -85,5 +85,6 @@ describe("documentos para o paciente", () => {
     expect(html.includes("Bia &amp; Cia")).toBe(true); // consentimento: assinatura do paciente também
     expect(html.includes("Recife, 30 de outubro de 2026.")).toBe(true);
     expect(html.includes("CRFa 2-12345")).toBe(true);
+    expect(html.includes('<img src="https://exemplo.test/brand/voicecheck-lockup-v3-papel.png" alt="VoiceCheck IA" />')).toBe(true);
   });
 });
