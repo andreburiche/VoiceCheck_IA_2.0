@@ -150,6 +150,21 @@ class User(Base, TimestampMixin):
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     #: Sessões emitidas antes disto deixam de valer (ex.: após redefinir a senha).
     password_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Perfil profissional: fonoaudiologo | professor_musica | musico (vazio = não escolhido).
+    #: Só fonoaudiólogo (ou administrador) acessa a avaliação clínica.
+    profile_kind: Mapped[Optional[str]] = mapped_column(String(24), nullable=True)
+    #: Meu perfil: registro profissional, especialidade, instituição, contato, cidade, apresentação.
+    profile_data: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
+    #: Foto do profissional no storage (perfil/<id>/...).
+    photo_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+
+    @property
+    def has_photo(self) -> bool:
+        return bool(self.photo_key)
+
+    @property
+    def clinical_access(self) -> bool:
+        return self.role == UserRole.admin or (self.profile_kind or "") == "fonoaudiologo"
 
     projects: Mapped[list[Project]] = relationship(back_populates="owner")
     subscriptions: Mapped[list[Subscription]] = relationship(back_populates="user")

@@ -468,7 +468,13 @@ export function emitirDocumento(entrada: {
 }
 
 export type AcaoIaTexto = "melhorar" | "corrigir" | "formal" | "simples" | "resumir" | "redigir";
-export type StatusIaTexto = { disponivel: boolean; provedor: "anthropic" | "ollama" | null; modelo: string | null };
+export type StatusIaTexto = {
+  disponivel: boolean;
+  provedor: "anthropic" | "ollama" | "openai" | null;
+  modelo: string | null;
+  /** por que está indisponível */
+  motivo?: string | null;
+};
 
 /** Se a IA de texto da aba Documentos está ligada na API (e com qual provedor). */
 export function statusIaTexto() {
@@ -581,6 +587,26 @@ export function enviarMidia(paciente: string, arquivo: File, descricao?: string)
   dados.append("paciente", paciente);
   if (descricao?.trim()) dados.append("descricao", descricao.trim());
   return apiFetch<Salvo<ResultadoMidia>>(`${BASE}/midias`, { method: "POST", body: dados, timeoutMs: 180_000 });
+}
+
+/** Foto de identificação do paciente (substitui a anterior; fica como mídia do paciente). */
+export function enviarFotoPaciente(paciente: string, arquivo: Blob, nome = "foto.jpg") {
+  const dados = new FormData();
+  dados.append("file", arquivo, nome);
+  dados.append("paciente", paciente);
+  return apiFetch<Salvo<ResultadoMidia>>(`${BASE}/pacientes/foto`, { method: "POST", body: dados, timeoutMs: 60_000 });
+}
+
+export function apagarFotoPaciente(paciente: string) {
+  return apiFetch<{ fotos_excluidas: number }>(`${BASE}/pacientes/foto`, { method: "DELETE", headers: cabecalhoPaciente(paciente) });
+}
+
+/** A foto do paciente como Blob; null se não houver. */
+export async function fotoPaciente(paciente: string): Promise<Blob | null> {
+  const res = await fetch(`${API_URL}${BASE}/pacientes/foto`, { credentials: "include", headers: cabecalhoPaciente(paciente) });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error("Não foi possível carregar a foto do paciente.");
+  return res.blob();
 }
 
 /** Arquivo da mídia como Blob (passa pelo fetch com o cookie de sessão, como as gravações). */

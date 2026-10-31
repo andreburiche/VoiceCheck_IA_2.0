@@ -26,7 +26,7 @@ from sqlalchemy import delete, func, select
 
 from app.api.v1.voicecheck import _read_limited
 from app.core.config import get_settings
-from app.core.deps import CurrentUser, DbSession, verify_csrf
+from app.core.deps import CurrentUser, DbSession, require_clinico, verify_csrf
 from app.core.rate_limit import enforce_rate_limit
 from app.api.v1.pratica_casa import plano_out, sessoes_por_plano
 from app.models import ClinicalEvaluation, HomePracticePlan, User, VoicePatient
@@ -76,7 +76,8 @@ from app.services.voz_clinica.pratica import hash_token, novo_token
 from app.services.voz_clinica.protocolos import PROTOCOLOS, ErroProtocolo
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/voz-clinica", tags=["voz-clinica"])
+# Dados de saúde de pacientes: só fonoaudiólogo (perfil) ou administrador.
+router = APIRouter(prefix="/voz-clinica", tags=["voz-clinica"], dependencies=[Depends(require_clinico)])
 settings = get_settings()
 
 #: Gravação de vogal sustentada ou fala curta: 30 MB cobre ~5 min de WAV 48 kHz.
@@ -511,7 +512,7 @@ def emitir_documento(entrada: DocumentoEntrada, user: CurrentUser, db: DbSession
 @router.get("/documentos/ia", response_model=IaTextoStatus)
 def status_ia_texto(user: CurrentUser) -> IaTextoStatus:
     """Se a IA de texto está ligada (e qual provedor), para a tela mostrar ou explicar os botões."""
-    return IaTextoStatus(**ia_texto.configuracao(get_settings()))
+    return IaTextoStatus(**ia_texto.verificar(get_settings()))
 
 
 @router.post("/documentos/ia", response_model=IaTextoSaida, dependencies=[Depends(verify_csrf)])
@@ -1092,15 +1093,19 @@ async def enviar_midia(
         return await _enviar_midia(db, uid, nome, descricao, file)
 
 
-async def _enviar_midia(db: DbSession, uid: str, nome: str, descricao: str | None, file: UploadFile) -> ResultadoSalvo:
-    dados = await _read_limited(file, max_bytes=midias.LIMITE_VIDEO)
+async def _enviar_midia(db: DbSession, uid: str, nome: str, descricao: str | None, file: UploadFile,
+                        foto: bool = False) -> ResultadoSalvo:
+    dados = await _read_limited(file, max_bytes=LIMITE_FOTO_PACIENTE if foto else midias.LIMITE_VIDEO)
     try:
         categoria, mime, ext = midias.validar(dados)
     except midias.ErroMidia as exc:
         raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=str(exc)) from exc
+    if foto and categoria != "imagem":
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="A foto precisa ser uma imagem (JPG, PNG ou WebP).")
     resultado = {
         "categoria": categoria, "mime": mime, "extensao": ext, "bytes": len(dados),
         "nome_original": midias.nome_seguro(file.filename), "descricao": (descricao or "").strip() or None,
+        **({"foto_perfil": True} if foto else {}),
     }
     # a leitura do usuário (login) já abriu a transação: encerra, para a trava ser o primeiro comando
     db.rollback()
@@ -1134,6 +1139,71 @@ async def _enviar_midia(db: DbSession, uid: str, nome: str, descricao: str | Non
     if not _ainda_ligado(db, row_id, chave):  # excluída durante o envio
         await asyncio.to_thread(_apagar_audios, db, [chave])
     return ResultadoSalvo(avaliacao_id=row_id, resultado=resultado)
+
+
+LIMITE_FOTO_PACIENTE = 5 * 1024 * 1024
+
+
+def _fotos_do_paciente(db: DbSession, uid: str, nome: str) -> list[ClinicalEvaluation]:
+    """Fotos de identificação do paciente (mídias marcadas), da mais recente para a mais antiga."""
+    rows = db.scalars(
+        select(ClinicalEvaluation).where(
+            ClinicalEvaluation.owner_id == uid, ClinicalEvaluation.patient_name == nome, ClinicalEvaluation.kind == "midia",
+        ).order_by(ClinicalEvaluation.created_at.desc())
+    ).all()
+    return [r for r in rows if isinstance(r.result, dict) and r.result.get("foto_perfil")]
+
+
+@router.post("/pacientes/foto", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])
+async def enviar_foto_paciente(
+    request: Request, user: CurrentUser, db: DbSession, file: UploadFile = File(...), paciente: str = Form(...),
+) -> ResultadoSalvo:
+    """Foto de identificação do paciente (JPG, PNG ou WebP, até 5 MB). Fica como mídia do paciente
+    (conta na cota, entra na exportação e na exclusão LGPD) e substitui a foto anterior."""
+    enforce_rate_limit(request, bucket="voz_clinica_foto", limit=20, window_sec=600)
+    nome = _paciente(paciente)
+    if nome is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Informe o paciente")
+    uid = user.id
+    async with _MEMORIA_PESADA:
+        salvo = await _enviar_midia(db, uid, nome, "Foto do paciente", file, foto=True)
+    antigas = [r for r in _fotos_do_paciente(db, uid, nome) if r.id != salvo.avaliacao_id]
+    if antigas:
+        chaves = [r.audio_key for r in antigas if r.audio_key]
+        db.execute(delete(ClinicalEvaluation).where(ClinicalEvaluation.id.in_([r.id for r in antigas])))
+        db.commit()
+        await asyncio.to_thread(_apagar_audios, db, chaves)
+    return salvo
+
+
+@router.get("/pacientes/foto")
+def ver_foto_paciente(user: CurrentUser, db: DbSession, paciente: PacienteConsulta) -> Response:
+    nome = _nome_obrigatorio(paciente)
+    fotos = _fotos_do_paciente(db, user.id, nome)
+    if not fotos or not fotos[0].audio_key:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente sem foto")
+    try:
+        dados = get_storage().get_bytes(fotos[0].audio_key)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Foto não encontrada no armazenamento") from exc
+    return Response(dados, media_type=fotos[0].result.get("mime", "application/octet-stream"), headers={
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'; sandbox",
+    })
+
+
+@router.delete("/pacientes/foto", dependencies=[Depends(verify_csrf)])
+def apagar_foto_paciente(user: CurrentUser, db: DbSession, paciente: PacienteConsulta) -> dict:
+    nome = _nome_obrigatorio(paciente)
+    fotos = _fotos_do_paciente(db, user.id, nome)
+    if not fotos:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paciente sem foto")
+    chaves = [r.audio_key for r in fotos if r.audio_key]
+    db.execute(delete(ClinicalEvaluation).where(ClinicalEvaluation.id.in_([r.id for r in fotos])))
+    db.commit()
+    _apagar_audios(db, chaves)
+    return {"fotos_excluidas": len(fotos)}
 
 
 @router.get("/midias/{avaliacao_id}")

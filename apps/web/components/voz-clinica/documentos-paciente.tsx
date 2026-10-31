@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { FileText, Printer, RotateCcw, Save } from "lucide-react";
 
 import { EditorDocumento, type EditorDocumentoRef } from "@/components/voz-clinica/editor-documento";
@@ -8,6 +10,7 @@ import { EditorDocumento, type EditorDocumentoRef } from "@/components/voz-clini
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { authApi, type User } from "@/lib/api";
 import { friendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 import { printHtmlDocument } from "@/lib/voicecheck-report-shared";
@@ -36,21 +39,22 @@ import {
 const PAINEL = "rounded-2xl bg-canvas-raised/60 p-5 ring-1 ring-inset ring-ink/10 sm:p-6";
 const AREA =
   "mt-1 block w-full rounded-lg border border-line bg-canvas-raised px-3 py-2 text-sm leading-relaxed text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60";
-const CHAVE_PROF = "vc2-profissional-documentos";
 
 function hojeLocal(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** Dados de quem assina: lembrados neste navegador (comodidade; cada documento grava os seus). */
-function lerProfissional(): Profissional {
-  try {
-    const v = JSON.parse(localStorage.getItem(CHAVE_PROF) ?? "null");
-    return v && typeof v === "object" ? { ...PROFISSIONAL_VAZIO, ...v } : PROFISSIONAL_VAZIO;
-  } catch {
-    return PROFISSIONAL_VAZIO;
-  }
+/** Quem assina, a partir de Meu perfil (cada documento grava os dados usados na emissão). */
+export function profissionalDoPerfil(u: User | undefined): Profissional {
+  if (!u) return PROFISSIONAL_VAZIO;
+  const d = u.perfil_dados ?? {};
+  return {
+    nome: u.name ?? "",
+    registro: d.registro ?? "",
+    contato: [d.instituicao, d.endereco, d.telefone].map((v) => (v ?? "").trim()).filter(Boolean).join(" · "),
+    cidade: d.cidade ?? "",
+  };
 }
 
 /**
@@ -74,13 +78,13 @@ export function DocumentosPaciente({ paciente, versao, aoSalvar }: { paciente: s
   const pedido = useRef(0);
   const textoRef = useRef<EditorDocumentoRef>(null);
 
-  useEffect(() => { setProf(lerProfissional()); }, []);
+  const me = useQuery({ queryKey: ["me"], queryFn: () => authApi.me() });
+  const [profEditado, setProfEditado] = useState(false);
+  // vem de Meu perfil; ajustes aqui valem só para os documentos desta tela
+  useEffect(() => { if (me.data && !profEditado) setProf(profissionalDoPerfil(me.data)); }, [me.data, profEditado]);
   function mudarProf(campo: keyof Profissional, valor: string) {
-    setProf((p) => {
-      const novo = { ...p, [campo]: valor };
-      try { localStorage.setItem(CHAVE_PROF, JSON.stringify(novo)); } catch { /* navegação anônima */ }
-      return novo;
-    });
+    setProfEditado(true);
+    setProf((p) => ({ ...p, [campo]: valor }));
   }
 
   const carregar = useCallback(async () => {
@@ -185,7 +189,9 @@ export function DocumentosPaciente({ paciente, versao, aoSalvar }: { paciente: s
             </div>
           ))}
         </div>
-        <p className="mt-1.5 text-xs text-ink-faint">Lembrado neste navegador para os próximos documentos.</p>
+        <p className="mt-1.5 text-xs text-ink-faint">
+          Vem de <Link href="/perfil" className="text-accent hover:underline">Meu perfil</Link>; mudanças aqui valem só para os documentos desta tela.
+        </p>
       </fieldset>
 
       <fieldset className="mt-6">

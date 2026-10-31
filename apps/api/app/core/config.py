@@ -90,6 +90,9 @@ class Settings(BaseSettings):
     ia_texto_modelo: str = ""  # vazio = padrão do provedor
     anthropic_api_key: str = ""
     ollama_url: str = "http://host.docker.internal:11434"
+    # provedor "openai": serviço compatível (LM Studio, Groq, OpenRouter...)
+    ia_texto_url: str = ""
+    ia_texto_chave: str = ""
 
     @model_validator(mode="after")
     def _check_production_secrets(self) -> "Settings":

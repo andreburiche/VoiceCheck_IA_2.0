@@ -96,6 +96,8 @@ def register(payload: RegisterRequest, response: Response, db: DbSession, reques
         password_hash=hash_password(payload.password),
         name=payload.name.strip(),
         role=UserRole.user,
+        profile_kind=payload.perfil,
+        profile_data={"registro": payload.registro.strip()} if payload.registro and payload.registro.strip() else None,
     )
     db.add(user)
     db.flush()

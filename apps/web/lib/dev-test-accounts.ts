@@ -33,6 +33,15 @@ export const DEV_TEST_ACCOUNTS: DevTestAccount[] = [
     description: "Projetos, estúdio, treino, análise e export",
   },
   {
+    id: "fono",
+    email: "fono@estudio.local",
+    password: "senha12345",
+    name: "Fonoaudióloga Teste",
+    role: "user",
+    label: "Fonoaudióloga",
+    description: "Avaliação clínica, prontuário e documentos",
+  },
+  {
     id: "andre",
     email: "andre@estudio.local",
     password: "senha12345",

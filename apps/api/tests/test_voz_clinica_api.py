@@ -18,7 +18,8 @@ BASE = os.getenv("PUBLIC_API_URL", "http://localhost:8000")
 
 def _registrar(c: httpx.Client, prefixo: str) -> None:
     email = f"{prefixo}_{uuid.uuid4().hex[:8]}@example.com"
-    reg = c.post("/api/v1/auth/register", json={"email": email, "password": "senha12345", "name": prefixo})
+    reg = c.post("/api/v1/auth/register", json={"email": email, "password": "senha12345", "name": prefixo,
+                                                "perfil": "fonoaudiologo", "registro": "CRFa 2-00000"})
     assert reg.status_code == 201, reg.text
     c.cookies.update(reg.cookies)
     c.headers["X-CSRF-Token"] = reg.json()["csrf_token"]
@@ -744,6 +745,29 @@ def _png(lado: int = 8) -> bytes:
     linhas = b"".join(b"\x00" + bytes([128]) * lado for _ in range(lado))
     return (b"\x89PNG\r\n\x1a\n" + bloco(b"IHDR", struct.pack(">IIBBBBB", lado, lado, 8, 0, 0, 0, 0))
             + bloco(b"IDAT", zlib.compress(linhas)) + bloco(b"IEND", b""))
+
+
+def test_foto_do_paciente_substitui_a_anterior(client: httpx.Client) -> None:
+    """Foto de identificação: guardada como mídia marcada, só a mais recente fica; sai na exclusão."""
+    paciente = f"Foto {uuid.uuid4().hex[:6]}"
+    cab = {"X-Paciente": paciente}
+    assert client.get("/api/v1/voz-clinica/pacientes/foto", headers=cab).status_code == 404
+    p1, p2 = _png(16), _png(24)
+    r1 = client.post("/api/v1/voz-clinica/pacientes/foto", files={"file": ("a.png", p1, "image/png")}, data={"paciente": paciente})
+    assert r1.status_code == 200, r1.text
+    assert r1.json()["resultado"]["foto_perfil"] is True
+    r2 = client.post("/api/v1/voz-clinica/pacientes/foto", files={"file": ("b.png", p2, "image/png")}, data={"paciente": paciente})
+    assert r2.status_code == 200
+    ver = client.get("/api/v1/voz-clinica/pacientes/foto", headers=cab)
+    assert ver.status_code == 200 and ver.content == p2 and ver.headers["content-type"] == "image/png"
+    midias_ = [a for a in client.get("/api/v1/voz-clinica/avaliacoes", headers=cab).json()["items"] if a["tipo"] == "midia"]
+    assert len(midias_) == 1  # a primeira foto saiu
+    # vídeo ou texto não servem como foto
+    assert client.post("/api/v1/voz-clinica/pacientes/foto", files={"file": ("x.txt", b"<html>" * 20, "image/png")},
+                       data={"paciente": paciente}).status_code == 415
+    assert client.request("DELETE", "/api/v1/voz-clinica/pacientes/foto", headers=cab).json()["fotos_excluidas"] == 1
+    assert client.get("/api/v1/voz-clinica/pacientes/foto", headers=cab).status_code == 404
+
 
 
 def test_midias_do_paciente(client: httpx.Client) -> None:

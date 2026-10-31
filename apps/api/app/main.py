@@ -56,6 +56,15 @@ _DEV_TEST_USERS = (
         "name": "Músico Teste",
         "role": UserRole.user,
         "password": "senha12345",
+        "profile_kind": "musico",
+    },
+    {
+        "email": "fono@estudio.local",
+        "name": "Fonoaudióloga Teste",
+        "role": UserRole.user,
+        "password": "senha12345",
+        "profile_kind": "fonoaudiologo",
+        "profile_data": {"registro": "CRFa 0-00000 (conta de teste)"},
     },
     {
         "email": "andre@estudio.local",
@@ -131,12 +140,18 @@ def seed_reference_data() -> None:
                     # Garante role correta (admin pode ter sido criado como user antes)
                     if existing.role != entry["role"]:
                         existing.role = entry["role"]
+                    # contas de teste: perfil fixo (a migração 0016 dá "fonoaudiologo" a quem tinha avaliações)
+                    if existing.profile_kind != entry.get("profile_kind"):
+                        existing.profile_kind = entry.get("profile_kind")
+                        existing.profile_data = entry.get("profile_data") or existing.profile_data
                     continue
                 user = User(
                     email=entry["email"],
                     name=entry["name"],
                     password_hash=hash_password(entry["password"]),
                     role=entry["role"],
+                    profile_kind=entry.get("profile_kind"),
+                    profile_data=entry.get("profile_data"),
                 )
                 db.add(user)
                 db.flush()

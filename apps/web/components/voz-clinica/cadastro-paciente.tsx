@@ -3,12 +3,22 @@
 import { ChevronDown } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
+import { FotoEditavel } from "@/components/perfil/foto-editavel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { friendlyError } from "@/lib/errors";
 import { cn } from "@/lib/utils";
-import { obterCadastro, resumoCadastro, salvarCadastro, type CadastroPaciente, type Sexo } from "@/lib/voz-clinica-api";
+import {
+  apagarFotoPaciente,
+  enviarFotoPaciente,
+  fotoPaciente,
+  obterCadastro,
+  resumoCadastro,
+  salvarCadastro,
+  type CadastroPaciente,
+  type Sexo,
+} from "@/lib/voz-clinica-api";
 
 const SELECT =
   "h-10 w-full rounded-lg border border-line bg-canvas-raised px-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60";
@@ -104,6 +114,13 @@ export function CadastroPacienteForm({ paciente, aoSalvar }: { paciente: string;
       </button>
       {aberto ? (
         <form id={`${id}-form`} className="mt-3 grid gap-3 sm:grid-cols-2" onSubmit={(e) => void salvar(e)} noValidate>
+          <div className="sm:col-span-2">
+            <FotoEditavel nome={paciente} rotulo="Foto do paciente" tamanho="md" testid="vc2-cadastro-foto"
+              carregar={() => fotoPaciente(paciente)}
+              enviar={(foto) => enviarFotoPaciente(paciente, foto)}
+              apagar={() => apagarFotoPaciente(paciente)} />
+            <p className="mt-1 text-xs text-ink-faint">Opcional: ajuda a identificar o paciente. Fica nas mídias do paciente e sai junto na exclusão (LGPD).</p>
+          </div>
           <div>
             <Label htmlFor={`${id}-nasc`}>Data de nascimento</Label>
             <Input id={`${id}-nasc`} type="date" className="mt-1" max={new Date().toISOString().slice(0, 10)} {...campo("data_nascimento")} data-testid="vc2-cadastro-nascimento" />

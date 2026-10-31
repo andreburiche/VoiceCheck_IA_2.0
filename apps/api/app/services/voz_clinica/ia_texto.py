@@ -2,8 +2,10 @@
 
 Provedores (configuração `IA_TEXTO_PROVEDOR`):
   - desligado (padrão): nada sai do servidor;
-  - anthropic: Claude, pela API de mensagens (precisa de ANTHROPIC_API_KEY);
-  - ollama: modelo local (OLLAMA_URL), nada sai da máquina.
+  - ollama: modelo local e gratuito (OLLAMA_URL), nada sai da máquina — o padrão da v2 local;
+  - openai: qualquer serviço compatível com a API da OpenAI (IA_TEXTO_URL e, se pedir, IA_TEXTO_CHAVE):
+    LM Studio (local), Groq ou OpenRouter (planos gratuitos, com limites);
+  - anthropic: Claude, pela API de mensagens (precisa de ANTHROPIC_API_KEY; pago).
 
 Privacidade: a tela troca o nome do paciente por [PACIENTE] antes de enviar e destroca na
 volta; aqui o texto só passa para o provedor e não é guardado. A IA recebe instruções de não
@@ -17,8 +19,8 @@ from typing import Literal
 
 Acao = Literal["melhorar", "corrigir", "formal", "simples", "resumir", "redigir"]
 
-MODELO_PADRAO = {"anthropic": "claude-sonnet-5-5", "ollama": "llama3.1:8b"}
-PROVEDORES = ("anthropic", "ollama")
+MODELO_PADRAO = {"anthropic": "claude-sonnet-5-5", "ollama": "qwen2.5:3b", "openai": "llama-3.1-8b-instant"}
+PROVEDORES = ("anthropic", "ollama", "openai")
 LIMITE_SAIDA_TOKENS = 4000
 TEMPO_LIMITE_S = 90.0
 
@@ -50,8 +52,35 @@ def configuracao(settings) -> dict:
     if prov not in PROVEDORES:
         return {"disponivel": False, "provedor": None, "modelo": None}
     if prov == "anthropic" and not settings.anthropic_api_key.strip():
-        return {"disponivel": False, "provedor": prov, "modelo": None}
+        return {"disponivel": False, "provedor": prov, "modelo": None, "motivo": "Falta ANTHROPIC_API_KEY."}
+    if prov == "openai" and not (getattr(settings, "ia_texto_url", "") or "").strip():
+        return {"disponivel": False, "provedor": prov, "modelo": None, "motivo": "Falta IA_TEXTO_URL."}
     return {"disponivel": True, "provedor": prov, "modelo": settings.ia_texto_modelo.strip() or MODELO_PADRAO[prov]}
+
+
+def verificar(settings, cliente=None) -> dict:
+    """Como `configuracao`, mas no Ollama confere se o serviço responde e se o modelo já foi baixado."""
+    conf = configuracao(settings)
+    if not conf["disponivel"] or conf["provedor"] != "ollama":
+        return conf
+    import httpx
+
+    proprio = cliente is None
+    cliente = cliente or httpx.Client(timeout=3.0)
+    try:
+        r = cliente.get(f"{settings.ollama_url.rstrip('/')}/api/tags")
+        modelos = [m.get("name", "") for m in (r.json().get("models") or [])] if r.status_code == 200 else None
+    except Exception:  # noqa: BLE001 — serviço fora do ar
+        modelos = None
+    finally:
+        if proprio:
+            cliente.close()
+    if modelos is None:
+        return {**conf, "disponivel": False, "motivo": "O Ollama não está rodando. Use o baixar-ia-local.bat."}
+    alvo = conf["modelo"]
+    if not any(m == alvo or m.split(":")[0] == alvo or m == f"{alvo}:latest" for m in modelos):
+        return {**conf, "disponivel": False, "motivo": f"O modelo {alvo} ainda não foi baixado. Use o baixar-ia-local.bat."}
+    return conf
 
 
 def montar_prompt(acao: str, texto: str, modelo_documento: str, pedido: str | None) -> tuple[str, str]:
@@ -117,12 +146,28 @@ def gerar(settings, acao: str, texto: str, modelo_documento: str, pedido: str | 
                 raise RuntimeError(f"O serviço de IA recusou o pedido (HTTP {r.status_code}).")
             dados = r.json()
             saida = "".join(b.get("text", "") for b in dados.get("content", []) if b.get("type") == "text")
+        elif conf["provedor"] == "openai":
+            chave = (getattr(settings, "ia_texto_chave", "") or "").strip()
+            r = cliente.post(
+                f"{settings.ia_texto_url.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {chave}"} if chave else {},
+                json={
+                    "model": conf["modelo"],
+                    "max_tokens": LIMITE_SAIDA_TOKENS,
+                    "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                },
+            )
+            if r.status_code >= 400:
+                raise RuntimeError(f"O serviço de IA recusou o pedido (HTTP {r.status_code}).")
+            escolhas = r.json().get("choices") or [{}]
+            saida = ((escolhas[0] or {}).get("message") or {}).get("content", "")
         else:
             r = cliente.post(
                 f"{settings.ollama_url.rstrip('/')}/api/chat",
                 json={
                     "model": conf["modelo"],
                     "stream": False,
+                    "options": {"temperature": 0.3, "num_ctx": 8192},
                     "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
                 },
             )

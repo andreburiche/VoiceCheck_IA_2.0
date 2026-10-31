@@ -8,7 +8,7 @@ import { Eye, EyeOff, Shield, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { authApi } from "@/lib/api";
+import { ROTULO_PERFIL, authApi, type PerfilProfissional } from "@/lib/api";
 import { DEV_TEST_ACCOUNTS, showDevTestAccounts, type DevTestAccount } from "@/lib/dev-test-accounts";
 import { cn } from "@/lib/utils";
 import { friendlyError } from "@/lib/errors";
@@ -69,6 +69,8 @@ export function AuthForm({ mode }: { mode: Mode }) {
     }
   }
 
+  const [perfil, setPerfil] = useState<PerfilProfissional>("musico");
+  const [registro, setRegistro] = useState("");
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const touch = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
   const fieldErrors = {
@@ -80,14 +82,18 @@ export function AuthForm({ mode }: { mode: Mode }) {
         : mode === "login" && !password
           ? "Digite sua senha."
           : null,
+    registro:
+      mode === "register" && perfil === "fonoaudiologo" && !/\d/.test(registro)
+        ? "Informe o número do seu registro no conselho (CRFa)."
+        : null,
   };
   const showErr = (k: keyof typeof fieldErrors) => (touched[k] ? fieldErrors[k] : null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setTouched({ name: true, email: true, password: true });
-    if (fieldErrors.name || fieldErrors.email || fieldErrors.password) {
-      const first = fieldErrors.name ? "name" : fieldErrors.email ? "email" : "password";
+    setTouched({ name: true, email: true, password: true, registro: true });
+    if (fieldErrors.name || fieldErrors.email || fieldErrors.password || fieldErrors.registro) {
+      const first = fieldErrors.name ? "name" : fieldErrors.registro ? "registro" : fieldErrors.email ? "email" : "password";
       document.getElementById(first)?.focus();
       return;
     }
@@ -95,7 +101,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
     setLoading(true);
     try {
       if (mode === "register") {
-        await authApi.register({ name, email, password });
+        await authApi.register({ name, email, password, perfil, ...(perfil === "fonoaudiologo" ? { registro: registro.trim() } : {}) });
         router.push("/dashboard");
       } else {
         const res = await authApi.login({ email, password });
@@ -161,6 +167,39 @@ export function AuthForm({ mode }: { mode: Mode }) {
             </p>
           ) : null}
         </div>
+      ) : null}
+
+      {mode === "register" ? (
+        <fieldset className="space-y-2">
+          <legend className="text-sm font-medium text-ink">Você é</legend>
+          <div className="grid gap-2" role="radiogroup" aria-label="Perfil profissional">
+            {(Object.keys(ROTULO_PERFIL) as PerfilProfissional[]).map((p) => (
+              <label key={p} className={cn(
+                "flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm ring-1 ring-inset transition-colors",
+                perfil === p ? "bg-accent/10 text-ink ring-accent" : "text-ink-muted ring-line hover:ring-ink/30",
+              )}>
+                <input type="radio" name="perfil" value={p} checked={perfil === p} onChange={() => setPerfil(p)}
+                  className="h-4 w-4 accent-[var(--accent)]" data-testid={`register-perfil-${p}`} />
+                {ROTULO_PERFIL[p]}
+              </label>
+            ))}
+          </div>
+          {perfil === "fonoaudiologo" ? (
+            <div className="space-y-2 pt-1">
+              <Label htmlFor="registro">Registro no conselho (CRFa)</Label>
+              <Input id="registro" name="registro" placeholder="ex.: CRFa 2-12345" maxLength={60} value={registro}
+                onChange={(e) => setRegistro(e.target.value)} onBlur={() => touch("registro")}
+                aria-invalid={showErr("registro") ? true : undefined}
+                aria-describedby={showErr("registro") ? "registro-error" : "registro-hint"}
+                className={cn("h-12 text-base", showErr("registro") && "border-signal-err")} />
+              {showErr("registro") ? (
+                <p id="registro-error" className="text-sm text-signal-err">{showErr("registro")}</p>
+              ) : (
+                <p id="registro-hint" className="text-xs text-ink-faint">Libera a avaliação clínica (dados de saúde de pacientes).</p>
+              )}
+            </div>
+          ) : null}
+        </fieldset>
       ) : null}
 
       <div className="space-y-2">
@@ -287,7 +326,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
             <span>Acesso rápido</span>
             <span className="rounded-full bg-canvas-raised px-2 py-0.5 normal-case tracking-normal">só em desenvolvimento</span>
           </p>
-          <ul className="grid grid-cols-3 gap-2" aria-label="Entrar com uma conta de teste">
+          <ul className="grid grid-cols-2 gap-2" aria-label="Entrar com uma conta de teste">
             {DEV_TEST_ACCOUNTS.map((account) => {
               const Icon = account.role === "admin" ? Shield : UserRound;
               return (

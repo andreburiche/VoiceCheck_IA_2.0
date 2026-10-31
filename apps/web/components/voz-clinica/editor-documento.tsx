@@ -196,7 +196,9 @@ export const EditorDocumento = forwardRef<EditorDocumentoRef, {
 
   const botao = "inline-flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium text-ink-muted transition-colors hover:bg-canvas-overlay hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:pointer-events-none disabled:opacity-40";
   const sep = <span className="mx-1 h-5 w-px bg-ink/10" aria-hidden />;
-  const nomeProvedor = ia?.provedor === "anthropic" ? "Claude (Anthropic)" : ia?.provedor === "ollama" ? "o modelo local" : "";
+  const nomeProvedor = ia?.provedor === "anthropic" ? "Claude (Anthropic)"
+    : ia?.provedor === "ollama" ? "o modelo local, no seu computador (nada sai da máquina)"
+    : ia?.provedor === "openai" ? "o serviço de IA configurado" : "";
 
   return (
     <div>
@@ -276,8 +278,8 @@ export const EditorDocumento = forwardRef<EditorDocumentoRef, {
           <p className="mt-1 text-xs text-ink-muted">Verificando…</p>
         ) : !ia.disponivel ? (
           <p className="mt-1 text-xs text-ink-muted" data-testid="vc2-doc-ia-desligada">
-            A IA de texto está desligada nesta instalação. Para ligar, configure na API <code className="text-data">IA_TEXTO_PROVEDOR</code>{" "}
-            (<code className="text-data">anthropic</code> com <code className="text-data">ANTHROPIC_API_KEY</code>, ou <code className="text-data">ollama</code> para um modelo local).
+            {ia.motivo ? `${ia.motivo} ` : "A IA de texto está desligada nesta instalação. "}
+            A IA gratuita roda no seu computador (Ollama): dê dois cliques em <code className="text-data">baixar-ia-local.bat</code>, na pasta do projeto, uma vez só.
           </p>
         ) : (
           <>

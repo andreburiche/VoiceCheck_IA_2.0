@@ -40,6 +40,20 @@ export type ApiError = {
   details?: unknown;
 };
 
+/** fonoaudiologo (acessa a avaliação clínica) | professor_musica | musico */
+export type PerfilProfissional = "fonoaudiologo" | "professor_musica" | "musico";
+
+/** Dados de Meu perfil, usados nos documentos clínicos e nos relatórios de música. */
+export type PerfilDados = {
+  registro?: string;
+  especialidade?: string;
+  instituicao?: string;
+  telefone?: string;
+  endereco?: string;
+  cidade?: string;
+  apresentacao?: string;
+};
+
 export type User = {
   id: string;
   email: string;
@@ -47,6 +61,17 @@ export type User = {
   role: string;
   email_verified_at: string | null;
   created_at: string;
+  perfil?: PerfilProfissional | null;
+  perfil_dados?: PerfilDados | null;
+  tem_foto?: boolean;
+  /** pode abrir a avaliação clínica (fonoaudiólogo ou administrador) */
+  acesso_clinico?: boolean;
+};
+
+export const ROTULO_PERFIL: Record<PerfilProfissional, string> = {
+  fonoaudiologo: "Fonoaudiólogo(a)",
+  professor_musica: "Professor(a) de música",
+  musico: "Cantor(a) ou músico(a)",
 };
 
 export type AuthResponse = {
@@ -258,7 +283,7 @@ export async function sha256Hex(file: File | Blob): Promise<string> {
 }
 
 export const authApi = {
-  register: (body: { email: string; password: string; name: string }) =>
+  register: (body: { email: string; password: string; name: string; perfil?: PerfilProfissional; registro?: string }) =>
     apiFetch<AuthResponse>("/api/v1/auth/register", { method: "POST", json: body }),
   login: (body: { email: string; password: string }) =>
     apiFetch<AuthResponse>("/api/v1/auth/login", { method: "POST", json: body }),
@@ -284,6 +309,24 @@ export type UsageSnapshot = {
   concurrent_jobs: number;
   max_concurrent_jobs: number;
   features: Record<string, unknown>;
+};
+
+export const perfilApi = {
+  salvar: (body: { name: string; perfil: PerfilProfissional | null } & PerfilDados) =>
+    apiFetch<User>("/api/v1/users/me/perfil", { method: "PUT", json: body }),
+  enviarFoto: (arquivo: Blob, nome = "foto.jpg") => {
+    const dados = new FormData();
+    dados.append("file", arquivo, nome);
+    return apiFetch<User>("/api/v1/users/me/foto", { method: "POST", body: dados, timeoutMs: 60_000 });
+  },
+  apagarFoto: () => apiFetch<User>("/api/v1/users/me/foto", { method: "DELETE" }),
+  /** A foto como Blob (com o cookie de sessão); null se não houver. */
+  foto: async (): Promise<Blob | null> => {
+    const res = await fetch(`${API_URL}/api/v1/users/me/foto`, { credentials: "include" });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error("Não foi possível carregar a foto.");
+    return res.blob();
+  },
 };
 
 export const usageApi = {

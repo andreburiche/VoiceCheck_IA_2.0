@@ -2,6 +2,7 @@
 
 import { Check, Eye, FileText, Pencil, Printer, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,6 +34,7 @@ import { buildTeacherReportHtml } from "@/lib/voicecheck-report-teacher";
 import { printHtmlDocument } from "@/lib/voicecheck-report-shared";
 import { cn } from "@/lib/utils";
 import { friendlyError } from "@/lib/errors";
+import { authApi } from "@/lib/api";
 import { useConfirm } from "@/components/ui/use-confirm";
 
 type Props = {
@@ -51,6 +53,9 @@ export function VoiceCheckMyReports({
   assetName,
 }: Props) {
   const [confirmDialog, confirm] = useConfirm();
+  // professor(a) de música: o nome de Meu perfil assina as devolutivas por padrão
+  const me = useQuery({ queryKey: ["me"], queryFn: () => authApi.me() });
+  const professorPadrao = me.data?.perfil === "professor_musica" ? me.data.name : "";
   const fp = analysisFingerprint(report);
   const [devolutiva, setDevolutiva] = useState<VoiceCheckDevolutiva | null>(null);
   const [history, setHistory] = useState<VoiceCheckDevolutiva[]>([]);
@@ -88,7 +93,7 @@ export function VoiceCheckMyReports({
   function personal() {
     return {
       studentName: studentName ?? devolutiva?.personal.studentName ?? "",
-      teacherName: teacherName ?? devolutiva?.personal.teacherName ?? "",
+      teacherName: teacherName || devolutiva?.personal.teacherName || professorPadrao,
       assetName: assetName ?? "",
       generatedAt: new Date(),
     };
@@ -144,7 +149,7 @@ export function VoiceCheckMyReports({
         devolutiva?.status === "draft" ? devolutiva.id : undefined;
       const d = buildDevolutivaFromReport(report, {
         studentName: studentName || devolutiva?.personal.studentName,
-        teacherName: teacherName || devolutiva?.personal.teacherName,
+        teacherName: teacherName || devolutiva?.personal.teacherName || professorPadrao || undefined,
         existingId: reuseDraftId,
       });
       await saveDevolutiva(d);

@@ -9,7 +9,8 @@ from app.services.voz_clinica import ia_texto
 
 
 def _conf(**kw):
-    base = {"ia_texto_provedor": "desligado", "ia_texto_modelo": "", "anthropic_api_key": "", "ollama_url": "http://ollama:11434"}
+    base = {"ia_texto_provedor": "desligado", "ia_texto_modelo": "", "anthropic_api_key": "", "ollama_url": "http://ollama:11434",
+            "ia_texto_url": "", "ia_texto_chave": ""}
     return SimpleNamespace(**{**base, **kw})
 
 
@@ -75,3 +76,35 @@ def test_ollama_e_erros_do_provedor():
                        cliente=_cliente({"error": {}}, status=401))
     with pytest.raises(RuntimeError, match="não devolveu texto"):
         ia_texto.gerar(_conf(ia_texto_provedor="ollama"), "melhorar", "t", "plano", cliente=_cliente({"message": {"content": " "}}))
+
+
+def test_openai_compativel_groq_lmstudio():
+    assert ia_texto.configuracao(_conf(ia_texto_provedor="openai"))["disponivel"] is False  # sem URL
+    pedidos: list = []
+    cli = _cliente({"choices": [{"message": {"content": "Texto simples."}}]}, guardar=pedidos)
+    conf = _conf(ia_texto_provedor="openai", ia_texto_url="https://api.groq.com/openai/v1/", ia_texto_chave="gsk-teste")
+    assert ia_texto.gerar(conf, "simples", "texto técnico", "devolutiva", cliente=cli) == "Texto simples."
+    assert str(pedidos[0].url) == "https://api.groq.com/openai/v1/chat/completions"
+    assert pedidos[0].headers["authorization"] == "Bearer gsk-teste"
+    sem_chave: list = []
+    ia_texto.gerar(_conf(ia_texto_provedor="openai", ia_texto_url="http://lmstudio:1234/v1"), "simples", "t", "plano",
+                   cliente=_cliente({"choices": [{"message": {"content": "ok"}}]}, guardar=sem_chave))
+    assert "authorization" not in sem_chave[0].headers
+
+
+def test_verificar_ollama_fora_do_ar_e_sem_modelo():
+    import httpx
+
+    conf = _conf(ia_texto_provedor="ollama")
+
+    def fora(req):
+        raise httpx.ConnectError("sem rota")
+
+    v = ia_texto.verificar(conf, cliente=httpx.Client(transport=httpx.MockTransport(fora)))
+    assert v["disponivel"] is False and "não está rodando" in v["motivo"]
+    v = ia_texto.verificar(conf, cliente=_cliente({"models": [{"name": "llama3.1:8b"}]}))
+    assert v["disponivel"] is False and "qwen2.5:3b" in v["motivo"]
+    v = ia_texto.verificar(conf, cliente=_cliente({"models": [{"name": "qwen2.5:3b"}]}))
+    assert v["disponivel"] is True and v["modelo"] == "qwen2.5:3b"
+    # outros provedores não fazem rede na verificação
+    assert ia_texto.verificar(_conf())["disponivel"] is False

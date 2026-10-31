@@ -50,6 +50,19 @@ def require_admin(user: CurrentUser) -> User:
 
 AdminUser = Annotated[User, Depends(require_admin)]
 
+#: Perfis que acessam a avaliação clínica (dados de saúde de pacientes).
+PERFIS_CLINICOS = {"fonoaudiologo"}
+
+
+def require_clinico(user: CurrentUser) -> User:
+    """Avaliação clínica: só fonoaudiólogo (perfil declarado em Meu perfil) ou administrador."""
+    if user.role == UserRole.admin or (user.profile_kind or "") in PERFIS_CLINICOS:
+        return user
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="A avaliação clínica é para fonoaudiólogos: escolha o perfil de fonoaudiólogo em Meu perfil.",
+    )
+
 
 def verify_csrf(
     request: Request,

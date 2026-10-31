@@ -12,7 +12,7 @@ import {
   LayoutDashboard,
   Library,
   Settings,
-  Shield, LifeBuoy, Stethoscope } from "lucide-react";
+  Shield, LifeBuoy, Stethoscope, UserRound } from "lucide-react";
 
 import { BrandLockup } from "@/components/brand/brand-lockup";
 import { LogoMark } from "@/components/brand/logo-mark";
@@ -30,12 +30,15 @@ const primaryLinks = [
 ];
 
 const labLinks = [
+  { href: "/perfil", label: "Meu perfil", icon: UserRound },
   { href: "/settings", label: "Configurações", icon: Settings },
   { href: "/ajuda", label: "Ajuda", icon: LifeBuoy },
 ];
 
 type SidebarProps = {
   isAdmin?: boolean;
+  /** fonoaudiólogo ou administrador: mostra a avaliação clínica */
+  acessoClinico?: boolean;
   mobileOpen?: boolean;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
@@ -44,6 +47,7 @@ type SidebarProps = {
 
 export function Sidebar({
   isAdmin = false,
+  acessoClinico = false,
   mobileOpen = false,
   collapsed = false,
   onCollapsedChange,
@@ -101,7 +105,7 @@ export function Sidebar({
         )}
         aria-label="Principal"
       >
-        <NavGroup label="Trabalho" links={primaryLinks} pathname={pathname} collapsed={rail} onNavigate={onNavigate} />
+        <NavGroup label="Trabalho" links={primaryLinks.filter((l) => acessoClinico || l.href !== "/voz-clinica")} pathname={pathname} collapsed={rail} onNavigate={onNavigate} />
         <NavGroup
           label="Sistema"
           links={[...labLinks, ...adminLinks]}

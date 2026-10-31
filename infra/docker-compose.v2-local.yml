@@ -41,6 +41,8 @@ services:
     container_name: vc2l-api
     restart: unless-stopped
     env_file:
+      # IA de texto gratuita e local (Ollama) por padrão; o ../.env pode trocar (vem depois e prevalece)
+      - ia-local.env
       - ../.env
     environment:
       APP_ENV: development
@@ -65,6 +67,17 @@ services:
     command: >
       sh -c "alembic upgrade head &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  # IA de texto local e gratuita (aba Documentos). O modelo é baixado uma vez pelo baixar-ia-local.bat
+  # e fica no volume vc2l_ollama; nada do texto sai do computador.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: vc2l-ollama
+    restart: unless-stopped
+    volumes:
+      - vc2l_ollama:/root/.ollama
+    ports:
+      - "11435:11434"
 
   web:
     build:
@@ -91,6 +104,7 @@ services:
     command: sh -c "pnpm install --ignore-scripts && rm -rf .next/dev && pnpm exec next dev --webpack --hostname 0.0.0.0 --port 3000"
 
 volumes:
+  vc2l_ollama:
   vc2l_mysql:
   vc2l_audio:
   vc2l_node_modules:

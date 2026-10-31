@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDown, LogOut, Settings, Shield } from "lucide-react";
+import { ChevronDown, LogOut, Settings, Shield, UserRound } from "lucide-react";
 
-import { authApi } from "@/lib/api";
+import { ROTULO_PERFIL, authApi, perfilApi } from "@/lib/api";
 
 /** Menu da conta (avatar): quem está conectado, Configurações e Sair num só lugar. */
 export function AccountMenu({ userName, onLogout }: { userName?: string; onLogout: () => void }) {
@@ -17,6 +17,21 @@ export function AccountMenu({ userName, onLogout }: { userName?: string; onLogou
   const name = me.data?.name ?? userName ?? "";
   const initial = name.trim().charAt(0).toUpperCase() || "?";
   const isAdmin = me.data?.role === "admin";
+  const temFoto = !!me.data?.tem_foto;
+  const [foto, setFoto] = useState<string | null>(null);
+
+  // foto do profissional no avatar (blob com o cookie de sessão)
+  useEffect(() => {
+    if (!temFoto) { setFoto(null); return; }
+    let vivo = true;
+    let url: string | null = null;
+    perfilApi.foto().then((b) => {
+      if (!vivo || !b) return;
+      url = URL.createObjectURL(b);
+      setFoto(url);
+    }).catch(() => undefined);
+    return () => { vivo = false; if (url) URL.revokeObjectURL(url); };
+  }, [temFoto, me.dataUpdatedAt]);
 
   useEffect(() => {
     if (!open) return;
@@ -65,8 +80,9 @@ export function AccountMenu({ userName, onLogout }: { userName?: string; onLogou
         aria-label={`Conta de ${name || "usuário"}`}
         className="inline-flex h-9 items-center gap-1.5 rounded-full pl-0.5 pr-2 text-ink-muted transition-colors hover:bg-canvas-overlay hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-accent/15 text-sm font-semibold text-accent">
-          {initial}
+        <span className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-accent/15 text-sm font-semibold text-accent">
+          {/* eslint-disable-next-line @next/next/no-img-element -- blob local */}
+          {foto ? <img src={foto} alt="" className="h-full w-full object-cover" /> : initial}
         </span>
         <ChevronDown className="h-3.5 w-3.5" aria-hidden />
       </button>
@@ -81,8 +97,13 @@ export function AccountMenu({ userName, onLogout }: { userName?: string; onLogou
           <div className="border-b border-line/70 px-3 py-2.5">
             <p className="truncate text-sm font-semibold text-ink">{name || "Sua conta"}</p>
             {me.data?.email ? <p className="truncate text-xs text-ink-muted">{me.data.email}</p> : null}
+            {me.data?.perfil ? <p className="mt-0.5 truncate text-xs text-accent">{ROTULO_PERFIL[me.data.perfil]}</p> : null}
           </div>
           <div className="py-1">
+            <Link role="menuitem" href="/perfil" className={item} onClick={() => setOpen(false)}>
+              <UserRound className="h-4 w-4" aria-hidden />
+              Meu perfil
+            </Link>
             <Link role="menuitem" href="/settings" className={item} onClick={() => setOpen(false)}>
               <Settings className="h-4 w-4" aria-hidden />
               Configurações

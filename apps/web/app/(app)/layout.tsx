@@ -51,7 +51,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
   }
 
   return (
-    <AppShell userName={data.name} isAdmin={data.role === "admin"}>
+    <AppShell userName={data.name} isAdmin={data.role === "admin"} acessoClinico={!!data.acesso_clinico}>
       {children}
     </AppShell>
   );

@@ -38,7 +38,7 @@ test.beforeAll(async ({ browser }) => {
   pagina.on("pageerror", (e) => erros.push(String(e)));
   const email = `e2e_voz_${Date.now()}@example.com`;
   const cadastro = await contexto.request.post("/__api/api/v1/auth/register", {
-    data: { email, password: "senha12345", name: "E2E Voz" },
+    data: { email, password: "senha12345", name: "E2E Voz", perfil: "fonoaudiologo", registro: "CRFa 0-00000" },
   });
   expect(cadastro.status(), await cadastro.text()).toBe(201);
 });

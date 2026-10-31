@@ -13,9 +13,10 @@ type AppShellProps = {
   children: React.ReactNode;
   userName?: string;
   isAdmin?: boolean;
+  acessoClinico?: boolean;
 };
 
-export function AppShell({ children, userName, isAdmin }: AppShellProps) {
+export function AppShell({ children, userName, isAdmin, acessoClinico }: AppShellProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -60,6 +61,7 @@ export function AppShell({ children, userName, isAdmin }: AppShellProps) {
       >
         <Sidebar
           isAdmin={isAdmin}
+          acessoClinico={acessoClinico}
           mobileOpen={menuOpen}
           collapsed={collapsed}
           onCollapsedChange={onCollapsedChange}

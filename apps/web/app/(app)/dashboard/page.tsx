@@ -97,6 +97,7 @@ export default function DashboardPage() {
   });
 
   const first = recentProjects[0];
+  const clinico = !!me.data?.acesso_clinico;
   const importHref = "/projects?new=1";
   const studioHref = first != null ? `/projects/${first.id}/studio` : "/projects";
   const practiceHref = first != null ? `/projects/${first.id}/practice` : "/projects";
@@ -110,10 +111,10 @@ export default function DashboardPage() {
 
   return (
     <div className="page-shell space-y-6">
-      <WaveHero userName={me.data?.name ?? "você"} importHref={importHref} />
+      <WaveHero userName={me.data?.name ?? "você"} importHref={importHref} clinico={clinico} />
 
       <div className="grid grid-cols-1 gap-4 motion-safe:animate-fade-up-delay lg:grid-cols-3">
-        <PacientesRecentes className="lg:col-span-2" />
+        {clinico ? <PacientesRecentes className="lg:col-span-2" /> : <LastDiagnosisCard className="lg:col-span-2" />}
         <section aria-label="Sua biblioteca e treino" className="panel-glass min-w-0 rounded-2xl p-5">
           <h2 className="font-display text-base font-semibold text-ink">Sua biblioteca</h2>
           <dl className="mt-4 space-y-3 text-sm">
@@ -138,7 +139,7 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      <LastDiagnosisCard />
+      {clinico ? <LastDiagnosisCard /> : null}
 
       <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
         <Panel
@@ -193,7 +194,7 @@ export default function DashboardPage() {
           ) : (
             <QuickActionCard href={importHref} title="Importar a primeira música" description="MP3, WAV, FLAC ou MP4" icon={Upload} />
           )}
-          <QuickActionCard href="/voz-clinica" title="Avaliação clínica" description="Paciente, medidas, protocolos e relatório" icon={Stethoscope} />
+          {clinico ? <QuickActionCard href="/voz-clinica" title="Avaliação clínica" description="Paciente, medidas, protocolos e relatório" icon={Stethoscope} /> : null}
           <QuickActionCard href="/voicecheck" title="Diagnóstico vocal" description="Envie uma gravação e veja cada ocorrência" icon={Activity} />
         </Panel>
       </div>

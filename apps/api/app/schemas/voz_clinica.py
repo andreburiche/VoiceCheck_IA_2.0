@@ -526,6 +526,8 @@ class IaTextoStatus(BaseModel):
     disponivel: bool
     provedor: str | None = None
     modelo: str | None = None
+    #: por que está indisponível (para a tela explicar)
+    motivo: str | None = None
 
 
 class NasalanciaEntrada(BaseModel):
