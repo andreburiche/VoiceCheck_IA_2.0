@@ -59,10 +59,10 @@ export default function HelpPage() {
           <Block id="comecar" title="Primeiros passos">
             <ol className="list-decimal space-y-1.5 pl-5">
               <li>
-                Em <Link href="/projects" className="text-accent hover:underline">Minhas músicas</Link>, dê um nome e
-                importe o áudio (MP3, WAV, FLAC ou MP4).
+                Em <Link href="/separar" className="text-accent hover:underline">Separar faixas</Link> (ou em Minhas músicas), dê um nome e
+                importe o áudio ou vídeo (MP3, WAV, FLAC, M4A, OGG, MP4, MOV, WEBM ou MKV).
               </li>
-              <li>Escolha o modelo de separação: 2 faixas (voz e instrumental) ou 4 faixas.</li>
+              <li>Escolha o modo (voz e instrumental, 4 faixas, 6 faixas com guitarra e piano, ou alta fidelidade) e a qualidade.</li>
               <li>Quando a separação terminar, abra o Estúdio, o Treino, a Análise ou o Laboratório vocal pelas abas da música.</li>
               <li>
                 Para avaliar uma gravação sua, use o{" "}
@@ -73,9 +73,16 @@ export default function HelpPage() {
 
           <Block id="separacao" title="Separação de faixas">
             <p>
-              A separação usa o modelo de IA <strong>Demucs</strong>. Com <strong>2 faixas</strong> você recebe a voz e o
-              instrumental; com <strong>4 faixas</strong>, voz, bateria, baixo e outros. Cada faixa tem sempre a mesma cor
-              no estúdio.
+              A separação usa o modelo de IA <strong>Demucs</strong>, no seu próprio servidor. Com <strong>2 faixas</strong> você
+              recebe a voz e o instrumental (karaokê); com <strong>4 faixas</strong>, voz, bateria, baixo e outros; com{" "}
+              <strong>6 faixas</strong>, também guitarra e piano. A <strong>alta fidelidade</strong> dá menos vazamento entre as
+              faixas e leva cerca de 4 vezes mais tempo. Cada faixa tem sempre a mesma cor no estúdio.
+            </p>
+            <p>
+              A <strong>qualidade</strong> (rápida, equilibrada ou máxima) define quantas passadas o modelo faz; em{" "}
+              <strong>Separação</strong>, dentro da música, os ajustes avançados mudam passadas e sobreposição, como no
+              Ultimate Vocal Remover. Em <strong>Exportar</strong> dá para baixar só a voz, só o instrumental ou cada faixa
+              (WAV, MP3, FLAC, M4A, OGG ou ZIP), reduzir ruído, realçar a voz, normalizar o volume e cortar um trecho.
             </p>
             <p>
               Nenhuma separação é perfeita: em mixagens muito densas, um pouco de instrumento pode aparecer na faixa de

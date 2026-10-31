@@ -58,7 +58,7 @@ export function ProjectModules({ projectId }: ProjectModulesProps) {
     {
       href: `${base}#separacao`,
       title: "Separação de faixas",
-      description: "Voz e instrumental, ou 4 faixas (voz, bateria, baixo e outros).",
+      description: "Voz e instrumental, 4 ou 6 faixas (com guitarra e piano), qualidade e ajustes avançados.",
       badge: "2 ou 4 faixas",
       icon: Sparkles,
       tone: "accent",
@@ -66,7 +66,7 @@ export function ProjectModules({ projectId }: ProjectModulesProps) {
     {
       href: `${base}/export`,
       title: "Exportar",
-      description: "Faixas em WAV alinhadas, prontas para qualquer editor.",
+      description: "Só a voz, só o instrumental ou cada faixa: WAV, MP3, FLAC, M4A, OGG; ruído, voz e corte.",
       badge: "WAV · MP3",
       icon: Download,
       tone: "accent",

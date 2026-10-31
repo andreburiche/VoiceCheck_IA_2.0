@@ -12,7 +12,7 @@ import {
   LayoutDashboard,
   Library,
   Settings,
-  Shield, LifeBuoy, Stethoscope, UserRound } from "lucide-react";
+  Shield, LifeBuoy, Layers, Stethoscope, UserRound } from "lucide-react";
 
 import { BrandLockup } from "@/components/brand/brand-lockup";
 import { LogoMark } from "@/components/brand/logo-mark";
@@ -25,6 +25,7 @@ const primaryLinks = [
   { href: "/dashboard", label: "Painel", icon: LayoutDashboard },
   { href: "/voz-clinica", label: "Avaliação clínica", icon: Stethoscope },
   { href: "/voicecheck", label: "Diagnóstico vocal", icon: AudioWaveform },
+  { href: "/separar", label: "Separar faixas", icon: Layers },
   { href: "/projects", label: "Minhas músicas", icon: FolderOpen },
   { href: "/library", label: "Biblioteca e setlists", icon: Library },
 ];

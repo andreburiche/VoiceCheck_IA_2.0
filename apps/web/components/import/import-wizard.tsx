@@ -48,6 +48,7 @@ export function ImportWizard({ projectId, projectName, onComplete }: ImportWizar
   const [artist, setArtist] = useState("");
   const [album, setAlbum] = useState("");
   const [modelCode, setModelCode] = useState<string | null>(null);
+  const [qualidade, setQualidade] = useState<"rapida" | "equilibrada" | "maxima">("rapida");
   const [rights, setRights] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,7 +164,7 @@ export function ImportWizard({ projectId, projectName, onComplete }: ImportWizar
       setPhase("Iniciando a separação…");
       const job = await separationsApi.create(
         projectId,
-        { source_asset_id: asset.id, model_code: modelCode, params: {} },
+        { source_asset_id: asset.id, model_code: modelCode, params: { qualidade } },
         `import-${projectId}-${asset.id}-${Date.now()}`,
       );
       setPhase("Separação iniciada.");
@@ -190,7 +191,7 @@ export function ImportWizard({ projectId, projectName, onComplete }: ImportWizar
           Assistente de importação
         </h2>
         <p className="text-sm text-ink-muted">
-          MP3, WAV, FLAC ou MP4
+          Música ou vídeo: MP3, WAV, FLAC, M4A, OGG, MP4, MOV, WEBM ou MKV
           {projectName ? ` · música “${projectName}”` : ""}
         </p>
         <WizardSteps current={step} />
@@ -257,7 +258,7 @@ export function ImportWizard({ projectId, projectName, onComplete }: ImportWizar
             </>
           )}
           <p className="text-xs text-ink-faint">
-            MP3 · MP4 · WAV · FLAC · máx. {formatBytes(maxBytes)}
+            MP3 · WAV · FLAC · M4A · OGG · MP4 · MOV · WEBM · MKV · máx. {formatBytes(maxBytes)}
           </p>
         </div>
       ) : null}
@@ -310,13 +311,35 @@ export function ImportWizard({ projectId, projectName, onComplete }: ImportWizar
             Nenhum modelo de separação disponível agora. Tente de novo em instantes ou fale com o administrador.
           </p>
         ) : (
-          <ModelCards
-            models={models}
-            selectedCode={modelCode}
-            onSelect={setModelCode}
-            gpuAvailable={sys.data?.gpu_available}
-            cpuCount={sys.data?.cpu_count}
-          />
+          <div className="space-y-4">
+            <ModelCards
+              models={models}
+              selectedCode={modelCode}
+              onSelect={setModelCode}
+              gpuAvailable={sys.data?.gpu_available}
+              cpuCount={sys.data?.cpu_count}
+            />
+            <fieldset className="rounded-2xl border border-line p-4">
+              <legend className="px-1 text-sm font-semibold text-ink">Qualidade da separação</legend>
+              <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Qualidade da separação">
+                {([
+                  ["rapida", "Rápida", "Ouve o resultado logo. Bom para treinar e testar."],
+                  ["equilibrada", "Equilibrada", "Menos chiado entre as faixas. Cerca de 2x o tempo."],
+                  ["maxima", "Máxima", "O melhor resultado, para publicar. Cerca de 3x o tempo."],
+                ] as const).map(([id, rotulo, texto]) => (
+                  <label key={id} className={`flex cursor-pointer flex-col gap-1 rounded-xl border p-3 text-sm ${qualidade === id ? "border-accent bg-accent/10" : "border-line hover:border-accent/40"}`}>
+                    <span className="flex items-center gap-2 font-medium text-ink">
+                      <input type="radio" name="qualidade" value={id} checked={qualidade === id} onChange={() => setQualidade(id)}
+                        data-testid={`import-qualidade-${id}`} />
+                      {rotulo}
+                    </span>
+                    <span className="text-xs text-ink-muted">{texto}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-ink-faint">Ajustes finos (passadas e sobreposição, como no UVR) ficam em Separação, dentro da música.</p>
+            </fieldset>
+          </div>
         )
       ) : null}
 
@@ -336,6 +359,7 @@ export function ImportWizard({ projectId, projectName, onComplete }: ImportWizar
               Modelo:{" "}
               <span className="text-accent">{selectedModel?.label ?? modelCode}</span>
               {selectedModel ? ` · ${selectedModel.stems.length} faixas` : ""}
+              {` · qualidade ${qualidade === "rapida" ? "rápida" : qualidade === "maxima" ? "máxima" : "equilibrada"}`}
             </li>
             <li>
               Dispositivo:{" "}

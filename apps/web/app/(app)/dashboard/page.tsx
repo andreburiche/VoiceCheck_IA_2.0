@@ -192,7 +192,7 @@ export default function DashboardPage() {
               <QuickActionCard href={vocalLabHref} title="Laboratório vocal" description="Melodia da voz em partitura e MIDI" icon={AudioLines} />
             </>
           ) : (
-            <QuickActionCard href={importHref} title="Importar a primeira música" description="MP3, WAV, FLAC ou MP4" icon={Upload} />
+            <QuickActionCard href={importHref} title="Importar a primeira música" description="Música ou vídeo: MP3, WAV, FLAC, MP4…" icon={Upload} />
           )}
           {clinico ? <QuickActionCard href="/voz-clinica" title="Avaliação clínica" description="Paciente, medidas, protocolos e relatório" icon={Stethoscope} /> : null}
           <QuickActionCard href="/voicecheck" title="Diagnóstico vocal" description="Envie uma gravação e veja cada ocorrência" icon={Activity} />

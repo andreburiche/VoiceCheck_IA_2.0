@@ -54,6 +54,8 @@ services:
       PUBLIC_API_URL: http://127.0.0.1:8110
       PUBLIC_WEB_URL: http://localhost:3100
       CORS_ORIGINS: http://localhost:3100,http://127.0.0.1:3100
+      # separação real com o processador de áudio (serviço worker abaixo)
+      SEPARATION_ADAPTER: cpu_demucs
     # portas presas ao próprio computador: ninguém da rede local acessa banco, API ou IA
     ports:
       - "127.0.0.1:8110:8000"
@@ -68,6 +70,46 @@ services:
     command: >
       sh -c "alembic upgrade head &&
              uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  # Processador de áudio: separação de faixas (Demucs: voz, bateria, baixo, guitarra, piano...) e
+  # exportação (FLAC/M4A/OGG, redução de ruído, corte). Sem ele a separação fica "na fila" para sempre.
+  # Os modelos são baixados na primeira separação de cada um e ficam no volume vc2l_torch.
+  worker:
+    build:
+      context: ..
+      dockerfile: infra/docker/Dockerfile.worker
+      args:
+        INSTALL_DEMUCS: "1"
+    image: vc2-worker
+    container_name: vc2l-worker
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      APP_ENV: development
+      PYTHONPATH: /api
+      DATABASE_URL: mysql+pymysql://vc2:vc2_local@mysql:3306/vc2
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      STORAGE_BACKEND: local
+      LOCAL_STORAGE_PATH: /data/audio
+      SEPARATION_ADAPTER: cpu_demucs
+      DEMUCS_DEVICE: cpu
+      WORKER_TMP_DIR: /tmp/estudio-worker
+      TORCH_HOME: /models/torch
+    # o computador tem pouca RAM: a separação usa até ~4 GB; acima disso o contêiner para, não a máquina
+    mem_limit: 5g
+    volumes:
+      - ../workers/audio:/app
+      - ../apps/api:/api:ro
+      - vc2l_audio:/data/audio
+      - vc2l_torch:/models/torch
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   # IA de texto local e gratuita (aba Documentos). O modelo é baixado uma vez pelo baixar-ia-local.bat
   # e fica no volume vc2l_ollama; nada do texto sai do computador.
@@ -113,6 +155,7 @@ services:
 
 volumes:
   vc2l_ollama:
+  vc2l_torch:
   vc2l_mysql:
   vc2l_audio:
   vc2l_node_modules:

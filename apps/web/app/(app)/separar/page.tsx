@@ -1,0 +1,126 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { AudioLines, Download, FileAudio, Gauge, Layers, Mic2, Scissors, SlidersHorizontal, Timer, Upload } from "lucide-react";
+
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { projectsApi, systemApi } from "@/lib/api";
+import { STEM_COLORS, STEM_LABELS } from "@/lib/stem-theme";
+
+const PAINEL = "rounded-2xl bg-canvas-raised/70 p-5 ring-1 ring-inset ring-ink/10";
+
+const RECURSOS = [
+  { icone: Layers, titulo: "Todos os instrumentos", texto: "Voz, bateria, baixo, guitarra, piano e outros em faixas separadas." },
+  { icone: Mic2, titulo: "Voz e acompanhamento", texto: "Modo rápido: a voz de um lado e o instrumental (karaokê) do outro." },
+  { icone: Gauge, titulo: "Qualidade ajustável", texto: "Rápida, equilibrada ou máxima, e o modelo de alta fidelidade." },
+  { icone: SlidersHorizontal, titulo: "Ajustes avançados", texto: "Passadas e sobreposição, como no Ultimate Vocal Remover." },
+  { icone: AudioLines, titulo: "Ruído e voz", texto: "Reduzir ruído, realçar a voz e normalizar o volume ao exportar." },
+  { icone: Scissors, titulo: "Editar e cortar", texto: "Mutar, solo e volume no estúdio; cortar o trecho na exportação." },
+  { icone: Download, titulo: "Exportar separado", texto: "Só a voz, só o instrumental ou cada faixa: WAV, MP3, FLAC, M4A, OGG ou ZIP." },
+  { icone: Timer, titulo: "Até 1 hora", texto: "Músicas, aulas, entrevistas e vídeos longos num arquivo só." },
+] as const;
+
+const FAIXAS_6 = ["vocals", "drums", "bass", "guitar", "piano", "other"];
+
+/** Ponto de entrada da separação de faixas (como o removedor de voz do Filmora e o UVR). */
+export default function SepararPage() {
+  const router = useRouter();
+  const [nome, setNome] = useState("");
+  const [criando, setCriando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const sys = useQuery({ queryKey: ["system-status"], queryFn: () => systemApi.status(), staleTime: 60_000 });
+  const projetos = useQuery({ queryKey: ["projects"], queryFn: () => projectsApi.list() });
+  const recentes = (projetos.data?.items ?? []).slice(0, 6);
+  const semWorker = sys.data && !sys.data.using_contract_silence && (sys.data.models ?? []).every((m) => !m.selectable);
+
+  async function comecar(e: React.FormEvent) {
+    e.preventDefault();
+    setErro(null);
+    setCriando(true);
+    try {
+      const p = await projectsApi.create({ name: nome.trim() || "Nova separação" });
+      router.push(`/projects/${p.id}`);
+    } catch (err) {
+      setErro((err as Error).message);
+      setCriando(false);
+    }
+  }
+
+  return (
+    <div className="page-shell space-y-8">
+      <header className="max-w-3xl">
+        <h1 className="font-display text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">Separar faixas</h1>
+        <p className="mt-2 text-base text-ink-muted">
+          Envie uma música ou um vídeo e receba cada instrumento numa faixa: a voz isolada, o instrumental para karaokê,
+          a bateria, o baixo, a guitarra e o piano. Tudo roda no seu servidor, sem mandar o áudio para outra empresa.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2" aria-label="Faixas do modo Todos os instrumentos">
+          {FAIXAS_6.map((f) => (
+            <span key={f} className="inline-flex items-center gap-1.5 rounded-full bg-ink/[0.05] px-3 py-1 text-sm text-ink">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: STEM_COLORS[f] }} aria-hidden />
+              {STEM_LABELS[f]}
+            </span>
+          ))}
+        </div>
+      </header>
+
+      <section className={PAINEL} aria-labelledby="separar-comecar">
+        <h2 id="separar-comecar" className="font-display text-lg font-semibold text-ink">Começar uma separação</h2>
+        <form onSubmit={comecar} className="mt-3 flex flex-wrap items-end gap-3">
+          <div className="min-w-[16rem] flex-1">
+            <Label htmlFor="separar-nome">Nome (música, aula, entrevista…)</Label>
+            <Input id="separar-nome" className="mt-1" value={nome} maxLength={200} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Ensaio do coral — 31/10" />
+          </div>
+          <Button type="submit" disabled={criando} data-testid="separar-comecar">
+            <Upload className="h-4 w-4" aria-hidden /> {criando ? "Criando…" : "Enviar música ou vídeo"}
+          </Button>
+        </form>
+        <p className="mt-2 text-xs text-ink-faint">
+          Na próxima tela: envie o arquivo (MP3, WAV, FLAC, M4A, AAC, OGG, MP4, MOV, WEBM ou MKV), escolha o modo e a qualidade.
+        </p>
+        {erro ? <p role="alert" className="mt-2 text-sm text-signal-err">{erro}</p> : null}
+        {semWorker ? (
+          <p role="status" className="mt-3 rounded-lg bg-signal-warn/10 px-3 py-2 text-sm text-ink ring-1 ring-inset ring-signal-warn/40">
+            Nenhum modelo de separação está disponível neste servidor agora. Peça ao administrador para ligar o processador de áudio (worker).
+          </p>
+        ) : null}
+      </section>
+
+      <section aria-labelledby="separar-recursos">
+        <h2 id="separar-recursos" className="font-display text-lg font-semibold text-ink">O que dá para fazer</h2>
+        <ul className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {RECURSOS.map(({ icone: Icone, titulo, texto }) => (
+            <li key={titulo} className={PAINEL}>
+              <Icone className="h-5 w-5 text-accent" aria-hidden />
+              <p className="mt-2 text-sm font-semibold text-ink">{titulo}</p>
+              <p className="mt-1 text-sm text-ink-muted">{texto}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section aria-labelledby="separar-recentes">
+        <h2 id="separar-recentes" className="font-display text-lg font-semibold text-ink">Suas músicas</h2>
+        {recentes.length ? (
+          <ul className="mt-3 grid gap-2 md:grid-cols-2">
+            {recentes.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center gap-3 rounded-xl bg-canvas-raised/60 p-3 ring-1 ring-inset ring-ink/10">
+                <FileAudio className="h-5 w-5 shrink-0 text-ink-muted" aria-hidden />
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{p.name}</span>
+                <Link href={`/projects/${p.id}#separacao`} className={buttonVariants({ size: "sm", variant: "secondary" })}>Separar de novo</Link>
+                <Link href={`/projects/${p.id}/export`} className={buttonVariants({ size: "sm", variant: "ghost" })}>Exportar</Link>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-ink-muted">Nenhuma música ainda. Comece enviando um arquivo acima.</p>
+        )}
+      </section>
+    </div>
+  );
+}

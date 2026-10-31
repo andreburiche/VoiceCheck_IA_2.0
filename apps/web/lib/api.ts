@@ -450,7 +450,8 @@ export const uploadsApi = {
   complete: (body: { asset_id: string; checksum_sha256: string }) =>
     apiFetch<AudioAsset>("/api/v1/uploads/complete", { method: "POST", json: body }),
   putFile: async (uploadUrl: string, file: File) => {
-    const res = await fetch(uploadUrl, {
+    // em desenvolvimento pela mesma origem (/__api): navegadores e bloqueadores barram outra porta
+    const res = await fetch(viaDevProxy(uploadUrl), {
       method: "PUT",
       body: file,
       headers: { "Content-Type": file.type || "application/octet-stream" },
