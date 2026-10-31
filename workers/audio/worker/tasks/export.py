@@ -13,9 +13,26 @@ from sqlalchemy import select
 
 from worker.celery_app import celery_app
 from worker.db import get_session
-from worker.pipeline.stem_mix import encode_mp3
+from worker.pipeline.export_util import codificar, tratar
 
-STEM_EXPORT_ORDER = ["vocals", "drums", "bass", "other", "instrumental"]
+STEM_EXPORT_ORDER = ["vocals", "drums", "bass", "guitar", "piano", "other", "instrumental"]
+
+
+def ler_parametros(params: dict | None):
+    """Parâmetros da exportação já validados pela API; jobs antigos com chaves fora do padrão caem no padrão."""
+    from pydantic import ValidationError
+
+    from app.services.exportacao import FORMATOS, ParametrosExportacao, filtros_ffmpeg
+
+    try:
+        p = ParametrosExportacao.model_validate(params or {})
+    except ValidationError:
+        conhecidos = {k: v for k, v in (params or {}).items() if k in ParametrosExportacao.model_fields}
+        try:
+            p = ParametrosExportacao.model_validate(conhecidos)
+        except ValidationError:
+            p = ParametrosExportacao()
+    return p, filtros_ffmpeg(p), FORMATOS
 
 
 @celery_app.task(name="worker.tasks.export.run_export", bind=True, max_retries=1)
@@ -36,16 +53,22 @@ def run_export(self, job_id: str) -> dict:
         db.commit()
 
         params = job.params or {}
-        out_format = str(params.get("format") or "wav").lower()
-        if out_format not in {"wav", "mp3"}:
-            out_format = "wav"
-        bitrate = str(params.get("bitrate") or "192k")
+        opcoes, filtros, formatos = ler_parametros(params)
+        out_format = opcoes.format
+        bitrate = opcoes.bitrate
+
+        def preparar(nome: str, wav: Path) -> Path:
+            """Trecho + tratamentos (ruído, voz, volume) e codificação no formato pedido."""
+            tratado = tratar(wav, work / f"{nome}.tratado.wav", filtros, opcoes.inicio_s, opcoes.fim_s)
+            return codificar(tratado, work / "saida" / nome, out_format, bitrate)
+
+        (work / "saida").mkdir(exist_ok=True)
 
         storage = get_storage()
         stems = list(
             db.scalars(select(Stem).where(Stem.project_id == job.project_id, Stem.owner_id == job.owner_id)).all()
         )
-        job_filter = params.get("job_id")
+        job_filter = opcoes.job_id
         if job_filter:
             stems = [s for s in stems if s.job_id == job_filter]
         if not stems:
@@ -70,43 +93,21 @@ def run_export(self, job_id: str) -> dict:
             raise RuntimeError("Falha ao baixar stems")
 
         if job.kind == ExportKind.stem:
-            stem_name = params.get("stem_type", "vocals")
+            stem_name = opcoes.stem_type or "vocals"
             if stem_name not in local_paths:
                 raise RuntimeError(f"Stem {stem_name} ausente")
-            wav_path = local_paths[stem_name]
-            if out_format == "mp3":
-                result_path = work / f"{stem_name}.mp3"
-                encode_mp3(wav_path, result_path, bitrate=bitrate)
-                filename = f"{stem_name}.mp3"
-                mime, fmt = "audio/mpeg", "mp3"
-            else:
-                result_path = wav_path
-                filename = f"{stem_name}.wav"
-                mime, fmt = "audio/wav", "wav"
+            result_path = preparar(stem_name, local_paths[stem_name])
+            ext, mime = formatos[out_format]
+            filename, fmt = f"{stem_name}.{ext}", out_format
 
         elif job.kind == ExportKind.stems_zip:
             result_path = work / "stems.zip"
             with ZipFile(result_path, "w", compression=ZIP_DEFLATED) as zf:
-                for name in STEM_EXPORT_ORDER:
-                    if name not in local_paths:
-                        continue
-                    path = local_paths[name]
-                    if out_format == "mp3":
-                        mp3_path = work / f"{name}.mp3"
-                        encode_mp3(path, mp3_path, bitrate=bitrate)
-                        zf.write(mp3_path, arcname=f"{name}.mp3")
-                    else:
-                        zf.write(path, arcname=f"{name}.wav")
-                # stems fora da ordem conhecida
-                for name, path in local_paths.items():
-                    if name in STEM_EXPORT_ORDER:
-                        continue
-                    if out_format == "mp3":
-                        mp3_path = work / f"{name}.mp3"
-                        encode_mp3(path, mp3_path, bitrate=bitrate)
-                        zf.write(mp3_path, arcname=f"{name}.mp3")
-                    else:
-                        zf.write(path, arcname=f"{name}.wav")
+                ordem = [n for n in STEM_EXPORT_ORDER if n in local_paths]
+                ordem += [n for n in local_paths if n not in ordem]  # stems fora da ordem conhecida
+                for name in ordem:
+                    arquivo = preparar(name, local_paths[name])
+                    zf.write(arquivo, arcname=arquivo.name)
             filename = "stems.zip"
             mime, fmt = "application/zip", "zip"
 
@@ -169,15 +170,9 @@ def run_export(self, job_id: str) -> dict:
                 if proc.returncode != 0:
                     raise RuntimeError(proc.stderr[-1500:])
 
-            if out_format == "mp3":
-                result_path = work / "mixdown.mp3"
-                encode_mp3(wav_out, result_path, bitrate=bitrate)
-                filename = "mixdown.mp3"
-                mime, fmt = "audio/mpeg", "mp3"
-            else:
-                result_path = wav_out
-                filename = "mixdown.wav"
-                mime, fmt = "audio/wav", "wav"
+            result_path = preparar("mixdown", wav_out)
+            ext, mime = formatos[out_format]
+            filename, fmt = f"mixdown.{ext}", out_format
         else:
             raise RuntimeError("kind não suportado")
 

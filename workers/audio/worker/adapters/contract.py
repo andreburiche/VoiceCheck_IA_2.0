@@ -46,6 +46,12 @@ class ContractNoopAdapter(SeparationAdapter):
         wav_path: Path,
         work_dir: Path,
         should_cancel: Callable[[], bool] | None = None,
+        *,
+        modelo: str = "htdemucs",
+        faixas: tuple[str, ...] = STEMS,
+        shifts: int = 0,
+        overlap: float = 0.25,
+        timeout_s: float | None = None,
     ) -> SeparationResult:
         allow = os.getenv("ALLOW_CONTRACT_STEMS", "").lower() in {"1", "true", "yes"}
         env = os.getenv("APP_ENV", "development").lower()
@@ -60,7 +66,7 @@ class ContractNoopAdapter(SeparationAdapter):
         work_dir.mkdir(parents=True, exist_ok=True)
         out: dict[str, Path] = {}
 
-        for stem in STEMS:
+        for stem in faixas:
             p = work_dir / f"{stem}.wav"
             if stem == "other":
                 # Passthrough audível do mixture (smoke).

@@ -24,7 +24,16 @@ class SeparationAdapter(ABC):
         wav_path: Path,
         work_dir: Path,
         should_cancel: Callable[[], bool] | None = None,
+        *,
+        modelo: str = "htdemucs",
+        faixas: tuple[str, ...] = ("vocals", "drums", "bass", "other"),
+        shifts: int = 0,
+        overlap: float = 0.25,
+        timeout_s: float | None = None,
     ) -> SeparationResult:
         """should_cancel é consultado periodicamente; se retornar True a
-        inferência é interrompida e SeparationCancelled é levantada."""
+        inferência é interrompida e SeparationCancelled é levantada.
+
+        modelo: nome do modelo Demucs (htdemucs, htdemucs_6s, htdemucs_ft); faixas: as que ele produz.
+        shifts/overlap: qualidade (mais passadas = menos artefato, mais tempo)."""
         raise NotImplementedError

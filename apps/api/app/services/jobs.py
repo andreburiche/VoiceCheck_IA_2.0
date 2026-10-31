@@ -136,6 +136,17 @@ def create_separation_job(
     if not model:
         raise ValueError(f"Modelo indisponível: {model_code}")
 
+    # params viram argumentos do Demucs no worker: só os conhecidos, nos limites (separacao.py)
+    from pydantic import ValidationError
+
+    from app.services.separacao import ParametrosSeparacao
+
+    try:
+        params = ParametrosSeparacao.model_validate(params or {}).model_dump(exclude_none=True)
+    except ValidationError as exc:
+        campos = ", ".join(".".join(str(p) for p in e["loc"]) or "params" for e in exc.errors())
+        raise ValueError(f"Parâmetros de separação inválidos: {campos}") from exc
+
     assert_can_start_separation(db, owner_id, asset.duration_ms)
 
     job = ProcessingJob(

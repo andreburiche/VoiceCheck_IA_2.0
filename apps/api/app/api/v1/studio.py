@@ -288,6 +288,17 @@ def create_export(
             raise HTTPException(status_code=403, detail="Idempotency-Key de outro usuário")
         return ExportJobResponse.model_validate(existing)
 
+    # params viram argumentos do FFmpeg no worker: só os conhecidos, nos limites (services/exportacao.py)
+    from pydantic import ValidationError
+
+    from app.services.exportacao import ParametrosExportacao
+
+    try:
+        params_ok = ParametrosExportacao.model_validate(payload.params or {}).model_dump(exclude_none=True)
+    except ValidationError as exc:
+        campos = ", ".join(".".join(str(p) for p in e["loc"]) or "params" for e in exc.errors())
+        raise HTTPException(status_code=422, detail=f"Parâmetros de exportação inválidos: {campos}") from exc
+
     stems = db.scalars(select(Stem).where(Stem.project_id == project_id, Stem.owner_id == user.id)).all()
     if not stems:
         raise HTTPException(status_code=400, detail="Projeto sem stems para exportar")
@@ -298,7 +309,7 @@ def create_export(
         owner_id=user.id,
         kind=kind,
         status=ExportStatus.queued,
-        params=payload.params or {},
+        params=params_ok,
         idempotency_key=idempotency_key,
     )
     db.add(job)

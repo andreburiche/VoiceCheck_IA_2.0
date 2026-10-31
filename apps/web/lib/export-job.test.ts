@@ -4,6 +4,7 @@ import {
   estimateExportBytes,
   formatAllowed,
   hasEnoughDisk,
+  parseTempo,
   progressFromStatus,
   sanitizeFilename,
 } from "./export-job";
@@ -40,5 +41,23 @@ describe("export-job helpers", () => {
     expect(progressFromStatus("queued", "queued")).toBe(20);
     expect(progressFromStatus("processing", "processing")).toBe(55);
     expect(progressFromStatus("completed", "done")).toBe(100);
+  });
+});
+
+describe("exportação: formatos e trecho", () => {
+  it("todos os modos de áudio aceitam FLAC, M4A e OGG; o ZIP também", () => {
+    expect(formatAllowed("stem", "flac")).toBe(true);
+    expect(formatAllowed("custom_mix", "m4a")).toBe(true);
+    expect(formatAllowed("all_tracks", "ogg")).toBe(true);
+    expect(formatAllowed("stem", "zip")).toBe(false);
+  });
+
+  it("lê o trecho em segundos ou minutos:segundos", () => {
+    expect(parseTempo("")).toBeUndefined();
+    expect(parseTempo("83")).toBe(83);
+    expect(parseTempo("1:23")).toBe(83);
+    expect(parseTempo("1:02,5")).toBe(62.5);
+    expect(parseTempo("abc")).toBeNull();
+    expect(parseTempo("-3")).toBeNull();
   });
 });

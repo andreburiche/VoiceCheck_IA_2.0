@@ -21,7 +21,9 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  AUDIO_FORMATS,
   EXPORT_MODES,
+  parseTempo,
   defaultStemMix,
   estimateExportBytes,
   formatAllowed,
@@ -31,6 +33,8 @@ import {
   runStemExports,
   runZipExport,
   sanitizeFilename,
+  type AudioFormat,
+  type ExportExtras,
   type ExportFormat,
   type ExportMode,
   type ExportPhase,
@@ -61,6 +65,10 @@ export function ExportWizard({ projectId }: Props) {
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState<ExportMode>("all_tracks");
   const [format, setFormat] = useState<ExportFormat>("zip");
+  const [zipInterno, setZipInterno] = useState<AudioFormat>("wav");
+  const [tratamento, setTratamento] = useState({ reduzir_ruido: false, realcar_voz: false, normalizar: false });
+  const [inicioTxt, setInicioTxt] = useState("");
+  const [fimTxt, setFimTxt] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [muteTarget, setMuteTarget] = useState("other");
   const [filename, setFilename] = useState("");
@@ -201,10 +209,21 @@ export function ExportWizard({ projectId }: Props) {
       }
 
       const base = filename || project.data?.name || "export";
-      const audioFmt = format === "mp3" ? "mp3" : "wav";
+      const audioFmt: AudioFormat = format === "zip" ? zipInterno : format;
+      const inicio = parseTempo(inicioTxt);
+      const fim = parseTempo(fimTxt);
+      if (inicio === null || fim === null) throw new Error("Trecho inválido: use segundos (83) ou minutos:segundos (1:23).");
+      if (inicio !== undefined && fim !== undefined && fim <= inicio) throw new Error("O fim do trecho precisa vir depois do início.");
+      const extras: ExportExtras = {
+        ...(tratamento.reduzir_ruido ? { reduzir_ruido: true } : {}),
+        ...(tratamento.realcar_voz ? { realcar_voz: true } : {}),
+        ...(tratamento.normalizar ? { normalizar: true } : {}),
+        ...(inicio !== undefined ? { inicio_s: inicio } : {}),
+        ...(fim !== undefined ? { fim_s: fim } : {}),
+      };
       let url: string | null = null;
 
-      if (mode === "stem" || (mode === "all_tracks" && (format === "wav" || format === "mp3"))) {
+      if (mode === "stem" || (mode === "all_tracks" && format !== "zip")) {
         const types = [...selected];
         if (!types.length) throw new Error("Selecione ao menos uma faixa");
         setPhase("queued");
@@ -218,6 +237,7 @@ export function ExportWizard({ projectId }: Props) {
             setProgress(progressFromStatus(job.status, "processing"));
           },
           audioFmt,
+          extras,
         );
         url = urls[urls.length - 1] ?? null;
       } else if (mode === "all_tracks" && format === "zip") {
@@ -230,7 +250,8 @@ export function ExportWizard({ projectId }: Props) {
             setPhase(job.status === "processing" ? "processing" : "queued");
             setProgress(progressFromStatus(job.status, "processing"));
           },
-          "wav",
+          zipInterno,
+          extras,
         );
       } else {
         // mixdown paths
@@ -261,6 +282,7 @@ export function ExportWizard({ projectId }: Props) {
             setProgress(progressFromStatus(job.status, "processing"));
           },
           audioFmt,
+          extras,
         );
       }
 
@@ -359,7 +381,7 @@ export function ExportWizard({ projectId }: Props) {
           <div>
             <h2 className="text-sm font-semibold text-ink">Formato</h2>
             <div className="mt-2 flex flex-wrap gap-2">
-              {(["wav", "mp3", "zip"] as ExportFormat[]).map((f) => {
+              {(["wav", "mp3", "flac", "m4a", "ogg", "zip"] as ExportFormat[]).map((f) => {
                 const ok = formatAllowed(mode, f);
                 return (
                   <button
@@ -383,6 +405,44 @@ export function ExportWizard({ projectId }: Props) {
               })}
             </div>
           </div>
+
+          {format === "zip" ? (
+            <div>
+              <Label htmlFor="zip-interno">Formato dos arquivos dentro do ZIP</Label>
+              <select id="zip-interno" className="mt-1 h-10 w-full max-w-xs rounded-lg border border-line bg-canvas px-3 text-sm text-ink"
+                value={zipInterno} onChange={(e) => setZipInterno(e.target.value as AudioFormat)}>
+                {AUDIO_FORMATS.map((f) => <option key={f} value={f}>{f.toUpperCase()}</option>)}
+              </select>
+            </div>
+          ) : null}
+
+          <fieldset className="rounded-xl border border-line/70 p-4" data-testid="export-tratamento">
+            <legend className="px-1 text-sm font-semibold text-ink">Tratamento e trecho (opcional)</legend>
+            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-ink-muted">
+              {([
+                ["reduzir_ruido", "Reduzir ruído", "Tira chiado e ruído de fundo"],
+                ["realcar_voz", "Realçar a voz", "Mais clareza e presença na fala ou no canto"],
+                ["normalizar", "Normalizar volume", "Volume padrão de podcast e streaming (-16 LUFS)"],
+              ] as const).map(([k, rotulo, dica]) => (
+                <label key={k} className="flex items-center gap-2" title={dica}>
+                  <input type="checkbox" checked={tratamento[k]} onChange={(e) => setTratamento((t) => ({ ...t, [k]: e.target.checked }))}
+                    data-testid={`export-${k}`} />
+                  {rotulo}
+                </label>
+              ))}
+            </div>
+            <div className="mt-3 flex flex-wrap items-end gap-3">
+              <div>
+                <Label htmlFor="trecho-inicio" className="text-xs">Início do trecho</Label>
+                <Input id="trecho-inicio" className="mt-1 h-9 w-28" placeholder="0:00" value={inicioTxt} onChange={(e) => setInicioTxt(e.target.value)} />
+              </div>
+              <div>
+                <Label htmlFor="trecho-fim" className="text-xs">Fim do trecho</Label>
+                <Input id="trecho-fim" className="mt-1 h-9 w-28" placeholder="até o fim" value={fimTxt} onChange={(e) => setFimTxt(e.target.value)} />
+              </div>
+              <p className="pb-2 text-xs text-ink-faint">Em segundos (83) ou minutos:segundos (1:23). Vazio = a faixa inteira.</p>
+            </div>
+          </fieldset>
 
           {mode === "minus_instrument" ? (
             <div>

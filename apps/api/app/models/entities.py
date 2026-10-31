@@ -72,6 +72,8 @@ class StemType(str, enum.Enum):
     bass = "bass"
     other = "other"
     instrumental = "instrumental"  # vocals + soma drums/bass/other (modelo 2-stem)
+    guitar = "guitar"  # htdemucs_6s
+    piano = "piano"  # htdemucs_6s
 
 
 class VocalTranscriptionStatus(str, enum.Enum):

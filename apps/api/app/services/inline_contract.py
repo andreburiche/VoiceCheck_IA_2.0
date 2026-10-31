@@ -62,7 +62,13 @@ def complete_job_with_contract_stems(db: Session, job: ProcessingJob) -> Process
     )
     checksum = hashlib.sha256(wav).hexdigest()
 
-    for idx, name in enumerate(STEMS):
+    # mesmas faixas que o modelo escolhido produziria (6 instrumentos, voz + acompanhamento...)
+    from app.models import ProcessingModel
+    from app.services.separacao import MODELOS
+
+    modelo = db.get(ProcessingModel, job.model_id)
+    nomes = MODELOS.get(modelo.code if modelo else "htdemucs", (None, STEMS))[1]
+    for idx, name in enumerate(nomes):
         asset_id = str(uuid4())
         key = f"stems/{job.owner_id}/{job.project_id}/{job.id}/{name}.wav"
         storage.put_bytes(key, wav, "audio/wav")

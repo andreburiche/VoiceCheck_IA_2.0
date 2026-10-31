@@ -11,7 +11,25 @@ from pathlib import Path
 from worker.adapters.base import SeparationAdapter, SeparationCancelled, SeparationResult
 
 STEMS = ("drums", "bass", "other", "vocals")  # ordem típica demucs htdemucs
+STEMS_4 = ("vocals", "drums", "bass", "other")
 CANCEL_POLL_SECONDS = 2.0
+#: Só estes modelos podem ir para a linha de comando (o nome vem do banco/params).
+MODELOS_DEMUCS = {"htdemucs", "htdemucs_6s", "htdemucs_ft"}
+
+
+def comando_demucs(modelo: str, device: str, out_dir: Path, wav_path: Path, *, shifts: int = 0,
+                   overlap: float = 0.25) -> list[str]:
+    """Linha de comando do Demucs com os controles de qualidade (como no UVR), valores conferidos."""
+    if modelo not in MODELOS_DEMUCS:
+        raise ValueError(f"Modelo Demucs não permitido: {modelo}")
+    shifts = int(shifts)
+    overlap = float(overlap)
+    if not (0 <= shifts <= 5) or not (0.1 <= overlap <= 0.75):
+        raise ValueError("shifts/overlap fora dos limites")
+    cmd = ["python", "-m", "demucs", "-n", modelo, "-d", device, "--overlap", f"{overlap:g}"]
+    if shifts:
+        cmd += ["--shifts", str(shifts)]
+    return cmd + ["-o", str(out_dir), str(wav_path)]
 
 
 def run_cancellable(
@@ -73,6 +91,12 @@ class DemucsAdapter(SeparationAdapter):
         wav_path: Path,
         work_dir: Path,
         should_cancel: Callable[[], bool] | None = None,
+        *,
+        modelo: str | None = None,
+        faixas: tuple[str, ...] = STEMS_4,
+        shifts: int = 0,
+        overlap: float = 0.25,
+        timeout_s: float | None = None,
     ) -> SeparationResult:
         try:
             import demucs  # noqa: F401
@@ -84,21 +108,11 @@ class DemucsAdapter(SeparationAdapter):
 
         out_dir = work_dir / "demucs_out"
         out_dir.mkdir(parents=True, exist_ok=True)
-        cmd = [
-            "python",
-            "-m",
-            "demucs",
-            "-n",
-            self.model,
-            "-d",
-            self.device,
-            "-o",
-            str(out_dir),
-            str(wav_path),
-        ]
+        nome_modelo = modelo or self.model
+        cmd = comando_demucs(nome_modelo, self.device, out_dir, wav_path, shifts=shifts, overlap=overlap)
         returncode, output = run_cancellable(
             cmd,
-            timeout=float(os.getenv("INFERENCE_TIMEOUT_SECONDS", "1800")),
+            timeout=float(timeout_s or os.getenv("INFERENCE_TIMEOUT_SECONDS", "1800")),
             should_cancel=should_cancel,
         )
         if returncode != 0:
@@ -110,12 +124,13 @@ class DemucsAdapter(SeparationAdapter):
             raise RuntimeError("Saída Demucs sem vocals.wav")
         stem_dir = candidates[0].parent
         paths: dict[str, Path] = {}
-        for stem in ("vocals", "drums", "bass", "other"):
+        for stem in faixas:
             p = stem_dir / f"{stem}.wav"
             if not p.is_file():
                 raise RuntimeError(f"Stem ausente: {stem}")
             paths[stem] = p
-        return SeparationResult(stem_paths=paths, model_version=f"{self.model}", adapter_name=self.name)
+        versao = nome_modelo + (f"+shifts{shifts}" if shifts else "") + (f"+overlap{overlap:g}" if overlap != 0.25 else "")
+        return SeparationResult(stem_paths=paths, model_version=versao, adapter_name=self.name)
 
 
 class CpuDemucsAdapter(DemucsAdapter):

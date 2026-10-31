@@ -15,11 +15,13 @@ from worker.celery_app import celery_app
 from worker.db import get_session
 from worker.pipeline.events import publish
 from worker.pipeline.ffmpeg_util import decode_to_wav, trim_wav
+from worker.pipeline.plano import plano_separacao
 from worker.pipeline.qa import validate_stem
 
 STEM_ORDER_4 = ["vocals", "drums", "bass", "other"]
 STEM_ORDER_2 = ["vocals", "instrumental"]
 TWO_STEM_MODELS = {"htdemucs_two"}
+
 
 
 def _is_cancelled(db, job_id: str) -> bool:
@@ -137,8 +139,18 @@ def run_separation(self, job_id: str) -> dict:
             db.expire_all()
             return _is_cancelled(db, job_id)
 
+        plano = plano_separacao(model_code, job.params, expected_duration)
         try:
-            result = adapter.separate(wav_path, work_root / "infer", should_cancel=should_cancel)
+            result = adapter.separate(
+                wav_path,
+                work_root / "infer",
+                should_cancel=should_cancel,
+                modelo=plano["modelo"],
+                faixas=plano["faixas_adaptador"],
+                shifts=plano["shifts"],
+                overlap=plano["overlap"],
+                timeout_s=plano["timeout_s"],
+            )
         except SeparationCancelled:
             job = db.get(ProcessingJob, job_id)
             _update(db, job, status=JobStatus.cancelled, progress=float(job.progress))
@@ -176,7 +188,7 @@ def run_separation(self, job_id: str) -> dict:
             stem_order = list(STEM_ORDER_2)
             model_version = f"{result.model_version}+instrumental-sum"
         else:
-            stem_order = list(STEM_ORDER_4)
+            stem_order = list(plano["faixas_finais"])
             model_version = result.model_version
 
         for idx, stem_name in enumerate(stem_order):

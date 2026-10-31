@@ -112,6 +112,16 @@ def seed_reference_data() -> None:
                     params_schema={"overlap": {"type": "number", "default": 0.25}},
                 )
             )
+        # 6 instrumentos (guitarra e piano) e alta fidelidade (fine-tuned): mesmos pacotes do Demucs 4,
+        # os pesos são baixados na primeira separação de cada um
+        for code, name, version, layout in (
+            ("htdemucs_6s", "Demucs HTDemucs 6 stems", "4.0.1", ["vocals", "drums", "bass", "guitar", "piano", "other"]),
+            ("htdemucs_ft", "Demucs HTDemucs fine-tuned", "4.0.1", ["vocals", "drums", "bass", "other"]),
+        ):
+            if not db.scalar(select(ProcessingModel).where(ProcessingModel.code == code)):
+                db.add(ProcessingModel(code=code, name=name, version=version, stem_layout=layout, license="MIT",
+                                       is_enabled=True, min_vram_mb=4096,
+                                       params_schema={"qualidade": {"type": "string", "enum": ["rapida", "equilibrada", "maxima"]}}))
         model_two = db.scalar(select(ProcessingModel).where(ProcessingModel.code == "htdemucs_two"))
         if not model_two:
             db.add(

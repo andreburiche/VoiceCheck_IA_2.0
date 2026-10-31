@@ -49,6 +49,8 @@ class Settings(BaseSettings):
 
     max_upload_bytes: int = 104_857_600
     max_duration_seconds: int = 600
+    #: Arquivos para separar instrumentos (música, vídeo, entrevista): até 1 hora, como no Filmora.
+    max_duration_separacao_s: int = 3600
     default_plan_code: str = "free"
     # Cotas do plano free (local-first: stems WAV ocupam bastante disco)
     default_max_storage_mb: int = 10_240

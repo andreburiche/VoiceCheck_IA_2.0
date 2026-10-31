@@ -1,12 +1,33 @@
 /**
  * Orquestração de export via API real (stem | stems_zip | mixdown).
- * WAV e MP3 (libmp3lame no worker) + ZIP.
+ * WAV, MP3, FLAC, M4A (AAC) e OGG + ZIP; tratamentos (ruído, voz, volume) e corte de trecho no worker.
  */
 
 import { assetsApi, studioApi, type ExportJob, type StemMixState } from "@/lib/api";
 
 export type ExportMode = "stem" | "all_tracks" | "custom_mix" | "minus_instrument";
-export type ExportFormat = "wav" | "mp3" | "zip";
+export type AudioFormat = "wav" | "mp3" | "flac" | "m4a" | "ogg";
+export type ExportFormat = AudioFormat | "zip";
+export const AUDIO_FORMATS: AudioFormat[] = ["wav", "mp3", "flac", "m4a", "ogg"];
+
+/** Tratamentos e corte aplicados pelo worker (validados na API: services/exportacao.py). */
+export type ExportExtras = {
+  reduzir_ruido?: boolean;
+  realcar_voz?: boolean;
+  normalizar?: boolean;
+  inicio_s?: number;
+  fim_s?: number;
+};
+
+/** Converte "1:23" ou "83" em segundos; vazio → undefined; inválido → null. */
+export function parseTempo(texto: string): number | undefined | null {
+  const t = texto.trim();
+  if (!t) return undefined;
+  const m = /^(?:(\d+):)?(\d+(?:[.,]\d+)?)$/.exec(t);
+  if (!m) return null;
+  const s = Number(m[2]!.replace(",", ".")) + Number(m[1] ?? 0) * 60;
+  return Number.isFinite(s) ? s : null;
+}
 
 export type ExportPhase =
   | "idle"
@@ -27,29 +48,29 @@ export const EXPORT_MODES: {
   {
     id: "stem",
     title: "Stem individual",
-    description: "Baixa uma ou mais trilhas como arquivos WAV ou MP3 separados.",
-    formats: ["wav", "mp3"],
+    description: "Baixa uma ou mais trilhas em arquivos separados (WAV, MP3, FLAC, M4A ou OGG): a voz isolada, só o instrumental, a guitarra…",
+    formats: ["wav", "mp3", "flac", "m4a", "ogg"],
     defaultFormat: "wav",
   },
   {
     id: "all_tracks",
     title: "Todas as trilhas",
-    description: "Pacote ZIP com todos os stems (WAV ou MP3 dentro) ou arquivos separados.",
-    formats: ["zip", "wav", "mp3"],
+    description: "Pacote ZIP com todas as faixas ou um arquivo por faixa, no formato escolhido.",
+    formats: ["zip", "wav", "mp3", "flac", "m4a", "ogg"],
     defaultFormat: "zip",
   },
   {
     id: "custom_mix",
     title: "Mixagem personalizada",
     description: "Mixdown com mute/volume do mix padrão (trilhas desmarcadas = mute nesta exportação).",
-    formats: ["wav", "mp3"],
+    formats: ["wav", "mp3", "flac", "m4a", "ogg"],
     defaultFormat: "wav",
   },
   {
     id: "minus_instrument",
     title: "Playback sem instrumento",
     description: "Mixdown silenciando a trilha escolhida (útil para treino).",
-    formats: ["wav", "mp3"],
+    formats: ["wav", "mp3", "flac", "m4a", "ogg"],
     defaultFormat: "wav",
   },
 ];
@@ -78,7 +99,7 @@ export function estimateExportBytes(
   allSizes: number[],
 ): number {
   const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
-  const mp3Factor = format === "mp3" ? 0.15 : 1;
+  const mp3Factor = format === "flac" ? 0.6 : format === "mp3" || format === "m4a" || format === "ogg" ? 0.15 : 1;
   if (mode === "all_tracks" && format === "zip") {
     return Math.ceil(sum(allSizes) * 1.05 * (format === "zip" ? 1 : mp3Factor));
   }
@@ -162,14 +183,15 @@ export async function runStemExports(
   stemTypes: string[],
   filenameBase: string,
   onJob?: (job: ExportJob, index: number, total: number) => void,
-  format: "wav" | "mp3" = "wav",
+  format: AudioFormat = "wav",
+  extras: ExportExtras = {},
 ): Promise<string[]> {
   const urls: string[] = [];
   for (let i = 0; i < stemTypes.length; i++) {
     const stemType = stemTypes[i]!;
     const job = await studioApi.createExport(
       projectId,
-      { kind: "stem", params: { stem_type: stemType, format } },
+      { kind: "stem", params: { stem_type: stemType, format, ...extras } },
       `exp-stem-${projectId}-${stemType}-${Date.now()}-${i}`,
     );
     onJob?.(job, i, stemTypes.length);
@@ -185,11 +207,12 @@ export async function runZipExport(
   projectId: string,
   filenameBase: string,
   onJob?: (job: ExportJob) => void,
-  format: "wav" | "mp3" = "wav",
+  format: AudioFormat = "wav",
+  extras: ExportExtras = {},
 ): Promise<string> {
   const job = await studioApi.createExport(
     projectId,
-    { kind: "stems_zip", params: { format } },
+    { kind: "stems_zip", params: { format, ...extras } },
     `exp-zip-${projectId}-${Date.now()}`,
   );
   onJob?.(job);
@@ -203,7 +226,8 @@ export async function runMixdownExport(
   mixState: { stems: Record<string, StemMixState>; master_gain: number },
   previousState: { stems: Record<string, StemMixState>; master_gain: number } | null,
   onJob?: (job: ExportJob) => void,
-  format: "wav" | "mp3" = "wav",
+  format: AudioFormat = "wav",
+  extras: ExportExtras = {},
 ): Promise<string> {
   await studioApi.putMix(projectId, {
     name: "Padrão",
@@ -213,7 +237,7 @@ export async function runMixdownExport(
   try {
     const job = await studioApi.createExport(
       projectId,
-      { kind: "mixdown", params: { format } },
+      { kind: "mixdown", params: { format, ...extras } },
       `exp-mix-${projectId}-${Date.now()}`,
     );
     onJob?.(job);

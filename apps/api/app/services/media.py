@@ -7,7 +7,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-ALLOWED_EXTENSIONS = {".mp3", ".wav", ".flac", ".mp4", ".m4a"}
+ALLOWED_EXTENSIONS = {".mp3", ".wav", ".flac", ".mp4", ".m4a", ".mov", ".aac", ".ogg", ".oga", ".opus", ".webm", ".mkv"}
 
 # MIME declarados aceitos (cliente) → formato canônico
 ALLOWED_MIME_TO_FORMAT: dict[str, str] = {
@@ -21,6 +21,19 @@ ALLOWED_MIME_TO_FORMAT: dict[str, str] = {
     "video/mp4": "mp4",
     "audio/mp4": "mp4",
     "audio/x-m4a": "mp4",
+    "audio/m4a": "mp4",
+    "video/quicktime": "mp4",  # MOV: mesmo contêiner (ftyp) do MP4
+    "audio/aac": "aac",
+    "audio/x-aac": "aac",
+    "audio/aacp": "aac",
+    "audio/ogg": "ogg",
+    "audio/opus": "ogg",
+    "application/ogg": "ogg",
+    "video/ogg": "ogg",
+    "audio/webm": "webm",
+    "video/webm": "webm",
+    "video/x-matroska": "webm",  # MKV: mesmo contêiner (EBML) do WebM
+    "audio/x-matroska": "webm",
 }
 
 # MIME detectado por assinatura → formato
@@ -29,6 +42,9 @@ DETECTED_MIME_TO_FORMAT: dict[str, str] = {
     "audio/wav": "wav",
     "audio/flac": "flac",
     "video/mp4": "mp4",
+    "audio/aac": "aac",
+    "audio/ogg": "ogg",
+    "video/webm": "webm",
 }
 
 
@@ -52,6 +68,12 @@ def sniff_mime(header: bytes) -> str | None:
         return "audio/flac"
     if header[4:8] == b"ftyp":
         return "video/mp4"
+    if header.startswith(b"OggS"):
+        return "audio/ogg"
+    if header.startswith(b"\x1a\x45\xdf\xa3"):  # EBML: WebM e MKV
+        return "video/webm"
+    if header[0] == 0xFF and (header[1] & 0xF6) == 0xF0:  # ADTS: sincronismo 0xFFF + layer 00 (AAC puro)
+        return "audio/aac"
     return None
 
 
@@ -89,6 +111,9 @@ def resolve_format(declared_mime: str, detected_mime: str | None, filename: str 
         "wav": "audio/wav",
         "flac": "audio/flac",
         "mp4": "video/mp4",
+        "aac": "audio/aac",
+        "ogg": "audio/ogg",
+        "webm": "video/webm",
     }[detected_fmt]
     return canonical_mime, detected_fmt
 

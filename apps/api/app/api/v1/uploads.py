@@ -214,12 +214,14 @@ def complete_upload(
             asset.status = AssetStatus.failed
             db.commit()
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Duração inválida")
-        if duration_ms > settings.max_duration_seconds * 1000:
+        # músicas e vídeos para separar: até 1 hora (MAX_DURATION_SEPARACAO_S)
+        limite_s = max(settings.max_duration_seconds, settings.max_duration_separacao_s)
+        if duration_ms > limite_s * 1000:
             asset.status = AssetStatus.failed
             db.commit()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Duração excede {settings.max_duration_seconds}s",
+                detail=f"Duração acima do limite ({limite_s // 60} min)",
             )
 
     asset.mime_type = mime
