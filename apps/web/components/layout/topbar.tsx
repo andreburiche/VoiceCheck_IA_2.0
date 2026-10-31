@@ -23,7 +23,7 @@ type TopbarProps = {
 };
 
 const iconButton =
-  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-ink/[0.05] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60";
+  "inline-flex h-9 w-9 toque:h-11 toque:w-11 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-ink/[0.05] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60";
 
 export function Topbar({
   userName,

@@ -83,7 +83,7 @@ export function AreasDeUso() {
               onClick={() => setAtiva(i)}
               onKeyDown={(e) => teclado(e, i)}
               className={cn(
-                "shrink-0 rounded-full border px-5 py-2.5 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas",
+                "min-h-11 shrink-0 rounded-full border px-5 py-2.5 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-canvas",
                 i === ativa ? "border-accent bg-accent text-canvas" : "border-line bg-canvas-overlay text-ink hover:border-ink-muted",
               )}
             >

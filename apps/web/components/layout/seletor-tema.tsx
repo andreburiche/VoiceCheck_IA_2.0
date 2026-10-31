@@ -51,7 +51,7 @@ export function SeletorTema({ modo = "icone", className }: { modo?: "icone" | "s
     <div ref={raiz} className={cn("relative", className)}>
       <button type="button" onClick={() => setAberto((v) => !v)} aria-haspopup="menu" aria-expanded={aberto} aria-controls={id}
         title="Tema: claro, escuro ou do sistema" aria-label="Escolher tema (claro ou escuro)"
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-ink/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="inline-flex h-9 w-9 toque:h-11 toque:w-11 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-ink/[0.06] hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         data-testid="tema-botao">
         <Atual className="h-[1.1rem] w-[1.1rem]" aria-hidden />
       </button>

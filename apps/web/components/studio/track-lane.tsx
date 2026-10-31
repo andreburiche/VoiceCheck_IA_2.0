@@ -45,7 +45,7 @@ export function TrackLane({
       <div className="flex w-44 shrink-0 flex-col justify-center gap-1.5 border-r border-line bg-canvas-raised/90 px-2 py-2 md:w-52">
         <div className="flex items-center gap-2">
           <span
-            className="inline-flex h-7 w-7 items-center justify-center rounded-lg"
+            className="inline-flex h-7 w-7 toque:h-11 toque:w-11 items-center justify-center rounded-lg"
             style={{ backgroundColor: `${color}22`, color }}
           >
             <Icon className="h-3.5 w-3.5" aria-hidden />
@@ -56,7 +56,7 @@ export function TrackLane({
           <button
             type="button"
             className={cn(
-              "h-7 w-7 rounded-md border text-xs font-semibold",
+              "h-7 w-7 toque:h-11 toque:w-11 rounded-md border text-xs font-semibold",
               cfg.mute
                 ? "border-signal-err/50 bg-signal-err/20 text-signal-err"
                 : "border-line text-ink-muted hover:border-ink-faint",
@@ -70,7 +70,7 @@ export function TrackLane({
           <button
             type="button"
             className={cn(
-              "h-7 w-7 rounded-md border text-xs font-semibold",
+              "h-7 w-7 toque:h-11 toque:w-11 rounded-md border text-xs font-semibold",
               cfg.solo
                 ? "border-accent/50 bg-accent/20 text-accent"
                 : "border-line text-ink-muted hover:border-ink-faint",

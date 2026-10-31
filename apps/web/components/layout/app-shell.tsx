@@ -21,6 +21,31 @@ export function AppShell({ children, userName, isAdmin, acessoClinico }: AppShel
   const [menuOpen, setMenuOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  // celular/tablet estreito: o menu vira gaveta e, fechado, sai da ordem do Tab
+  const [estreito, setEstreito] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767.98px)");
+    const sync = () => setEstreito(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  // Gaveta aberta: foco no primeiro link, Esc fecha e devolve o foco ao botão do menu
+  useEffect(() => {
+    if (!menuOpen) return;
+    const botao = document.querySelector<HTMLElement>('[aria-controls="app-sidebar"]');
+    document.querySelector<HTMLElement>("#app-sidebar nav a")?.focus();
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        botao?.focus();
+      }
+    };
+    document.addEventListener("keydown", tecla);
+    return () => document.removeEventListener("keydown", tecla);
+  }, [menuOpen]);
 
   useEffect(() => {
     try {
@@ -54,6 +79,7 @@ export function AppShell({ children, userName, isAdmin, acessoClinico }: AppShel
 
       <div
         id="app-sidebar"
+        inert={estreito && !menuOpen}
         className={cn(
           "shrink-0 transition-[width] duration-300 ease-out motion-reduce:transition-none",
           // Reserva largura no desktop antes/depois do hydrate (evita salto de layout)

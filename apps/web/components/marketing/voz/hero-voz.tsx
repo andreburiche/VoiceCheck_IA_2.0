@@ -31,7 +31,7 @@ export function HeroVoz() {
           <Link href="/register" className={buttonVariants({ size: "lg", className: "rounded-full px-7" })}>
             Criar conta grátis
           </Link>
-          <a href="#avaliacao-clinica" className="text-base font-medium text-ink underline decoration-line underline-offset-8 transition-colors hover:decoration-accent">
+          <a href="#avaliacao-clinica" className="inline-block py-2.5 text-base font-medium text-ink underline decoration-line underline-offset-8 transition-colors hover:decoration-accent">
             Ver a avaliação clínica
           </a>
         </div>

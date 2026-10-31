@@ -192,7 +192,7 @@ export function EditorFoto({
     </div>
   );
 
-  const botaoIcone = "inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-muted ring-1 ring-inset ring-ink/15 transition-colors hover:bg-canvas-overlay hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+  const botaoIcone = "inline-flex h-9 w-9 toque:h-11 toque:w-11 items-center justify-center rounded-lg text-ink-muted ring-1 ring-inset ring-ink/15 transition-colors hover:bg-canvas-overlay hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
   return (
     <dialog ref={dialogo} onClose={aoFechar} aria-labelledby={`${id}-t`}

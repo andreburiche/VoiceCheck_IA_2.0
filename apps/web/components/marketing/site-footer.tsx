@@ -19,7 +19,7 @@ export function SiteFooter() {
           <ul className="flex flex-wrap gap-x-8 gap-y-3">
             {LINKS.map((item) => (
               <li key={item.label}>
-                <Link href={item.href} className="text-base text-ink-muted transition-colors hover:text-ink">
+                <Link href={item.href} className="inline-block text-base text-ink-muted transition-colors hover:text-ink toque:py-2.5">
                   {item.label}
                 </Link>
               </li>

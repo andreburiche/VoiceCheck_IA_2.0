@@ -85,7 +85,7 @@ export function ProjectRowCard({ project, onEdit, onDelete }: ProjectRowCardProp
         <button
           ref={triggerRef}
           type="button"
-          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-canvas-overlay hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
+          className="inline-flex h-9 w-9 toque:h-11 toque:w-11 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-canvas-overlay hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
           aria-expanded={menuOpen}
           aria-haspopup="menu"
           aria-controls={menuId}

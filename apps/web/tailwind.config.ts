@@ -164,6 +164,8 @@ const config: Config = {
     // claro:… aplica só no tema claro (ex.: claro:shadow-sm); o padrão é o escuro
     plugin(({ addVariant }) => {
       addVariant("claro", 'html[data-theme="light"] &');
+      // toque:… só em telas de toque (celular/tablet): área mínima de 44 px sem inchar o desktop
+      addVariant("toque", "@media (pointer: coarse)");
     }),
   ],
 };

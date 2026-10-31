@@ -236,7 +236,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
           {mode === "login" ? (
             <Link
               href={email ? `/esqueci-senha?email=${encodeURIComponent(email)}` : "/esqueci-senha"}
-              className="rounded text-sm font-medium text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="inline-block rounded text-sm font-medium text-accent hover:underline toque:py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               Esqueci minha senha
             </Link>
@@ -254,7 +254,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
             onChange={(e) => setPassword(e.target.value)}
             onBlur={() => touch("password")}
             aria-invalid={showErr("password") ? true : undefined}
-            className={cn("h-12 pr-11 text-base", showErr("password") && "border-signal-err")}
+            className={cn("h-12 pr-11 toque:pr-12 text-base", showErr("password") && "border-signal-err")}
             aria-describedby={
               [mode === "register" ? "password-hint" : null, error ? "auth-error" : null]
                 .filter(Boolean)
@@ -263,7 +263,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
           />
           <button
             type="button"
-            className="absolute right-2 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-canvas-overlay hover:text-ink"
+            className="absolute right-1 top-1/2 inline-flex h-9 w-9 toque:h-11 toque:w-11 -translate-y-1/2 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-canvas-overlay hover:text-ink"
             onClick={() => setShowPassword((v) => !v)}
             aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
           >

@@ -54,7 +54,7 @@
 
 /*
  * Tema claro: papel frio e tinta grafite. O turquesa e o laranja escurecem para manter o
- * contraste de texto (WCAG AA ≥ 4,5:1 sobre o branco); o turquesa do botão segue com texto claro.
+ * contraste de texto (WCAG AA ≥ 4,5:1 sobre o branco e sobre o cinza dos painéis); o turquesa do botão segue com texto claro.
  */
 [data-theme="light"] {
   color-scheme: light;
@@ -64,18 +64,18 @@
   --c-canvas-card: 255 255 255;
   --c-ink: 14 26 36;
   --c-ink-muted: 74 90 105;
-  --c-ink-faint: 98 113 128;
+  --c-ink-faint: 94 108 122;
   --c-line: 208 217 227;
-  --c-accent: 10 128 123;
+  --c-accent: 9 119 114;
   --c-accent-soft: 8 112 108;
   --c-accent-deep: 7 98 94;
   --c-brand-blue: 26 111 214;
   --c-violet-soft: 37 99 198;
   --c-violet-deep: 21 86 170;
-  --c-flare: 200 80 0;
+  --c-flare: 181 72 0;
   --c-flare-soft: 186 74 0;
   --c-flare-deep: 160 62 0;
-  --c-warn: 158 102 0;
+  --c-warn: 148 95 0;
   --c-err: 194 51 74;
   --c-sombra: 30 41 59;
   --k-sombra: 0.3;

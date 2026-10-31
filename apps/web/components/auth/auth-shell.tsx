@@ -60,7 +60,7 @@ export function AuthShell({
             <SeletorTema className="ml-auto" />
             <Link
               href={back.href}
-              className="group -mr-2 inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-ink-muted transition-colors duration-ui hover:bg-canvas-overlay/70 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="group -mr-2 inline-flex h-9 toque:h-11 shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-medium text-ink-muted transition-colors duration-ui hover:bg-canvas-overlay/70 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <ArrowLeft
                 className="h-4 w-4 transition-transform duration-ui group-hover:-translate-x-0.5 motion-reduce:transition-none"

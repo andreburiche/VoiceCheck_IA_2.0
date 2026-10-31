@@ -105,7 +105,7 @@ export function StudioPreview({ className }: { className?: string }) {
                   aria-label={`${muted[stem.id] ? "Reativar" : "Silenciar"} ${stem.label}`}
                   onClick={() => setMuted((m) => ({ ...m, [stem.id]: !m[stem.id] }))}
                   className={cn(
-                    "h-8 w-8 rounded-md text-xs font-semibold transition-colors duration-ui",
+                    "h-8 w-8 toque:h-11 toque:w-11 rounded-md text-xs font-semibold transition-colors duration-ui",
                     muted[stem.id]
                       ? "bg-ink text-canvas"
                       : "bg-canvas-overlay text-ink-muted hover:bg-line hover:text-ink",
@@ -119,7 +119,7 @@ export function StudioPreview({ className }: { className?: string }) {
                   aria-label={`${solo === stem.id ? "Tirar solo de" : "Solo em"} ${stem.label}`}
                   onClick={() => setSolo((s) => (s === stem.id ? null : stem.id))}
                   className={cn(
-                    "h-8 w-8 rounded-md text-xs font-semibold transition-colors duration-ui",
+                    "h-8 w-8 toque:h-11 toque:w-11 rounded-md text-xs font-semibold transition-colors duration-ui",
                     solo === stem.id
                       ? "bg-accent text-canvas"
                       : "bg-canvas-overlay text-ink-muted hover:bg-line hover:text-ink",
