@@ -315,25 +315,74 @@ export type DocumentoEmitido = {
   emitido_em?: string;
 };
 
-/** Texto puro → parágrafos e listas (linhas com "•", "-" ou "1."), tudo escapado. */
-function corpoHtml(corpo: string): string {
+/**
+ * Marcação simples da barra de ferramentas → HTML. Escapa PRIMEIRO e só depois troca
+ * **negrito** e _itálico_ por tags fixas: nada do texto vira HTML.
+ */
+export function formatarLinha(texto: string): string {
+  return esc(texto)
+    .replace(/\*\*(?=\S)([^*\n]*?\S)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[\s(«"“])_(?=\S)([^_\n]*?\S)_(?=$|[\s).,;:!?»"”])/g, "$1<em>$2</em>");
+}
+
+/** Texto do documento → parágrafos, subtítulos ("## "), listas ("• ", "- ", "1. "), negrito e itálico. */
+export function corpoHtml(corpo: string): string {
+  const item = /^\s*(•|-|\d+\.)\s/;
+  const lista = (ls: string[]) => {
+    const numerada = ls.every((l) => /^\s*\d+\.\s/.test(l));
+    const tag = numerada ? "ol" : "ul";
+    return `<${tag}>${ls.map((l) => `<li>${formatarLinha(l.replace(item, ""))}</li>`).join("")}</${tag}>`;
+  };
   return corpo
     .trim()
     .split(/\n{2,}/)
     .map((bloco) => {
       const linhas = bloco.split("\n").map((l) => l.trimEnd()).filter((l) => l.trim());
-      const item = /^\s*(•|-|\d+\.)\s/;
-      const lista = (ls: string[]) => {
-        const numerada = ls.every((l) => /^\s*\d+\.\s/.test(l));
-        const tag = numerada ? "ol" : "ul";
-        return `<${tag}>${ls.map((l) => `<li>${esc(l.replace(item, ""))}</li>`).join("")}</${tag}>`;
+      const partes: string[] = [];
+      let paragrafo: string[] = [];
+      let itens: string[] = [];
+      const fechar = () => {
+        if (paragrafo.length) partes.push(`<p>${paragrafo.map(formatarLinha).join("<br/>")}</p>`);
+        if (itens.length) partes.push(lista(itens));
+        paragrafo = [];
+        itens = [];
       };
-      if (linhas.every((l) => item.test(l))) return lista(linhas);
-      const [cab, ...resto] = linhas;
-      if (resto.length && resto.every((l) => item.test(l))) return `<p>${esc(cab!)}</p>${lista(resto)}`;
-      return `<p>${linhas.map(esc).join("<br/>")}</p>`;
+      for (const l of linhas) {
+        if (/^##\s+/.test(l)) {
+          fechar();
+          partes.push(`<h2>${formatarLinha(l.replace(/^##\s+/, ""))}</h2>`);
+        } else if (item.test(l)) {
+          if (paragrafo.length) { partes.push(`<p>${paragrafo.map(formatarLinha).join("<br/>")}</p>`); paragrafo = []; }
+          itens.push(l);
+        } else {
+          if (itens.length) { partes.push(lista(itens)); itens = []; }
+          paragrafo.push(l);
+        }
+      }
+      fechar();
+      return partes.join("");
     })
     .join("\n");
+}
+
+const escRegex = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Antes de mandar texto à IA: troca o nome completo por [PACIENTE] e o primeiro nome por
+ * [PRIMEIRO_NOME] (sem diferenciar maiúsculas). `restaurar` desfaz a troca na resposta.
+ */
+export function anonimizar(texto: string, paciente: string): { texto: string; restaurar: (t: string) => string } {
+  const nome = paciente.trim().replace(/\s+/g, " ");
+  const primeiro = nome.split(" ")[0] ?? "";
+  let t = texto;
+  if (nome) t = t.replace(new RegExp(escRegex(nome).replace(/ /g, "\\s+"), "gi"), "[PACIENTE]");
+  if (primeiro.length >= 3 && primeiro !== nome) {
+    t = t.replace(new RegExp(`(^|[^\\p{L}])${escRegex(primeiro)}(?![\\p{L}])`, "giu"), "$1[PRIMEIRO_NOME]");
+  }
+  return {
+    texto: t,
+    restaurar: (r: string) => r.replace(/\[PACIENTE\]/g, nome || "[PACIENTE]").replace(/\[PRIMEIRO_NOME\]/g, primeiro || "[PACIENTE]"),
+  };
 }
 
 /** Logo da aplicação para papel branco (partes brancas do lockup em grafite). */
@@ -368,6 +417,7 @@ export function htmlDocumento(doc: DocumentoEmitido, paciente: string, logoUrl?:
     h1 { text-align: center; font-size: 15pt; letter-spacing: .02em; text-transform: uppercase; margin: 0 0 22pt; }
     p { margin: 0 0 10pt; text-align: justify; }
     ul, ol { margin: 0 0 10pt 16pt; padding: 0; }
+    h2 { font-size: 12pt; margin: 14pt 0 6pt; }
     li { margin: 0 0 3pt; }
     .local { margin-top: 26pt; text-align: right; }
     .assinaturas { display: flex; gap: 28pt; justify-content: center; margin-top: 46pt; page-break-inside: avoid; }

@@ -83,6 +83,14 @@ class Settings(BaseSettings):
     smtp_starttls: bool = True
     password_reset_ttl_minutes: int = 30
 
+    # IA de texto (aba Documentos: melhorar, corrigir, simplificar, redigir).
+    # desligado (padrão) | anthropic (Claude, precisa de ANTHROPIC_API_KEY) | ollama (modelo local).
+    # O nome do paciente nunca é enviado: a tela troca por [PACIENTE] antes.
+    ia_texto_provedor: str = "desligado"
+    ia_texto_modelo: str = ""  # vazio = padrão do provedor
+    anthropic_api_key: str = ""
+    ollama_url: str = "http://host.docker.internal:11434"
+
     @model_validator(mode="after")
     def _check_production_secrets(self) -> "Settings":
         if not self.is_production:

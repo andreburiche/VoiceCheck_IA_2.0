@@ -722,6 +722,17 @@ def test_documento_emitido_fica_no_prontuario(client: httpx.Client) -> None:
     assert client.delete("/api/v1/voz-clinica/pacientes", params={"paciente": paciente}).json()["avaliacoes_excluidas"] == 1
 
 
+def test_ia_de_texto_desligada_por_padrao(client: httpx.Client) -> None:
+    """Sem IA_TEXTO_PROVEDOR, a tela sabe que está desligada e o pedido é recusado sem sair do servidor."""
+    st = client.get("/api/v1/voz-clinica/documentos/ia")
+    assert st.status_code == 200 and st.json()["disponivel"] is False
+    r = client.post("/api/v1/voz-clinica/documentos/ia", json={"acao": "melhorar", "texto": "Texto.", "modelo": "relatorio"})
+    assert r.status_code == 503
+    # validações antes de qualquer chamada
+    assert client.post("/api/v1/voz-clinica/documentos/ia", json={"acao": "redigir", "texto": "", "modelo": "plano"}).status_code == 400
+    assert client.post("/api/v1/voz-clinica/documentos/ia", json={"acao": "inventar", "texto": "x", "modelo": "plano"}).status_code == 422
+
+
 def _png(lado: int = 8) -> bytes:
     """PNG válido de verdade (cinza), sem depender de biblioteca de imagem."""
     import struct

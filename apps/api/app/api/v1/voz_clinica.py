@@ -39,6 +39,9 @@ from app.schemas.voz_clinica import (
     CadastroOut,
     CargaEntrada,
     DocumentoEntrada,
+    IaTextoEntrada,
+    IaTextoSaida,
+    IaTextoStatus,
     EggEntrada,
     NasalanciaEntrada,
     TipoAvaliacao,
@@ -61,7 +64,7 @@ from app.services import voz_clinica
 from app.services.voz_clinica.audio import limitar_duracao
 from app.services.voz_clinica.cepstral import analisar_cepstral
 from app.services.voz_clinica.ddk import analisar_ddk
-from app.services.voz_clinica import manipulacao, midias
+from app.services.voz_clinica import ia_texto, manipulacao, midias
 from app.services.voz_clinica.exclusao import apagar_ou_agendar, tentar_pendentes
 from app.services.voz_clinica.fala import analisar_fala
 from app.services.voz_clinica.fonetograma import resumir_campo, resumo_em_spl
@@ -503,6 +506,36 @@ def emitir_documento(entrada: DocumentoEntrada, user: CurrentUser, db: DbSession
         "emitido_em": datetime.now(timezone.utc).isoformat(),
     }
     return ResultadoSalvo(avaliacao_id=_salvar(db, user, nome, "documento", resultado), resultado=resultado)
+
+
+@router.get("/documentos/ia", response_model=IaTextoStatus)
+def status_ia_texto(user: CurrentUser) -> IaTextoStatus:
+    """Se a IA de texto está ligada (e qual provedor), para a tela mostrar ou explicar os botões."""
+    return IaTextoStatus(**ia_texto.configuracao(get_settings()))
+
+
+@router.post("/documentos/ia", response_model=IaTextoSaida, dependencies=[Depends(verify_csrf)])
+def ajudar_texto(entrada: IaTextoEntrada, request: Request, user: CurrentUser) -> IaTextoSaida:
+    """Melhora, corrige, muda o tom, resume ou redige o texto de um documento. Nada é guardado:
+    o profissional decide se aplica a sugestão."""
+    enforce_rate_limit(request, bucket="voz_clinica_ia_texto", limit=30, window_sec=600)
+    texto = entrada.texto.strip()
+    if entrada.acao == "redigir":
+        if not (entrada.pedido or "").strip():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Diga o que a IA deve escrever")
+    elif not texto:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Não há texto para a IA trabalhar")
+    try:
+        saida = ia_texto.gerar(get_settings(), entrada.acao, texto, entrada.modelo, entrada.pedido)
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="A IA de texto está desligada. Configure IA_TEXTO_PROVEDOR (anthropic ou ollama) na API.",
+        )
+    except RuntimeError as erro:
+        logger.warning("ia_texto_falhou", extra={"acao": entrada.acao, "erro": str(erro)})
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(erro))
+    return IaTextoSaida(texto=saida[:20000])
 
 
 @router.post("/nasalancia", response_model=ResultadoSalvo, dependencies=[Depends(verify_csrf)])

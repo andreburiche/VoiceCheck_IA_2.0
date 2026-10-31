@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { FileText, Printer, RotateCcw, Save } from "lucide-react";
 
+import { EditorDocumento, type EditorDocumentoRef } from "@/components/voz-clinica/editor-documento";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +22,7 @@ import {
 import {
   ESPECIALIDADES,
   LOGO_PAPEL,
+  achados as listarAchados,
   MODELOS,
   PROFISSIONAL_VAZIO,
   gerarRascunho,
@@ -69,7 +72,7 @@ export function DocumentosPaciente({ paciente, versao, aoSalvar }: { paciente: s
   const [msg, setMsg] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const pedido = useRef(0);
-  const textoRef = useRef<HTMLTextAreaElement>(null);
+  const textoRef = useRef<EditorDocumentoRef>(null);
 
   useEffect(() => { setProf(lerProfissional()); }, []);
   function mudarProf(campo: keyof Profissional, valor: string) {
@@ -117,6 +120,7 @@ export function DocumentosPaciente({ paciente, versao, aoSalvar }: { paciente: s
   }
 
   const faltando = pendencias(corpo);
+  const achadosLista = useMemo(() => (itens ? listarAchados(itens) : []), [itens]);
   const emitidos = useMemo(
     () => (itens ?? []).filter((a) => a.tipo === "documento").sort((a, b) => b.criado_em.localeCompare(a.criado_em)),
     [itens],
@@ -138,7 +142,7 @@ export function DocumentosPaciente({ paciente, versao, aoSalvar }: { paciente: s
     if (!prof.nome.trim()) { setErro("Informe o nome do profissional que assina."); return; }
     if (!titulo.trim() || !corpo.trim()) { setErro("O documento está sem título ou sem texto."); return; }
     if (faltando.length && !window.confirm(`Ainda há ${faltando.length} ${faltando.length === 1 ? "trecho" : "trechos"} entre colchetes para completar. Emitir assim mesmo?`)) {
-      textoRef.current?.focus();
+      textoRef.current?.focar();
       return;
     }
     setSalvando(true);
@@ -263,8 +267,10 @@ export function DocumentosPaciente({ paciente, versao, aoSalvar }: { paciente: s
             </button>
           ) : null}
         </div>
-        <textarea id={`${id}-corpo`} ref={textoRef} className={cn(AREA, "min-h-[22rem] font-[inherit]")} maxLength={20000} value={corpo}
-          onChange={(e) => { setCorpo(e.target.value); setEditado(true); }} aria-describedby={`${id}-pend`} data-testid="vc2-doc-corpo" />
+        <div className="mt-1">
+          <EditorDocumento ref={textoRef} id={`${id}-corpo`} valor={corpo} paciente={paciente} modelo={modelo} achados={achadosLista}
+            descricaoId={`${id}-pend`} aoMudar={(t) => { setCorpo(t); setEditado(true); }} />
+        </div>
         <p id={`${id}-pend`} className={cn("mt-1.5 text-xs", faltando.length ? "text-signal-warn" : "text-ink-faint")} data-testid="vc2-doc-pendencias">
           {itens === null ? "Carregando o prontuário…"
             : faltando.length ? `Para completar: ${faltando.slice(0, 6).join(" · ")}${faltando.length > 6 ? " …" : ""}`

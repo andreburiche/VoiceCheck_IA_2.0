@@ -508,6 +508,26 @@ class DocumentoEntrada(BaseModel):
     profissional: ProfissionalDocumento
 
 
+class IaTextoEntrada(BaseModel):
+    """Pedido de ajuda da IA num texto da aba Documentos (o nome do paciente já vem trocado por [PACIENTE])."""
+
+    acao: Literal["melhorar", "corrigir", "formal", "simples", "resumir", "redigir"]
+    texto: str = Field(default="", max_length=20000)
+    modelo: ModeloDocumento
+    #: o que o profissional quer (obrigatório em "redigir")
+    pedido: str | None = Field(default=None, max_length=1000)
+
+
+class IaTextoSaida(BaseModel):
+    texto: str
+
+
+class IaTextoStatus(BaseModel):
+    disponivel: bool
+    provedor: str | None = None
+    modelo: str | None = None
+
+
 class NasalanciaEntrada(BaseModel):
     """Resumo da nasalância medida no navegador (2 canais: oral e nasal); o áudio não é enviado."""
 

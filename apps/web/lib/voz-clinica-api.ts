@@ -467,6 +467,19 @@ export function emitirDocumento(entrada: {
   return apiFetch<Salvo<DocumentoSalvo>>(`${BASE}/documentos`, { method: "POST", json: entrada });
 }
 
+export type AcaoIaTexto = "melhorar" | "corrigir" | "formal" | "simples" | "resumir" | "redigir";
+export type StatusIaTexto = { disponivel: boolean; provedor: "anthropic" | "ollama" | null; modelo: string | null };
+
+/** Se a IA de texto da aba Documentos está ligada na API (e com qual provedor). */
+export function statusIaTexto() {
+  return apiFetch<StatusIaTexto>(`${BASE}/documentos/ia`);
+}
+
+/** Sugestão da IA para um texto (o nome do paciente já deve vir trocado por [PACIENTE]). */
+export function ajudarTexto(entrada: { acao: AcaoIaTexto; texto: string; modelo: string; pedido?: string }) {
+  return apiFetch<{ texto: string }>(`${BASE}/documentos/ia`, { method: "POST", json: entrada, timeoutMs: 120_000 });
+}
+
 export function registrarSessao(entrada: EntradaSessao) {
   return apiFetch<Salvo<ResultadoSessao>>(`${BASE}/sessoes`, { method: "POST", json: entrada });
 }

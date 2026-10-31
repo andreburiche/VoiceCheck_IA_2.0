@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Avaliacao, CadastroPaciente } from "@/lib/voz-clinica-api";
-import { MODELOS, achados, gerarRascunho, htmlDocumento, pendencias, type Contexto } from "@/lib/voz-clinica-documentos";
+import { MODELOS, achados, anonimizar, corpoHtml, formatarLinha, gerarRascunho, htmlDocumento, pendencias, type Contexto } from "@/lib/voz-clinica-documentos";
 
 const av = (tipo: Avaliacao["tipo"], resultado: unknown, criado_em: string): Avaliacao =>
   ({ id: `${tipo}-${criado_em}`, paciente: "Ana Souza", tipo, motor: null, criado_em, resultado }) as Avaliacao;
@@ -86,5 +86,20 @@ describe("documentos para o paciente", () => {
     expect(html.includes("Recife, 30 de outubro de 2026.")).toBe(true);
     expect(html.includes("CRFa 2-12345")).toBe(true);
     expect(html.includes('<img src="https://exemplo.test/brand/voicecheck-lockup-v3-papel.png" alt="VoiceCheck IA" />')).toBe(true);
+  });
+
+  it("marcação da barra de ferramentas: negrito, itálico, subtítulo e listas, sem abrir brecha para HTML", () => {
+    expect(formatarLinha("voz **rouca** e _soprosa_.")).toBe("voz <strong>rouca</strong> e <em>soprosa</em>.");
+    expect(formatarLinha("**<b>x</b>**")).toBe("<strong>&lt;b&gt;x&lt;/b&gt;</strong>");
+    expect(formatarLinha("arquivo_de_audio e 2 * 3 ** 4")).toBe("arquivo_de_audio e 2 * 3 ** 4");
+    const html = corpoHtml("## Conduta\nTexto antes\n• um\n• dois\nTexto depois\n\n1. a\n2. **b**");
+    expect(html).toBe("<h2>Conduta</h2><p>Texto antes</p><ul><li>um</li><li>dois</li></ul><p>Texto depois</p>\n<ol><li>a</li><li><strong>b</strong></li></ol>");
+  });
+
+  it("anonimiza o nome antes da IA e devolve na volta", () => {
+    const a = anonimizar("Olá, Ana. Ana  Souza fez a avaliação; Anabela não é a paciente.", "Ana Souza");
+    expect(a.texto).toBe("Olá, [PRIMEIRO_NOME]. [PACIENTE] fez a avaliação; Anabela não é a paciente.");
+    expect(a.restaurar("Olá, [PRIMEIRO_NOME]! [PACIENTE] melhorou.")).toBe("Olá, Ana! Ana Souza melhorou.");
+    expect(anonimizar("Texto de João.", "João").texto).toBe("Texto de [PACIENTE].");
   });
 });
