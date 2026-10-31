@@ -19,9 +19,11 @@ export function HeroVoz() {
   return (
     <section aria-labelledby="hero-voz-title" className="relative isolate overflow-hidden px-5 pb-20 pt-32 sm:px-8 lg:pb-28 lg:pt-44">
       <div className="hud-grid absolute inset-x-0 top-0 -z-10 h-[38rem]" aria-hidden />
+      {/* "Mint Haze": névoa de cor da marca atrás do título, parada (sem custo de animação) */}
+      <div className="nevoa-marca pointer-events-none absolute inset-x-0 top-0 -z-10 h-[44rem]" aria-hidden />
       <div className="mx-auto max-w-4xl text-center motion-safe:animate-fade-up">
         <h1 id="hero-voz-title" className="text-balance font-display text-5xl font-bold leading-[1.02] tracking-[-0.035em] text-ink sm:text-6xl xl:text-[5.25rem]">
-          A voz inteira, <span className="text-accent">medida.</span>
+          A voz inteira, <span className="inline-block text-accent motion-safe:animate-foco">medida.</span>
         </h1>
         <p className="mx-auto mt-7 max-w-2xl text-pretty text-lg leading-relaxed text-ink/90 sm:text-xl">
           Avaliação acústica, fonetograma, terapia e treino de canto num só lugar — com números que

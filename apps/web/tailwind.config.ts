@@ -143,9 +143,15 @@ const config: Config = {
           "0%": { transform: "translateX(-100%)" },
           "100%": { transform: "translateX(0)" },
         },
+        // "Focus Reveal": a palavra entra desfocada e espaçada e assenta no lugar
+        "foco": {
+          from: { opacity: "0.15", filter: "blur(12px)", letterSpacing: "0.06em" },
+          to: { opacity: "1", filter: "blur(0)", letterSpacing: "inherit" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.55s ease-out both",
+        foco: "foco 1.1s cubic-bezier(0.22, 1, 0.36, 1) 0.35s both",
         "fade-up-delay": "fade-up 0.55s ease-out 0.1s both",
         "pulse-meter": "pulse-meter 2.4s ease-in-out infinite",
         "wave-drift": "wave-drift 18s linear infinite",

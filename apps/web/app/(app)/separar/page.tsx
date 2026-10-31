@@ -14,15 +14,24 @@ import { STEM_COLORS, STEM_LABELS } from "@/lib/stem-theme";
 
 const PAINEL = "rounded-2xl bg-canvas-raised/70 p-5 ring-1 ring-inset ring-ink/10";
 
+/** Cada cartão abre (como os "Expanded Cards") e diz onde a função fica e uma dica de uso. */
 const RECURSOS = [
-  { icone: Layers, titulo: "Todos os instrumentos", texto: "Voz, bateria, baixo, guitarra, piano e outros em faixas separadas." },
-  { icone: Mic2, titulo: "Voz e acompanhamento", texto: "Modo rápido: a voz de um lado e o instrumental (karaokê) do outro." },
-  { icone: Gauge, titulo: "Qualidade ajustável", texto: "Rápida, equilibrada ou máxima, e o modelo de alta fidelidade." },
-  { icone: SlidersHorizontal, titulo: "Ajustes avançados", texto: "Passadas e sobreposição, como no Ultimate Vocal Remover." },
-  { icone: AudioLines, titulo: "Ruído e voz", texto: "Reduzir ruído, realçar a voz e normalizar o volume ao exportar." },
-  { icone: Scissors, titulo: "Editar e cortar", texto: "Mutar, solo e volume no estúdio; cortar o trecho na exportação." },
-  { icone: Download, titulo: "Exportar separado", texto: "Só a voz, só o instrumental ou cada faixa: WAV, MP3, FLAC, M4A, OGG ou ZIP." },
-  { icone: Timer, titulo: "Até 1 hora", texto: "Músicas, aulas, entrevistas e vídeos longos num arquivo só." },
+  { icone: Layers, titulo: "Todos os instrumentos", texto: "Voz, bateria, baixo, guitarra, piano e outros em faixas separadas.",
+    onde: "Ao enviar o arquivo, escolha “Todos os instrumentos (6 fontes)”.", dica: "O piano é o mais difícil de isolar; prefira a qualidade equilibrada." },
+  { icone: Mic2, titulo: "Voz e acompanhamento", texto: "Modo rápido: a voz de um lado e o instrumental (karaokê) do outro.",
+    onde: "Ao enviar, escolha “Vocal / Instrumental (2 fontes)”.", dica: "É o modo mais rápido para ensaio e karaokê." },
+  { icone: Gauge, titulo: "Qualidade ajustável", texto: "Rápida, equilibrada ou máxima, e o modelo de alta fidelidade.",
+    onde: "No passo “Modelo de IA” do envio.", dica: "Teste na rápida; refaça na máxima só o que for publicar." },
+  { icone: SlidersHorizontal, titulo: "Ajustes avançados", texto: "Passadas e sobreposição, como no Ultimate Vocal Remover.",
+    onde: "Dentro da música, painel Separação → Ajustes avançados.", dica: "Mais passadas tiram chiado, mas cada uma soma tempo." },
+  { icone: AudioLines, titulo: "Ruído e voz", texto: "Reduzir ruído, realçar a voz e normalizar o volume ao exportar.",
+    onde: "Dentro da música, aba Exportar → Tratamento e trecho.", dica: "Normalizar deixa todas as faixas no mesmo volume de streaming." },
+  { icone: Scissors, titulo: "Editar e cortar", texto: "Mutar, solo e volume no estúdio; cortar o trecho na exportação.",
+    onde: "Aba Estúdio (mixer) e aba Exportar (início e fim).", dica: "Em cada faixa, M silencia e S toca só ela." },
+  { icone: Download, titulo: "Exportar separado", texto: "Só a voz, só o instrumental ou cada faixa: WAV, MP3, FLAC, M4A, OGG ou ZIP.",
+    onde: "Dentro da música, aba Exportar.", dica: "FLAC guarda a qualidade sem perda e ocupa menos que WAV." },
+  { icone: Timer, titulo: "Até 1 hora", texto: "Músicas, aulas, entrevistas e vídeos longos num arquivo só.",
+    onde: "Vale para qualquer envio, de áudio ou vídeo.", dica: "Arquivos longos demoram mais; você pode navegar enquanto processa." },
 ] as const;
 
 const FAIXAS_6 = ["vocals", "drums", "bass", "guitar", "piano", "other"];
@@ -94,11 +103,23 @@ export default function SepararPage() {
       <section aria-labelledby="separar-recursos">
         <h2 id="separar-recursos" className="font-display text-lg font-semibold text-ink">O que dá para fazer</h2>
         <ul className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {RECURSOS.map(({ icone: Icone, titulo, texto }) => (
-            <li key={titulo} className={PAINEL}>
-              <Icone className="h-5 w-5 text-accent" aria-hidden />
-              <p className="mt-2 text-sm font-semibold text-ink">{titulo}</p>
-              <p className="mt-1 text-sm text-ink-muted">{texto}</p>
+          {RECURSOS.map(({ icone: Icone, titulo, texto, onde, dica }) => (
+            <li key={titulo}>
+              <details className="group h-full rounded-2xl bg-canvas-raised/70 ring-1 ring-inset ring-ink/10 transition-shadow duration-200 open:ring-accent/40 hover:ring-ink/20">
+                <summary className="flex min-h-11 cursor-pointer list-none flex-col p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent [&::-webkit-details-marker]:hidden">
+                  <span className="flex items-center justify-between">
+                    <Icone className="h-5 w-5 text-accent" aria-hidden />
+                    <span className="text-xs font-medium text-ink-faint group-open:hidden">Onde fica?</span>
+                    <span className="hidden text-xs font-medium text-accent group-open:inline">Fechar</span>
+                  </span>
+                  <span className="mt-2 text-sm font-semibold text-ink">{titulo}</span>
+                  <span className="mt-1 text-sm text-ink-muted">{texto}</span>
+                </summary>
+                <div className="-mt-2 space-y-2 px-5 pb-5 text-sm motion-safe:animate-fade-up">
+                  <p className="text-ink"><span className="font-semibold">Onde: </span>{onde}</p>
+                  <p className="text-ink-muted"><span className="font-semibold text-ink">Dica: </span>{dica}</p>
+                </div>
+              </details>
             </li>
           ))}
         </ul>

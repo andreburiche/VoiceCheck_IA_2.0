@@ -62,7 +62,7 @@ export function TrackLane({
                 : "border-line text-ink-muted hover:border-ink-faint",
             )}
             aria-pressed={cfg.mute}
-            aria-label={`Mute ${label}`}
+            aria-label={`Silenciar ${label}`}
             onClick={() => onChange({ mute: !cfg.mute })}
           >
             M
@@ -76,7 +76,7 @@ export function TrackLane({
                 : "border-line text-ink-muted hover:border-ink-faint",
             )}
             aria-pressed={cfg.solo}
-            aria-label={`Solo ${label}`}
+            aria-label={`Ouvir só ${label}`}
             onClick={() => onChange({ solo: !cfg.solo })}
           >
             S
