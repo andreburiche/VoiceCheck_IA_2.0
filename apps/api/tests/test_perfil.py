@@ -53,7 +53,7 @@ def test_sem_perfil_clinico_nao_entra_na_avaliacao_clinica() -> None:
     assert reg.status_code == 201
     assert reg.json()["user"]["acesso_clinico"] is False
     r = c.get("/api/v1/voz-clinica/status")
-    assert r.status_code == 403 and "Meu perfil" in r.json()["detail"]
+    assert r.status_code == 403 and "Meu perfil" in r.text  # formato de erro padronizado da API
     assert c.get("/api/v1/voz-clinica/pacientes").status_code == 403
     # a prática em casa do paciente (link público) não depende do perfil
     assert c.get("/api/v1/pratica-casa/plano", headers={"X-Pratica-Token": "x" * 40}).status_code != 403
