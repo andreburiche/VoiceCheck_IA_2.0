@@ -160,6 +160,12 @@ class User(Base, TimestampMixin):
     #: Quando aceitou os Termos e a Política de Privacidade, e qual versão (LGPD art. 8º e 9º).
     privacy_accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     privacy_version: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    #: Conferência do registro (CRFa) pelo administrador: pendente | aprovado | recusado (vazio = não pediu).
+    #: Só o fonoaudiólogo APROVADO entra na área clínica: o perfil declarado sozinho não basta.
+    clinical_status: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    clinical_reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    clinical_reviewed_by: Mapped[Optional[str]] = mapped_column(CHAR(36), nullable=True)
+    clinical_review_note: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     @property
     def has_photo(self) -> bool:
@@ -167,7 +173,9 @@ class User(Base, TimestampMixin):
 
     @property
     def clinical_access(self) -> bool:
-        return self.role == UserRole.admin or (self.profile_kind or "") == "fonoaudiologo"
+        return self.role == UserRole.admin or (
+            (self.profile_kind or "") == "fonoaudiologo" and self.clinical_status == "aprovado"
+        )
 
     projects: Mapped[list[Project]] = relationship(back_populates="owner")
     subscriptions: Mapped[list[Subscription]] = relationship(back_populates="user")

@@ -198,7 +198,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
               {showErr("registro") ? (
                 <p id="registro-error" className="text-sm text-signal-err">{showErr("registro")}</p>
               ) : (
-                <p id="registro-hint" className="text-xs text-ink-faint">Libera a avaliação clínica (dados de saúde de pacientes).</p>
+                <p id="registro-hint" className="text-xs text-ink-faint">A avaliação clínica (dados de saúde de pacientes) abre depois que o administrador conferir o seu CRFa.</p>
               )}
             </div>
           ) : null}

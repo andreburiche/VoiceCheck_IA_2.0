@@ -69,6 +69,9 @@ export type User = {
   /** Quando aceitou a Política de Privacidade (null = ainda não aceitou). */
   privacidade_aceita_em?: string | null;
   privacidade_versao?: string | null;
+  /** Conferência do CRFa pelo administrador: pendente | aprovado | recusado (null = não pediu). */
+  verificacao_clinica?: "pendente" | "aprovado" | "recusado" | null;
+  verificacao_clinica_nota?: string | null;
 };
 
 export const ROTULO_PERFIL: Record<PerfilProfissional, string> = {
@@ -344,6 +347,15 @@ export const systemApi = {
 
 export const adminApi = {
   conformidade: () => apiFetch<Record<string, unknown>>("/api/v1/admin/conformidade"),
+  verificacoesClinicas: (situacao: "pendente" | "aprovado" | "recusado" = "pendente") =>
+    apiFetch<{ items: Array<{ id: string; nome: string; email: string; registro: string | null; cidade: string | null; situacao: string; nota: string | null; criado_em: string }> }>(
+      `/api/v1/admin/verificacoes-clinicas?situacao=${situacao}`,
+    ),
+  decidirVerificacao: (id: string, aprovar: boolean, nota?: string) =>
+    apiFetch<{ id: string; situacao: string }>(`/api/v1/admin/usuarios/${encodeURIComponent(id)}/verificacao-clinica`, {
+      method: "POST",
+      json: { aprovar, nota: nota?.trim() || null },
+    }),
   users: () =>
     apiFetch<{ items: Array<{ id: string; email: string; name: string; role: string; created_at: string }>; total: number }>(
       "/api/v1/admin/users",

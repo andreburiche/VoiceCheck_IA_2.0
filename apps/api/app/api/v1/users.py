@@ -30,12 +30,20 @@ def me(user: CurrentUser) -> UserResponse:
 def atualizar_perfil(entrada: PerfilEntrada, user: CurrentUser, db: DbSession) -> UserResponse:
     """Meu perfil: nome, perfil profissional e dados que entram nos documentos e relatórios.
 
-    O perfil é declarado pelo próprio profissional (o sistema não confere o registro no conselho);
-    o de fonoaudiólogo libera a avaliação clínica e exige o número do registro."""
+    O perfil é declarado pelo profissional, mas o de fonoaudiólogo só libera a avaliação clínica depois
+    que o administrador confere o registro (CRFa). Trocar de perfil tira o acesso; voltar para
+    fonoaudiólogo, ou mudar o número do registro, pede nova conferência."""
+    registro_antes = (user.profile_data or {}).get("registro")
+    era_fono = user.profile_kind == "fonoaudiologo"
     user.name = entrada.name.strip()
     user.profile_kind = entrada.perfil
     dados = {k: (getattr(entrada, k) or "").strip() or None for k in CAMPOS_PERFIL}
     user.profile_data = {k: v for k, v in dados.items() if v} or None
+    if entrada.perfil != "fonoaudiologo":
+        user.clinical_status = None
+    elif not era_fono or dados.get("registro") != registro_antes or user.clinical_status in (None, "recusado"):
+        user.clinical_status = "pendente"
+        user.clinical_review_note = None
     db.commit()
     db.refresh(user)
     return UserResponse.model_validate(user)

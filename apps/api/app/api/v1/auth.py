@@ -101,6 +101,8 @@ def register(payload: RegisterRequest, response: Response, db: DbSession, reques
         role=UserRole.user,
         profile_kind=payload.perfil,
         profile_data={"registro": payload.registro.strip()} if payload.registro and payload.registro.strip() else None,
+        # fonoaudiólogo só entra na área clínica depois que o administrador confere o CRFa
+        clinical_status="pendente" if payload.perfil == "fonoaudiologo" else None,
         privacy_accepted_at=datetime.now(UTC) if payload.aceite_privacidade else None,
         privacy_version=VERSAO_PRIVACIDADE if payload.aceite_privacidade else None,
     )

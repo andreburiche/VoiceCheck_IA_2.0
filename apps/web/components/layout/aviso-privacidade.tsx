@@ -21,7 +21,7 @@ export function AvisoPrivacidade() {
       <ShieldCheck className="h-5 w-5 shrink-0 text-accent" aria-hidden />
       <p className="min-w-0 flex-1">
         Atualizamos os <Link href="/privacidade" target="_blank" className="font-medium text-accent hover:underline">Termos e a Política de Privacidade</Link>{" "}
-        (LGPD): como guardamos os dados da sua conta e dos seus pacientes. Leia e confirme para registrar o aceite.
+        (LGPD): como guardamos os dados da sua conta{me.data.acesso_clinico ? " e dos seus pacientes" : ""}. Leia e confirme para registrar o aceite.
       </p>
       {erro ? <p role="alert" className="text-signal-err">{erro}</p> : null}
       <Button size="sm" disabled={salvando} onClick={async () => {

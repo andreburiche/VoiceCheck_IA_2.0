@@ -9,6 +9,8 @@ import uuid
 import zipfile
 
 import httpx
+
+from tests.admin_teste import aprovar_fono
 import pytest
 
 from voz_clinica_sintese import para_wav, sintetizar
@@ -23,6 +25,8 @@ def _registrar(c: httpx.Client, prefixo: str) -> None:
     assert reg.status_code == 201, reg.text
     c.cookies.update(reg.cookies)
     c.headers["X-CSRF-Token"] = reg.json()["csrf_token"]
+    # o perfil de fonoaudiólogo só abre a área clínica depois que o administrador confere o CRFa
+    aprovar_fono(reg.json()["user"]["id"])
 
 
 _CLIENTES: dict[str, httpx.Client] = {}

@@ -41,6 +41,17 @@ test.beforeAll(async ({ browser }) => {
     data: { email, password: "senha12345", name: "E2E Voz", perfil: "fonoaudiologo", registro: "CRFa 0-00000" },
   });
   expect(cadastro.status(), await cadastro.text()).toBe(201);
+  // o CRFa precisa ser aprovado pelo administrador (conta de teste do seed) antes da área clínica abrir
+  const admin = await browser.newContext();
+  const login = await admin.request.post("/__api/api/v1/auth/login", { data: { email: "admin@estudio.local", password: "senha12345" } });
+  expect(login.status(), await login.text()).toBe(200);
+  const csrf = (await login.json()).csrf_token as string;
+  const id = (await cadastro.json()).user.id as string;
+  const ok = await admin.request.post(`/__api/api/v1/admin/usuarios/${id}/verificacao-clinica`, {
+    data: { aprovar: true }, headers: { "X-CSRF-Token": csrf },
+  });
+  expect(ok.status(), await ok.text()).toBe(200);
+  await admin.close();
 });
 
 test.afterAll(async () => {

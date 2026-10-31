@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { ConferenciaCrfa } from "@/components/admin/conferencia-crfa";
 import { PainelConformidade } from "@/components/admin/painel-conformidade";
 import { adminApi, authApi } from "@/lib/api";
 
@@ -41,6 +42,8 @@ export default function AdminPage() {
         <h1 className="font-display text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">Administração</h1>
         <p className="mt-2 text-base text-ink-muted">Usuários, processamentos e registro de auditoria.</p>
       </div>
+
+      <ConferenciaCrfa />
 
       <PainelConformidade />
 

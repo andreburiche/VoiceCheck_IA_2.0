@@ -144,6 +144,10 @@ def seed_reference_data() -> None:
                     if existing.profile_kind != entry.get("profile_kind"):
                         existing.profile_kind = entry.get("profile_kind")
                         existing.profile_data = entry.get("profile_data") or existing.profile_data
+                    # a conta de teste de fonoaudióloga já vem com o registro aprovado; as outras, sem acesso clínico
+                    status_teste = "aprovado" if entry.get("profile_kind") == "fonoaudiologo" else None
+                    if existing.clinical_status != status_teste:
+                        existing.clinical_status = status_teste
                     continue
                 user = User(
                     email=entry["email"],
@@ -152,6 +156,7 @@ def seed_reference_data() -> None:
                     role=entry["role"],
                     profile_kind=entry.get("profile_kind"),
                     profile_data=entry.get("profile_data"),
+                    clinical_status="aprovado" if entry.get("profile_kind") == "fonoaudiologo" else None,
                 )
                 db.add(user)
                 db.flush()

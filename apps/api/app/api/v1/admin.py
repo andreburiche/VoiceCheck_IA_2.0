@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 
-from app.core.deps import AdminUser, DbSession
+from app.core.deps import AdminUser, DbSession, verify_csrf
 from app.models import AuditLog, ProcessingJob, User
 from app.models.entities import JobStatus
 from app.schemas.admin import (
@@ -113,6 +113,7 @@ def conformidade(_admin: AdminUser, db: DbSession) -> dict:
         return int(db.scalar(select(func.count()).select_from(modelo).where(*filtros)) or 0)
 
     clinicos = select(User).where(User.deleted_at.is_(None), User.profile_kind == "fonoaudiologo").subquery()
+    aguardando = int(db.scalar(select(func.count()).select_from(clinicos).where(clinicos.c.clinical_status == "pendente")) or 0)
     total_clinicos = int(db.scalar(select(func.count()).select_from(clinicos)) or 0)
     sem_verificar = int(db.scalar(select(func.count()).select_from(clinicos).where(clinicos.c.email_verified_at.is_(None))) or 0)
     usuarios = contar(User.deleted_at.is_(None), modelo=User)
@@ -140,6 +141,7 @@ def conformidade(_admin: AdminUser, db: DbSession) -> dict:
             "usuarios": usuarios,
             "sem_aceite_da_politica": sem_aceite,
             "fonoaudiologos": total_clinicos,
+            "fonoaudiologos_aguardando_conferencia_do_crfa": aguardando,
             "fonoaudiologos_sem_email_verificado": sem_verificar,
         },
         "dados_de_pacientes": {
@@ -155,3 +157,57 @@ def conformidade(_admin: AdminUser, db: DbSession) -> dict:
             "exclusao_pendente_mais_antiga": pendente_mais_antigo.isoformat() if pendente_mais_antigo else None,
         },
     }
+
+
+
+# --- Conferência do registro (CRFa) dos fonoaudiólogos ---------------------------------------------
+
+from typing import Literal  # noqa: E402
+
+from pydantic import BaseModel, Field  # noqa: E402
+
+
+class DecisaoClinica(BaseModel):
+    aprovar: bool
+    #: Motivo, mostrado ao profissional quando recusado (ex.: "número não encontrado no CRFa-2").
+    nota: str | None = Field(default=None, max_length=255)
+
+
+@router.get("/verificacoes-clinicas")
+def listar_verificacoes(
+    _admin: AdminUser,
+    db: DbSession,
+    situacao: Literal["pendente", "aprovado", "recusado"] = Query(default="pendente"),
+) -> dict:
+    """Fonoaudiólogos esperando a conferência do registro no conselho (ou já aprovados/recusados)."""
+    rows = db.scalars(
+        select(User)
+        .where(User.deleted_at.is_(None), User.profile_kind == "fonoaudiologo", User.clinical_status == situacao)
+        .order_by(User.created_at.desc())
+        .limit(200)
+    ).all()
+    return {"items": [{
+        "id": u.id, "nome": u.name, "email": u.email, "registro": (u.profile_data or {}).get("registro"),
+        "cidade": (u.profile_data or {}).get("cidade"), "situacao": u.clinical_status, "nota": u.clinical_review_note,
+        "criado_em": u.created_at, "conferido_em": u.clinical_reviewed_at,
+    } for u in rows]}
+
+
+@router.post("/usuarios/{usuario_id}/verificacao-clinica", dependencies=[Depends(verify_csrf)])
+def decidir_verificacao(usuario_id: str, entrada: DecisaoClinica, request: Request, admin: AdminUser, db: DbSession) -> dict:
+    """Aprova (libera a área clínica) ou recusa o registro informado pelo fonoaudiólogo. Fica na auditoria."""
+    from datetime import UTC, datetime
+
+    from app.services.audit import write_audit
+
+    u = db.get(User, usuario_id)
+    if u is None or u.deleted_at is not None or u.profile_kind != "fonoaudiologo":
+        raise HTTPException(status_code=404, detail="Fonoaudiólogo não encontrado")
+    u.clinical_status = "aprovado" if entrada.aprovar else "recusado"
+    u.clinical_reviewed_at = datetime.now(UTC)
+    u.clinical_reviewed_by = admin.id
+    u.clinical_review_note = (entrada.nota or "").strip() or None
+    write_audit(db, action="admin.verificacao_clinica", resource_type="user", resource_id=u.id, actor_id=admin.id,
+                request=request, meta={"situacao": u.clinical_status, "registro": (u.profile_data or {}).get("registro")})
+    db.commit()
+    return {"id": u.id, "situacao": u.clinical_status}

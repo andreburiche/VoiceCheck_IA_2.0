@@ -10,6 +10,8 @@ import zlib
 import httpx
 import pytest
 
+from tests.admin_teste import admin, aprovar_fono
+
 BASE = os.getenv("PUBLIC_API_URL", "http://localhost:8000")
 
 
@@ -43,9 +45,37 @@ def test_fonoaudiologo_precisa_de_registro_no_cadastro() -> None:
     c, reg = _novo({"perfil": "fonoaudiologo", "registro": "CRFa 2-12345"})
     assert reg.status_code == 201, reg.text
     u = reg.json()["user"]
-    assert u["perfil"] == "fonoaudiologo" and u["acesso_clinico"] is True
+    # declarar o perfil não basta: o CRFa fica em conferência até o administrador aprovar
+    assert u["perfil"] == "fonoaudiologo" and u["acesso_clinico"] is False and u["verificacao_clinica"] == "pendente"
     assert u["perfil_dados"] == {"registro": "CRFa 2-12345"}
+    r = c.get("/api/v1/voz-clinica/status")
+    assert r.status_code == 403 and "conferência" in r.text
+    assert c.get("/api/v1/voz-clinica/pacientes").status_code == 403
+    pend = admin().get("/api/v1/admin/verificacoes-clinicas").json()["items"]
+    assert any(p["id"] == u["id"] and p["registro"] == "CRFa 2-12345" for p in pend)
+    aprovar_fono(u["id"])
+    me = c.get("/api/v1/users/me").json()
+    assert me["acesso_clinico"] is True and me["verificacao_clinica"] == "aprovado"
     assert c.get("/api/v1/voz-clinica/status").status_code == 200
+
+
+def test_musico_nao_entra_na_area_clinica_nem_se_declarando_fono() -> None:
+    c, reg = _novo({"perfil": "musico"})
+    assert reg.status_code == 201 and reg.json()["user"]["acesso_clinico"] is False
+    for rota in ("/api/v1/voz-clinica/status", "/api/v1/voz-clinica/pacientes", "/api/v1/voz-clinica/avaliacoes",
+                 "/api/v1/voz-clinica/agenda?de=2031-01-01T00:00:00Z&ate=2031-01-08T00:00:00Z"):
+        assert c.get(rota).status_code == 403, rota
+    # trocar sozinho para fonoaudiólogo em Meu perfil só pede a conferência; o acesso não abre
+    r = c.put("/api/v1/users/me/perfil", json={"name": "Músico", "perfil": "fonoaudiologo", "registro": "CRFa 9-99999"})
+    assert r.status_code == 200 and r.json()["acesso_clinico"] is False and r.json()["verificacao_clinica"] == "pendente"
+    assert c.get("/api/v1/voz-clinica/pacientes").status_code == 403
+    # recusado: continua sem acesso e vê o motivo
+    aprovar_fono(r.json()["id"], aprovar=False, nota="Registro não encontrado")
+    me = c.get("/api/v1/users/me").json()
+    assert me["verificacao_clinica"] == "recusado" and me["verificacao_clinica_nota"] == "Registro não encontrado"
+    assert "não foi aprovado" in c.get("/api/v1/voz-clinica/status").text
+    # usuário comum não aprova ninguém
+    assert c.post(f"/api/v1/admin/usuarios/{r.json()['id']}/verificacao-clinica", json={"aprovar": True}).status_code == 403
 
 
 def test_sem_perfil_clinico_nao_entra_na_avaliacao_clinica() -> None:
@@ -68,14 +98,23 @@ def test_meu_perfil_atualiza_dados_e_libera_o_acesso() -> None:
     r = c.put("/api/v1/users/me/perfil", json={**base, "registro": " CRFa 4-98765 "})
     assert r.status_code == 200, r.text
     u = r.json()
-    assert u["name"] == "Ana Fono" and u["acesso_clinico"] is True
+    assert u["name"] == "Ana Fono" and u["acesso_clinico"] is False and u["verificacao_clinica"] == "pendente"
     assert u["perfil_dados"] == {"registro": "CRFa 4-98765", "especialidade": "Voz", "instituicao": "Clínica Vozes",
                                  "telefone": "(81) 90000-0000", "cidade": "Recife"}
+    aprovar_fono(u["id"])
     assert c.get("/api/v1/voz-clinica/status").status_code == 200
-    # trocar para professor de música tira o acesso clínico
+    # editar outros dados mantém a aprovação; mudar o número do registro pede nova conferência
+    r = c.put("/api/v1/users/me/perfil", json={**base, "registro": "CRFa 4-98765", "cidade": "Olinda"})
+    assert r.json()["acesso_clinico"] is True
+    r = c.put("/api/v1/users/me/perfil", json={**base, "registro": "CRFa 4-11111"})
+    assert r.json()["acesso_clinico"] is False and r.json()["verificacao_clinica"] == "pendente"
+    aprovar_fono(u["id"])
+    # trocar para professor de música tira o acesso clínico, e voltar para fono pede nova conferência
     r = c.put("/api/v1/users/me/perfil", json={"name": "Ana", "perfil": "professor_musica"})
     assert r.json()["acesso_clinico"] is False and r.json()["perfil_dados"] is None
     assert c.get("/api/v1/voz-clinica/status").status_code == 403
+    r = c.put("/api/v1/users/me/perfil", json={**base, "registro": "CRFa 4-11111"})
+    assert r.json()["acesso_clinico"] is False and r.json()["verificacao_clinica"] == "pendente"
 
 
 def test_foto_do_profissional() -> None:
@@ -106,12 +145,7 @@ def test_aceite_da_politica_de_privacidade_fica_registrado() -> None:
 def test_painel_de_conformidade_so_para_admin() -> None:
     c, _ = _novo()
     assert c.get("/api/v1/admin/conformidade").status_code == 403
-    adm = httpx.Client(base_url=BASE, timeout=60.0)
-    r = adm.post("/api/v1/auth/login", json={"email": "admin@estudio.local", "password": "senha12345"})
-    if r.status_code != 200:
-        pytest.skip("conta de teste do administrador indisponível")
-    adm.cookies.update(r.cookies)
-    m = adm.get("/api/v1/admin/conformidade")
+    m = admin().get("/api/v1/admin/conformidade")
     assert m.status_code == 200, m.text
     corpo = m.json()
     assert {"acesso", "contas", "dados_de_pacientes"} <= set(corpo)

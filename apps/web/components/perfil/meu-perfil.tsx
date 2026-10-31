@@ -118,9 +118,22 @@ export function MeuPerfil() {
               ))}
             </div>
             <p className="mt-3 text-xs text-ink-faint">
-              A avaliação clínica (dados de saúde de pacientes) fica disponível só para o perfil de fonoaudiólogo, com o registro no conselho.
-              O perfil é declarado por você e pode ser mudado aqui.
+              A avaliação clínica (dados de saúde de pacientes) é só para fonoaudiólogos: escolhido esse perfil, o administrador confere o
+              registro no conselho (CRFa) e libera o acesso. Músicos e professores de música não acessam a parte clínica.
             </p>
+            {me.data?.perfil === "fonoaudiologo" && me.data.role !== "admin" ? (
+              <p role="status" data-testid="perfil-verificacao"
+                className={cn("mt-3 rounded-lg px-3 py-2 text-sm ring-1 ring-inset",
+                  me.data.verificacao_clinica === "aprovado" ? "bg-signal-ok/10 text-ink ring-signal-ok/30"
+                    : me.data.verificacao_clinica === "recusado" ? "bg-flare/10 text-ink ring-flare/30"
+                      : "bg-signal-warn/10 text-ink ring-signal-warn/30")}>
+                {me.data.verificacao_clinica === "aprovado"
+                  ? "Registro aprovado: a avaliação clínica está liberada."
+                  : me.data.verificacao_clinica === "recusado"
+                    ? `Registro não aprovado${me.data.verificacao_clinica_nota ? `: ${me.data.verificacao_clinica_nota}` : ""}. Corrija o CRFa e salve para pedir nova conferência.`
+                    : "Registro em conferência: a avaliação clínica abre assim que o administrador aprovar."}
+              </p>
+            ) : null}
           </section>
 
           <section className={PAINEL} aria-labelledby={`${id}-dados`}>

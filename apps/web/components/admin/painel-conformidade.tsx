@@ -12,6 +12,7 @@ const ROTULOS: Record<string, string> = {
   usuarios: "Contas ativas",
   sem_aceite_da_politica: "Sem aceite da Política de Privacidade",
   fonoaudiologos: "Fonoaudiólogos",
+  fonoaudiologos_aguardando_conferencia_do_crfa: "Aguardando conferência do CRFa",
   fonoaudiologos_sem_email_verificado: "Fonoaudiólogos sem e-mail verificado",
   pacientes_com_registros: "Pacientes com registros",
   cadastros: "Cadastros de paciente",
@@ -23,7 +24,7 @@ const ROTULOS: Record<string, string> = {
 };
 const GRUPOS: Record<string, string> = { acesso: "Acesso e auditoria", contas: "Contas", dados_de_pacientes: "Dados de pacientes" };
 /** Valores que pedem atenção quando passam de zero. */
-const ALERTA = new Set(["sem_aceite_da_politica", "sem_registro_ha_mais_de_5_anos", "links_de_pratica_ativos_ha_mais_de_90_dias", "arquivos_aguardando_exclusao"]);
+const ALERTA = new Set(["fonoaudiologos_aguardando_conferencia_do_crfa", "sem_aceite_da_politica", "sem_registro_ha_mais_de_5_anos", "links_de_pratica_ativos_ha_mais_de_90_dias", "arquivos_aguardando_exclusao"]);
 
 /** Métricas de segurança e LGPD (só contagens; nenhum dado de paciente). */
 export function PainelConformidade() {

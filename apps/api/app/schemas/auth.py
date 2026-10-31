@@ -81,6 +81,9 @@ class UserResponse(BaseModel):
     #: quando aceitou a Política de Privacidade (null = ainda não aceitou)
     privacidade_aceita_em: Optional[datetime] = Field(default=None, validation_alias=AliasChoices("privacidade_aceita_em", "privacy_accepted_at"))
     privacidade_versao: Optional[str] = Field(default=None, validation_alias=AliasChoices("privacidade_versao", "privacy_version"))
+    #: Conferência do CRFa: pendente | aprovado | recusado (null = não pediu)
+    verificacao_clinica: Optional[str] = Field(default=None, validation_alias=AliasChoices("verificacao_clinica", "clinical_status"))
+    verificacao_clinica_nota: Optional[str] = Field(default=None, validation_alias=AliasChoices("verificacao_clinica_nota", "clinical_review_note"))
 
 
 class PerfilEntrada(BaseModel):

@@ -55,13 +55,19 @@ PERFIS_CLINICOS = {"fonoaudiologo"}
 
 
 def require_clinico(user: CurrentUser) -> User:
-    """Avaliação clínica: só fonoaudiólogo (perfil declarado em Meu perfil) ou administrador."""
-    if user.role == UserRole.admin or (user.profile_kind or "") in PERFIS_CLINICOS:
+    """Avaliação clínica: só administrador ou fonoaudiólogo com o registro (CRFa) aprovado.
+
+    Declarar o perfil não basta: músico, professor de música ou quem só escolheu "fonoaudiólogo" e
+    ainda não teve o registro conferido fica de fora (dados de saúde de pacientes, LGPD art. 11)."""
+    if user.clinical_access:
         return user
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="A avaliação clínica é para fonoaudiólogos: escolha o perfil de fonoaudiólogo em Meu perfil.",
-    )
+    if (user.profile_kind or "") in PERFIS_CLINICOS and user.clinical_status == "pendente":
+        detalhe = "Seu registro no conselho (CRFa) está em conferência. A avaliação clínica abre assim que for aprovado."
+    elif (user.profile_kind or "") in PERFIS_CLINICOS and user.clinical_status == "recusado":
+        detalhe = "O registro informado não foi aprovado. Confira o número do CRFa em Meu perfil e salve para pedir nova conferência."
+    else:
+        detalhe = "A avaliação clínica é só para fonoaudiólogos com registro aprovado: escolha esse perfil em Meu perfil e informe o CRFa."
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detalhe)
 
 
 def require_clinico_registrado(request: Request, db: DbSession, user: Annotated[User, Depends(require_clinico)]) -> User:
