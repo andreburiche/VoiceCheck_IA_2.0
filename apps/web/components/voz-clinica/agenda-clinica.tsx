@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarPlus, ChevronLeft, ChevronRight, MapPin, Monitor, Home, Trash2 } from "lucide-react";
+import { CalendarCheck2, CalendarDays, CalendarPlus, CalendarX2, CheckCheck, ChevronLeft, ChevronRight, MapPin, Monitor, Home, Trash2 } from "lucide-react";
+
+import { KpisTopo } from "@/components/dashboard/kpis-topo";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -37,12 +39,24 @@ import { cn } from "@/lib/utils";
 const PAINEL = "panel-glass rounded-2xl p-4 md:p-5";
 
 export const COR_SITUACAO: Record<SituacaoConsulta, string> = {
-  agendada: "bg-ink/[0.06] text-ink-muted",
-  confirmada: "bg-accent/15 text-ink",
-  realizada: "bg-signal-ok/15 text-ink",
-  faltou: "bg-flare/15 text-ink",
+  agendada: "bg-ink/[0.07] text-ink-muted",
+  confirmada: "bg-accent/15 text-accent",
+  realizada: "bg-brand-blue/15 text-brand-blue",
+  faltou: "bg-flare/15 text-flare",
   cancelada: "bg-ink/[0.04] text-ink-faint line-through",
 };
+
+type FiltroSemana = "todas" | SituacaoConsulta;
+const FILTROS_SEMANA: Array<{ valor: FiltroSemana; rotulo: string }> = [
+  { valor: "todas", rotulo: "Todas" },
+  { valor: "agendada", rotulo: "Agendadas" },
+  { valor: "confirmada", rotulo: "Confirmadas" },
+  { valor: "realizada", rotulo: "Realizadas" },
+  { valor: "faltou", rotulo: "Faltas" },
+];
+
+/** Botões de ação do cartão: compactos no mouse, 44 px no toque. */
+const ACAO = "rounded-full px-2.5 py-1 text-xs toque:min-h-11 toque:px-3.5";
 
 const ICONE_MODALIDADE = { presencial: MapPin, online: Monitor, domiciliar: Home } as const;
 
@@ -66,7 +80,7 @@ export function CartaoConsulta({ c, onEditar, onSituacao, onExcluir, onAbrir, co
   const aberta = c.situacao === "agendada" || c.situacao === "confirmada";
   const Icone = ICONE_MODALIDADE[c.modalidade];
   return (
-    <li className={cn("rounded-xl bg-canvas-raised/70 p-3 ring-1 ring-inset ring-ink/10", c.situacao === "cancelada" && "opacity-70")}
+    <li className={cn("rounded-2xl bg-canvas-raised/70 p-3 ring-1 ring-inset ring-ink/10", c.situacao === "cancelada" && "opacity-70")}
       data-testid="vc2-consulta">
       <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
         <button type="button" onClick={onEditar} className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
@@ -79,28 +93,28 @@ export function CartaoConsulta({ c, onEditar, onSituacao, onExcluir, onAbrir, co
             {ROTULO_TIPO_CONSULTA[c.tipo]} · {ROTULO_MODALIDADE[c.modalidade]}
           </p>
         </button>
-        <span className={cn("shrink-0 rounded-md px-1.5 py-0.5 text-[0.7rem] font-medium", COR_SITUACAO[c.situacao])}>
+        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-xs font-medium", COR_SITUACAO[c.situacao])}>
           {ROTULO_SITUACAO[c.situacao]}
         </span>
       </div>
       {c.observacoes ? <p className="mt-1.5 line-clamp-2 text-xs text-ink-muted">{c.observacoes}</p> : null}
       <div className="mt-2 flex flex-wrap gap-1">
         {aberta && !passou && c.situacao === "agendada" ? (
-          <button type="button" className="rounded-md px-2 py-1 text-xs text-accent hover:bg-accent/10" onClick={() => onSituacao("confirmada")}>Confirmar</button>
+          <button type="button" className={cn(ACAO, "text-accent hover:bg-accent/10")} onClick={() => onSituacao("confirmada")}>Confirmar</button>
         ) : null}
         {aberta && passou ? (
           <>
-            <button type="button" className="rounded-md px-2 py-1 text-xs text-accent hover:bg-accent/10" onClick={() => onSituacao("realizada")}>Realizada</button>
-            <button type="button" className="rounded-md px-2 py-1 text-xs text-flare hover:bg-flare/10" onClick={() => onSituacao("faltou")}>Faltou</button>
+            <button type="button" className={cn(ACAO, "text-accent hover:bg-accent/10")} onClick={() => onSituacao("realizada")}>Realizada</button>
+            <button type="button" className={cn(ACAO, "text-flare hover:bg-flare/10")} onClick={() => onSituacao("faltou")}>Faltou</button>
           </>
         ) : null}
         {aberta ? (
-          <button type="button" className="rounded-md px-2 py-1 text-xs text-ink-muted hover:bg-ink/[0.05]" onClick={() => onSituacao("cancelada")}>Cancelar</button>
+          <button type="button" className={cn(ACAO, "text-ink-muted hover:bg-ink/[0.05]")} onClick={() => onSituacao("cancelada")}>Cancelar</button>
         ) : null}
         {onAbrir ? (
-          <button type="button" className="rounded-md px-2 py-1 text-xs text-ink-muted hover:bg-ink/[0.05]" onClick={onAbrir}>Ficha</button>
+          <button type="button" className={cn(ACAO, "text-ink-muted hover:bg-ink/[0.05]")} onClick={onAbrir}>Ficha</button>
         ) : null}
-        <button type="button" className="ml-auto rounded-md p-1 text-ink-faint hover:bg-signal-err/10 hover:text-signal-err" onClick={onExcluir}
+        <button type="button" className="ml-auto rounded-full p-1.5 text-ink-faint hover:bg-signal-err/10 hover:text-signal-err toque:p-3.5" onClick={onExcluir}
           aria-label={`Excluir consulta de ${c.paciente}`}>
           <Trash2 className="h-3.5 w-3.5" aria-hidden />
         </button>
@@ -121,6 +135,7 @@ export function AgendaClinica() {
   const [apagar, setApagar] = useState<Consulta | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [filtro, setFiltro] = useState<FiltroSemana>("todas");
 
   const carregar = useCallback(() => {
     setCarregando(true);
@@ -133,7 +148,7 @@ export function AgendaClinica() {
   useEffect(() => { listarPacientes().then((r) => setPacientes(r.items)).catch(() => undefined); }, []);
 
   const dias = useMemo(() => diasDaSemana(semana), [semana]);
-  const grupos = useMemo(() => porDia(consultas), [consultas]);
+  const grupos = useMemo(() => porDia(filtro === "todas" ? consultas : consultas.filter((c) => c.situacao === filtro)), [consultas, filtro]);
   const hoje = chaveDia(new Date());
   const resumo = useMemo(() => {
     const ativas = consultas.filter(ativa);
@@ -164,35 +179,56 @@ export function AgendaClinica() {
     <div className="space-y-5">
       <header className="space-y-3">
         <NavegacaoClinica />
-        <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <h1 className="font-display text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">Agenda</h1>
-            <p className="mt-1 text-base text-ink-muted">Consultas da semana. Toque num horário para editar ou num dia vazio para agendar.</p>
+            <p className="mt-1 max-w-md text-base text-ink-muted">Consultas da semana. Toque num horário para editar ou num dia vazio para agendar.</p>
+            <Button className="mt-4 rounded-full" onClick={() => setForm({})} data-testid="vc2-agendar">
+              <CalendarPlus className="h-4 w-4" aria-hidden /> Agendar consulta
+            </Button>
           </div>
-          <Button onClick={() => setForm({})} data-testid="vc2-agendar">
-            <CalendarPlus className="h-4 w-4" aria-hidden /> Agendar consulta
-          </Button>
+          <KpisTopo
+            carregando={carregando}
+            itens={[
+              { icone: CalendarDays, valor: String(resumo.total), rotulo: "Consultas na semana" },
+              { icone: CalendarCheck2, valor: String(resumo.confirmadas), rotulo: "Confirmadas" },
+              { icone: CheckCheck, valor: String(resumo.realizadas), rotulo: "Realizadas" },
+              { icone: CalendarX2, valor: String(resumo.faltas), rotulo: "Faltas", etiqueta: resumo.faltas ? "rever" : undefined, alerta: true },
+            ]}
+          />
         </div>
       </header>
 
       <section className={PAINEL} aria-label="Semana">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={() => setSemana((s) => somarDias(s, -7))} aria-label="Semana anterior">
-              <ChevronLeft className="h-4 w-4" aria-hidden />
-            </Button>
-            <Button variant="secondary" size="sm" onClick={() => setSemana(inicioDaSemana(new Date()))}>Hoje</Button>
-            <Button variant="ghost" size="sm" onClick={() => setSemana((s) => somarDias(s, 7))} aria-label="Próxima semana">
-              <ChevronRight className="h-4 w-4" aria-hidden />
-            </Button>
-            <h2 className="ml-2 font-display text-lg font-semibold text-ink" aria-live="polite">{rotuloSemana(semana)}</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1 rounded-full bg-ink/[0.05] p-1">
+              <Button variant="ghost" size="sm" className="rounded-full" onClick={() => setSemana((s) => somarDias(s, -7))} aria-label="Semana anterior">
+                <ChevronLeft className="h-4 w-4" aria-hidden />
+              </Button>
+              <Button variant="secondary" size="sm" className="rounded-full" onClick={() => setSemana(inicioDaSemana(new Date()))}>Hoje</Button>
+              <Button variant="ghost" size="sm" className="rounded-full" onClick={() => setSemana((s) => somarDias(s, 7))} aria-label="Próxima semana">
+                <ChevronRight className="h-4 w-4" aria-hidden />
+              </Button>
+            </div>
+            <h2 className="font-display text-lg font-semibold text-ink" aria-live="polite">{rotuloSemana(semana)}</h2>
           </div>
-          <dl className="flex flex-wrap gap-x-5 gap-y-1 text-sm" aria-label="Resumo da semana">
-            <div className="flex gap-1.5"><dt className="text-ink-muted">Consultas</dt><dd className="font-mono font-semibold text-ink">{resumo.total}</dd></div>
-            <div className="flex gap-1.5"><dt className="text-ink-muted">Confirmadas</dt><dd className="font-mono font-semibold text-ink">{resumo.confirmadas}</dd></div>
-            <div className="flex gap-1.5"><dt className="text-ink-muted">Realizadas</dt><dd className="font-mono font-semibold text-ink">{resumo.realizadas}</dd></div>
-            <div className="flex gap-1.5"><dt className="text-ink-muted">Faltas</dt><dd className="font-mono font-semibold text-ink">{resumo.faltas}</dd></div>
-          </dl>
+          <div role="group" aria-label="Mostrar consultas" className="flex max-w-full gap-1 overflow-x-auto overscroll-x-contain rounded-full bg-ink/[0.05] p-1 [scrollbar-width:none]">
+            {FILTROS_SEMANA.map((f) => (
+              <button
+                key={f.valor}
+                type="button"
+                aria-pressed={filtro === f.valor}
+                onClick={() => setFiltro(f.valor)}
+                className={cn(
+                  "inline-flex min-h-8 toque:min-h-11 shrink-0 items-center whitespace-nowrap rounded-full px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                  filtro === f.valor ? "bg-canvas-raised text-ink shadow-sm ring-1 ring-inset ring-ink/10" : "text-ink-muted hover:text-ink",
+                )}
+              >
+                {f.rotulo}
+              </button>
+            ))}
+          </div>
         </div>
 
         {erro ? <p role="alert" className="mt-3 text-sm text-signal-err">{erro}</p> : null}
@@ -204,7 +240,7 @@ export function AgendaClinica() {
             const lista = grupos.get(k) ?? [];
             return (
               <section key={k} aria-label={diaCurtoBR(d)}
-                className={cn("flex min-h-[7rem] flex-col rounded-xl p-2 ring-1 ring-inset", k === hoje ? "bg-accent/[0.06] ring-accent/40" : "ring-ink/10")}>
+                className={cn("flex min-h-[7rem] flex-col rounded-2xl p-2 ring-1 ring-inset", k === hoje ? "bg-accent/[0.06] ring-accent/40" : "ring-ink/10")}>
                 <h3 className={cn("px-1 pb-2 text-xs font-semibold uppercase tracking-wide", k === hoje ? "text-accent" : "text-ink-muted")}>
                   {diaCurtoBR(d)}{k === hoje ? " · hoje" : ""}
                 </h3>

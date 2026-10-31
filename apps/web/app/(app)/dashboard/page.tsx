@@ -3,11 +3,29 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Activity, AudioLines, FolderKanban, Mic2, Stethoscope, TextCursorInput, Upload, Waves } from "lucide-react";
+import {
+  Activity,
+  AudioLines,
+  CalendarClock,
+  CalendarDays,
+  Clock3,
+  FolderKanban,
+  Layers,
+  Mic2,
+  Music2,
+  Stethoscope,
+  TextCursorInput,
+  Upload,
+  Users,
+  Waves,
+} from "lucide-react";
 
+import { AgendaHoje } from "@/components/dashboard/agenda-hoje";
+import { KpisTopo, type Kpi } from "@/components/dashboard/kpis-topo";
 import { LastDiagnosisCard } from "@/components/dashboard/last-diagnosis-card";
 import { PacientesRecentes } from "@/components/dashboard/pacientes-recentes";
-import { WaveHero } from "@/components/dashboard/wave-hero";
+import { Reavaliacao } from "@/components/dashboard/reavaliacao";
+import { StatusConsole } from "@/components/dashboard/status-console";
 import { Panel, Stat, TrendChart } from "@/components/hud";
 import { buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -23,6 +41,9 @@ import {
   type Project,
 } from "@/lib/api";
 import { formatHours } from "@/lib/format";
+import { consultasDeHoje, faixasReavaliacao, proximaConsulta } from "@/lib/painel";
+import { horaBR, somarDias } from "@/lib/voz-clinica-agenda";
+import { listarAgenda, listarPacientes } from "@/lib/voz-clinica-api";
 import { CardGridSkeleton } from "@/components/ui/skeleton";
 import { friendlyError } from "@/lib/errors";
 
@@ -98,6 +119,20 @@ export default function DashboardPage() {
 
   const first = recentProjects[0];
   const clinico = !!me.data?.acesso_clinico;
+
+  // Área clínica: agenda de hoje + próximos 14 dias (para "próxima consulta") e pacientes
+  const inicioHoje = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+  const agenda = useQuery({
+    queryKey: ["painel-agenda", inicioHoje.toISOString()],
+    queryFn: () => listarAgenda(inicioHoje, somarDias(inicioHoje, 14)),
+    enabled: clinico,
+    retry: false,
+  });
+  const pacientes = useQuery({ queryKey: ["voz-pacientes"], queryFn: () => listarPacientes(), enabled: clinico, retry: false });
   const importHref = "/projects?new=1";
   const studioHref = first != null ? `/projects/${first.id}/studio` : "/projects";
   const practiceHref = first != null ? `/projects/${first.id}/practice` : "/projects";
@@ -108,36 +143,69 @@ export default function DashboardPage() {
   const week = practice.data?.week ?? [];
   const weekMax = Math.max(30, ...week.map((w) => w.value));
   const weekTotal = week.reduce((s, w) => s + w.value, 0);
+  const nome = (me.data?.name ?? "").split(" ")[0] || "você";
+
+  const hoje = consultasDeHoje(agenda.data?.items ?? []);
+  const proxima = proximaConsulta(agenda.data?.items ?? []);
+  const atrasados = faixasReavaliacao(pacientes.data?.items ?? []).find((f) => f.alerta)?.pacientes ?? 0;
+  const confirmadasHoje = hoje.filter((c) => c.situacao === "confirmada").length;
+  const proximaRotulo = proxima
+    ? new Date(proxima.inicio).toDateString() === new Date().toDateString()
+      ? `hoje, ${horaBR(proxima.inicio)}`
+      : new Intl.DateTimeFormat("pt-BR", { weekday: "short", day: "2-digit" }).format(new Date(proxima.inicio)) + `, ${horaBR(proxima.inicio)}`
+    : "—";
+
+  const kpis: Kpi[] = clinico
+    ? [
+        { icone: CalendarDays, valor: String(hoje.length), rotulo: "Consultas hoje", etiqueta: confirmadasHoje ? `${confirmadasHoje} confirmada${confirmadasHoje > 1 ? "s" : ""}` : undefined },
+        { icone: Clock3, valor: proximaRotulo, rotulo: "Próxima consulta" },
+        { icone: Users, valor: String(pacientes.data?.items.length ?? 0), rotulo: "Pacientes", etiqueta: atrasados ? `${atrasados} há +90 dias` : undefined, alerta: true },
+      ]
+    : [
+        { icone: Music2, valor: String(projects.data?.total ?? 0), rotulo: "Músicas" },
+        { icone: Layers, valor: String(stems.data?.total ?? 0), rotulo: "Faixas separadas" },
+        { icone: CalendarClock, valor: formatHours(practice.data?.total ?? 0), rotulo: "Treino total", etiqueta: weekTotal ? `${weekTotal} min na semana` : undefined },
+      ];
+  const carregandoKpis = clinico ? agenda.isLoading || pacientes.isLoading : loadingMetrics;
 
   return (
     <div className="page-shell space-y-6">
-      <WaveHero userName={me.data?.name ?? "você"} importHref={importHref} clinico={clinico} />
+      {/* Topo: saudação, ações e os números principais lado a lado */}
+      <header className="flex flex-col gap-6 motion-safe:animate-fade-up xl:flex-row xl:items-end xl:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-balance font-display text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">Olá, {nome}</h1>
+          <p className="mt-1.5 max-w-lg text-base text-ink-muted">
+            {clinico ? "Sua agenda, seus pacientes e o que pede atenção hoje." : "Suas músicas, faixas e treino num lugar só."}
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2.5">
+            {clinico ? (
+              <Link href="/voz-clinica" className={buttonVariants({ className: "rounded-full" })}>
+                <Stethoscope className="h-4 w-4" aria-hidden />
+                Nova avaliação
+              </Link>
+            ) : null}
+            <Link href={importHref} className={buttonVariants({ variant: clinico ? "secondary" : "default", className: "rounded-full" })}>
+              <Upload className="h-4 w-4" aria-hidden />
+              Importar música
+            </Link>
+          </div>
+        </div>
+        <KpisTopo itens={kpis} carregando={carregandoKpis} />
+      </header>
 
-      <div className="grid grid-cols-1 gap-4 motion-safe:animate-fade-up-delay lg:grid-cols-3">
-        {clinico ? <PacientesRecentes className="lg:col-span-2" /> : <LastDiagnosisCard className="lg:col-span-2" />}
-        <section aria-label="Sua biblioteca e treino" className="panel-glass min-w-0 rounded-2xl p-5">
-          <h2 className="font-display text-base font-semibold text-ink">Sua biblioteca</h2>
-          <dl className="mt-4 space-y-3 text-sm">
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-ink-muted">Músicas</dt>
-              <dd className="text-data text-lg font-semibold text-ink">{loadingMetrics ? "—" : projects.data?.total ?? 0}</dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-ink-muted">Faixas separadas</dt>
-              <dd className="text-data text-lg font-semibold text-ink">{loadingMetrics ? "—" : stems.data?.total ?? 0}</dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-ink-muted">Treino total</dt>
-              <dd className="text-data text-lg font-semibold text-ink">
-                {formatHours(practice.data?.total ?? 0)}
-                <span className="ml-1 text-xs font-normal text-ink-muted">
-                  {practice.data ? `${practice.data.count} sessões` : ""}
-                </span>
-              </dd>
-            </div>
-          </dl>
-        </section>
-      </div>
+      {clinico ? (
+        <div className="grid grid-cols-1 gap-4 motion-safe:animate-fade-up-delay lg:grid-cols-3">
+          <AgendaHoje className="lg:col-span-2" consultas={agenda.data?.items} carregando={agenda.isLoading} erro={agenda.isError} />
+          <Reavaliacao pacientes={pacientes.data?.items} carregando={pacientes.isLoading} erro={pacientes.isError} />
+          <PacientesRecentes className="lg:col-span-2" />
+          <StatusConsole />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 motion-safe:animate-fade-up-delay lg:grid-cols-3">
+          <LastDiagnosisCard className="lg:col-span-2" />
+          <StatusConsole />
+        </div>
+      )}
 
       {clinico ? <LastDiagnosisCard /> : null}
 

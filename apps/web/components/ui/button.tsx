@@ -18,8 +18,8 @@ export const buttonVariants = cva(
         danger: "bg-signal-err/90 text-white hover:bg-signal-err",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-8 px-3 text-xs",
+        default: "h-10 toque:h-11 px-4 py-2",
+        sm: "h-8 toque:h-11 px-3 text-xs",
         lg: "h-11 px-5 text-base",
       },
     },
