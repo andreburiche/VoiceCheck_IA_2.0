@@ -14,7 +14,7 @@ const NAV = [
   { href: "#precisao", label: "Precisão" },
   { href: "#para-quem", label: "Para quem" },
   { href: "#separacao", label: "Canto" },
-  { href: "#privacidade", label: "Privacidade" },
+  { href: "/privacidade", label: "Privacidade" },
 ] as const;
 
 export function SiteHeader() {

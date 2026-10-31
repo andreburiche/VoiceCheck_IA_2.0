@@ -6,7 +6,7 @@ const LINKS = [
   { href: "#separacao", label: "Separação" },
   { href: "#estudio", label: "Estúdio" },
   { href: "#voicecheck", label: "VoiceCheck" },
-  { href: "#privacidade", label: "Privacidade" },
+  { href: "/privacidade", label: "Privacidade" },
   { href: "/login", label: "Entrar" },
   { href: "/register", label: "Criar conta" },
 ] as const;

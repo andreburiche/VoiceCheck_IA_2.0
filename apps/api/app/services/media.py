@@ -105,6 +105,7 @@ def probe_with_ffprobe(path: Path) -> tuple[int | None, int | None, int | None]:
                 "json",
                 "-show_format",
                 "-show_streams",
+                "-protocol_whitelist", "file",
                 str(path),
             ],
             capture_output=True,

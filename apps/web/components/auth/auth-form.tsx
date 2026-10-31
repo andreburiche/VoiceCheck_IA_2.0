@@ -71,6 +71,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
 
   const [perfil, setPerfil] = useState<PerfilProfissional>("musico");
   const [registro, setRegistro] = useState("");
+  const [aceite, setAceite] = useState(false);
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const touch = (k: string) => setTouched((t) => ({ ...t, [k]: true }));
   const fieldErrors = {
@@ -86,14 +87,16 @@ export function AuthForm({ mode }: { mode: Mode }) {
       mode === "register" && perfil === "fonoaudiologo" && !/\d/.test(registro)
         ? "Informe o número do seu registro no conselho (CRFa)."
         : null,
+    aceite: mode === "register" && !aceite ? "Para criar a conta, leia e aceite os Termos e a Política de Privacidade." : null,
   };
   const showErr = (k: keyof typeof fieldErrors) => (touched[k] ? fieldErrors[k] : null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    setTouched({ name: true, email: true, password: true, registro: true });
-    if (fieldErrors.name || fieldErrors.email || fieldErrors.password || fieldErrors.registro) {
-      const first = fieldErrors.name ? "name" : fieldErrors.registro ? "registro" : fieldErrors.email ? "email" : "password";
+    setTouched({ name: true, email: true, password: true, registro: true, aceite: true });
+    if (fieldErrors.name || fieldErrors.email || fieldErrors.password || fieldErrors.registro || fieldErrors.aceite) {
+      const first = fieldErrors.name ? "name" : fieldErrors.registro ? "registro" : fieldErrors.email ? "email"
+        : fieldErrors.password ? "password" : "aceite";
       document.getElementById(first)?.focus();
       return;
     }
@@ -101,7 +104,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
     setLoading(true);
     try {
       if (mode === "register") {
-        await authApi.register({ name, email, password, perfil, ...(perfil === "fonoaudiologo" ? { registro: registro.trim() } : {}) });
+        await authApi.register({ name, email, password, perfil, aceite_privacidade: true, ...(perfil === "fonoaudiologo" ? { registro: registro.trim() } : {}) });
         router.push("/dashboard");
       } else {
         const res = await authApi.login({ email, password });
@@ -290,7 +293,21 @@ export function AuthForm({ mode }: { mode: Mode }) {
             Lembrar meu e-mail
           </label>
         </div>
-      ) : null}
+      ) : (
+        <div className="space-y-1">
+          <label className="flex cursor-pointer items-start gap-2 text-sm text-ink-muted">
+            <input id="aceite" type="checkbox" checked={aceite} onChange={(e) => { setAceite(e.target.checked); touch("aceite"); }}
+              aria-invalid={showErr("aceite") ? true : undefined} aria-describedby={showErr("aceite") ? "aceite-error" : undefined}
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-line accent-accent" data-testid="register-aceite" />
+            <span>
+              Li e aceito os{" "}
+              <Link href="/privacidade" target="_blank" className="font-medium text-accent hover:underline">Termos e a Política de Privacidade</Link>
+              , inclusive o tratamento de dados de saúde de pacientes quando eu usar a avaliação clínica.
+            </span>
+          </label>
+          {showErr("aceite") ? <p id="aceite-error" className="text-sm text-signal-err">{showErr("aceite")}</p> : null}
+        </div>
+      )}
 
       {error ? (
         <p id="auth-error" role="alert" className="rounded-lg border border-signal-err/30 bg-signal-err/10 px-3 py-2 text-sm text-signal-err">

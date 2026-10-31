@@ -16,7 +16,9 @@ _DEV_ENVS = {"development", "dev", "local", "test"}
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    app_env: str = "development"
+    #: Sem APP_ENV definido, vale produção: falha fechada (exige segredos fortes, cookie Secure e não cria
+    #: contas de teste). O ambiente local declara APP_ENV=development no docker-compose.
+    app_env: str = "production"
     app_name: str = "Estúdio Musical"
     public_web_url: str = "http://localhost:3000"
     public_api_url: str = "http://localhost:8000"
@@ -58,6 +60,8 @@ class Settings(BaseSettings):
 
     # Rate limits (0 = desligado). Janela em segundos.
     rate_limit_auth: int = 20
+    #: Tentativas de login por conta (qualquer IP) em 15 minutos.
+    rate_limit_login_conta: int = 10
     rate_limit_auth_window_sec: int = 60
     rate_limit_upload: int = 30
     rate_limit_upload_window_sec: int = 60
@@ -93,6 +97,10 @@ class Settings(BaseSettings):
     # provedor "openai": serviço compatível (LM Studio, Groq, OpenRouter...)
     ia_texto_url: str = ""
     ia_texto_chave: str = ""
+    #: Provedor de IA fora deste computador/servidor (Anthropic, OpenAI-compatível na internet) recebe
+    #: texto de documento clínico: transferência de dado de saúde (LGPD art. 11 e 33). Só liga com
+    #: este aceite explícito, depois de contrato com o provedor e informação ao paciente.
+    ia_texto_transferencia_autorizada: bool = False
 
     @model_validator(mode="after")
     def _check_production_secrets(self) -> "Settings":

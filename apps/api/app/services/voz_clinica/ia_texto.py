@@ -46,11 +46,54 @@ INSTRUCAO_ACAO: dict[str, str] = {
 }
 
 
+_HOSTS_LOCAIS = {"localhost", "127.0.0.1", "::1", "ollama", "host.docker.internal"}
+
+
+def provedor_externo(settings, prov: str) -> bool:
+    """O texto sai do computador/servidor? Ollama e um serviço "openai" em endereço local, não."""
+    if prov == "anthropic":
+        return True
+    if prov == "ollama":
+        url = settings.ollama_url
+    else:
+        url = getattr(settings, "ia_texto_url", "") or ""
+    from urllib.parse import urlparse
+
+    host = (urlparse(url).hostname or "").lower()
+    privado = host.startswith(("10.", "192.168.")) or any(host.startswith(f"172.{n}.") for n in range(16, 32))
+    return not (host in _HOSTS_LOCAIS or privado)
+
+
+import re as _re
+
+_PADROES_PESSOAIS = [
+    (_re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+"), "[E-MAIL]"),
+    (_re.compile(r"\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b"), "[CPF]"),
+    (_re.compile(r"\b\d{3}\s?\d{4}\s?\d{4}\s?\d{4}\b"), "[CNS]"),
+    (_re.compile(r"(?:\+?55\s?)?\(?\b\d{2}\)?\s?9?\d{4}[-\s]?\d{4}\b"), "[TELEFONE]"),
+    (_re.compile(r"\b\d{5}-?\d{3}\b"), "[CEP]"),
+]
+_DATA = _re.compile(r"\b\d{1,2}/\d{1,2}/\d{2,4}\b")
+
+
+def anonimizar(texto: str, externo: bool) -> str:
+    """Tira identificadores diretos antes de mandar o texto à IA (o navegador já troca o nome).
+    Para provedor externo, tira também as datas (podem ser a data de nascimento)."""
+    for padrao, marca in _PADROES_PESSOAIS:
+        texto = padrao.sub(marca, texto)
+    return _DATA.sub("[DATA]", texto) if externo else texto
+
+
 def configuracao(settings) -> dict:
     """{disponivel, provedor, modelo} — para a tela saber se mostra os botões de IA."""
     prov = (settings.ia_texto_provedor or "").strip().lower()
     if prov not in PROVEDORES:
         return {"disponivel": False, "provedor": None, "modelo": None}
+    if provedor_externo(settings, prov) and not getattr(settings, "ia_texto_transferencia_autorizada", False):
+        return {"disponivel": False, "provedor": prov, "modelo": None,
+                "motivo": ("Este provedor de IA fica fora do seu computador: o texto clínico sairia daqui (LGPD). "
+                           "Use o Ollama local ou, com contrato e aviso ao paciente, defina "
+                           "IA_TEXTO_TRANSFERENCIA_AUTORIZADA=1.")}
     if prov == "anthropic" and not settings.anthropic_api_key.strip():
         return {"disponivel": False, "provedor": prov, "modelo": None, "motivo": "Falta ANTHROPIC_API_KEY."}
     if prov == "openai" and not (getattr(settings, "ia_texto_url", "") or "").strip():
@@ -121,6 +164,9 @@ def gerar(settings, acao: str, texto: str, modelo_documento: str, pedido: str | 
     conf = configuracao(settings)
     if not conf["disponivel"]:
         raise LookupError("IA de texto desligada")
+    externo = provedor_externo(settings, conf["provedor"])
+    texto = anonimizar(texto, externo)
+    pedido = anonimizar(pedido, externo) if pedido else pedido
     system, user = montar_prompt(acao, texto, modelo_documento, pedido)
     import httpx  # só aqui: o resto do módulo não depende de rede
 

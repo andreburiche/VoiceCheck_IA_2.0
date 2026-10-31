@@ -1,5 +1,7 @@
 "use client";
 
+import { NavegacaoClinica } from "@/components/voz-clinica/navegacao-clinica";
+import { CHAVE_ABRIR_PACIENTE } from "@/lib/voz-clinica-agenda";
 import { Download, FileText, History, LoaderCircle, Mic, NotebookPen, Square, Trash2, Upload } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
@@ -1033,6 +1035,13 @@ export function AvaliacaoClinica() {
       .catch(() => undefined); // a lista é só sugestão; a tela funciona sem ela
   }, []);
   useEffect(recarregarPacientes, [recarregarPacientes]);
+  useEffect(() => {
+    // vindo da lista de pacientes ou da agenda: já abre o paciente (o nome não passa pela URL — LGPD)
+    try {
+      const pedido = sessionStorage.getItem(CHAVE_ABRIR_PACIENTE);
+      if (pedido) { sessionStorage.removeItem(CHAVE_ABRIR_PACIENTE); setPaciente(pedido); }
+    } catch { /* sem storage */ }
+  }, []);
 
   const aoSalvar = useCallback(() => {
     setVersao((v) => v + 1);
@@ -1042,6 +1051,7 @@ export function AvaliacaoClinica() {
   return (
     <div className="space-y-5">
       <header>
+        <NavegacaoClinica className="mb-3" />
         <h1 className="font-display text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">Avaliação clínica</h1>
         <p className="mt-2 max-w-[70ch] text-base text-ink-muted">
           Anamnese, medidas acústicas, protocolos de autoavaliação e escala perceptiva, com o histórico de cada paciente. Não é diagnóstico médico.

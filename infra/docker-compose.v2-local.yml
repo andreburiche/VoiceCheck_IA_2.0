@@ -54,8 +54,9 @@ services:
       PUBLIC_API_URL: http://127.0.0.1:8110
       PUBLIC_WEB_URL: http://localhost:3100
       CORS_ORIGINS: http://localhost:3100,http://127.0.0.1:3100
+    # portas presas ao próprio computador: ninguém da rede local acessa banco, API ou IA
     ports:
-      - "8110:8000"
+      - "127.0.0.1:8110:8000"
     volumes:
       - ../apps/api:/app
       - vc2l_audio:/data/audio
@@ -71,13 +72,14 @@ services:
   # IA de texto local e gratuita (aba Documentos). O modelo é baixado uma vez pelo baixar-ia-local.bat
   # e fica no volume vc2l_ollama; nada do texto sai do computador.
   ollama:
+    # só o próprio computador alcança a porta (127.0.0.1)
     image: ollama/ollama:latest
     container_name: vc2l-ollama
     restart: unless-stopped
     volumes:
       - vc2l_ollama:/root/.ollama
     ports:
-      - "11435:11434"
+      - "127.0.0.1:11435:11434"
 
   web:
     build:
@@ -94,7 +96,7 @@ services:
       NEXT_PUBLIC_API_URL: http://127.0.0.1:8110
       NEXT_PUBLIC_APP_URL: http://localhost:3100
     ports:
-      - "3100:3000"
+      - "127.0.0.1:3100:3000"
     volumes:
       - ../apps/web:/app
       - vc2l_node_modules:/app/node_modules

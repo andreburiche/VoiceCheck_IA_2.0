@@ -157,6 +157,9 @@ class User(Base, TimestampMixin):
     profile_data: Mapped[Optional[dict[str, Any]]] = mapped_column(JSON, nullable=True)
     #: Foto do profissional no storage (perfil/<id>/...).
     photo_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    #: Quando aceitou os Termos e a Política de Privacidade, e qual versão (LGPD art. 8º e 9º).
+    privacy_accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    privacy_version: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
 
     @property
     def has_photo(self) -> bool:
@@ -623,6 +626,34 @@ class HomePracticePlan(Base, TimestampMixin):
     exercises: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ClinicalAppointment(Base, TimestampMixin):
+    """Consulta agendada na avaliação clínica (VoiceCheck IA 2.0).
+
+    Ligada ao paciente pelo mesmo nome/código das avaliações (único por profissional). Guarda só o
+    necessário para a agenda: data, duração, tipo, modalidade, situação e uma observação curta.
+    """
+
+    __tablename__ = "clinical_appointments"
+    __table_args__ = (
+        Index("ix_clinical_appointments_owner_start", "owner_id", "starts_at"),
+        Index("ix_clinical_appointments_owner_patient", "owner_id", "patient_name", "starts_at"),
+    )
+
+    id: Mapped[str] = mapped_column(CHAR(36), primary_key=True, default=_uuid)
+    owner_id: Mapped[str] = mapped_column(CHAR(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    patient_name: Mapped[str] = mapped_column(NOME_PACIENTE, nullable=False)
+    #: Início em UTC (o navegador mostra no fuso de quem vê).
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    duration_min: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    #: avaliacao | terapia | retorno | reavaliacao | outro
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="terapia")
+    #: presencial | online | domiciliar
+    modality: Mapped[str] = mapped_column(String(16), nullable=False, default="presencial")
+    #: agendada | confirmada | realizada | faltou | cancelada
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="agendada")
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class StoragePendingDelete(Base, TimestampMixin):

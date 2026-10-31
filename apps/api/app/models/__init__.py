@@ -1,6 +1,7 @@
 from app.models.entities import (
     AuditLog,
     AudioAsset,
+    ClinicalAppointment,
     ClinicalEvaluation,
     ExportJob,
     HomePracticePlan,
@@ -27,6 +28,7 @@ from app.models.entities import (
 )
 
 __all__ = [
+    "ClinicalAppointment",
     "User",
     "Plan",
     "Subscription",

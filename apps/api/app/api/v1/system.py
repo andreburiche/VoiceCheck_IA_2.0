@@ -271,7 +271,6 @@ def _hardware_snapshot() -> dict:
     return {
         "platform": platform.platform(),
         "arch": platform.machine(),
-        "hostname": platform.node(),
         "cpu_count": os.cpu_count() or 0,
         "ram_total_bytes": _ram_total_bytes(),
         "gpu_available": bool(cuda["cuda_available"]) or "gpu" in adapter.lower(),
@@ -281,14 +280,15 @@ def _hardware_snapshot() -> dict:
         "gpu_memory_total": cuda.get("gpu_memory_total"),
         "cuda_driver": cuda.get("cuda_driver"),
         "cuda_probe_error": cuda.get("probe_error"),
-        "storage_path": settings.local_storage_path,
         "app_version": "0.1.0",
     }
 
 
 @router.get("/status")
 def system_status(_user: CurrentUser) -> dict:
-    """Metadados de runtime (sem segredos) — honestidade na UI. Exige login."""
+    """Metadados de runtime (sem segredos) — honestidade na UI. Exige login.
+
+    Nome da máquina e pasta do servidor só para administrador (ajudam a mapear o servidor num ataque)."""
     adapter = settings.separation_adapter
     contract = settings.allow_contract_stems and adapter == "contract"
     disk = _disk_stats()
@@ -307,6 +307,8 @@ def system_status(_user: CurrentUser) -> dict:
         "models": _separation_models(),
         **disk,
         **hw,
+        **({"hostname": platform.node(), "storage_path": settings.local_storage_path}
+           if _user.role.value == "admin" else {}),
         "message": (
             "Stems de contrato são silêncio alinhado (smoke de pipeline), não Demucs real."
             if contract

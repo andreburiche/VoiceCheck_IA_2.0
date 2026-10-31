@@ -10,7 +10,7 @@ from app.services.voz_clinica import ia_texto
 
 def _conf(**kw):
     base = {"ia_texto_provedor": "desligado", "ia_texto_modelo": "", "anthropic_api_key": "", "ollama_url": "http://ollama:11434",
-            "ia_texto_url": "", "ia_texto_chave": ""}
+            "ia_texto_url": "", "ia_texto_chave": "", "ia_texto_transferencia_autorizada": True}
     return SimpleNamespace(**{**base, **kw})
 
 
@@ -108,3 +108,34 @@ def test_verificar_ollama_fora_do_ar_e_sem_modelo():
     assert v["disponivel"] is True and v["modelo"] == "qwen2.5:3b"
     # outros provedores não fazem rede na verificação
     assert ia_texto.verificar(_conf())["disponivel"] is False
+
+
+def test_provedor_externo_so_com_transferencia_autorizada():
+    """LGPD art. 33: texto clínico só sai do computador com aceite explícito na configuração."""
+    fora = _conf(ia_texto_provedor="anthropic", anthropic_api_key="sk", ia_texto_transferencia_autorizada=False)
+    c = ia_texto.configuracao(fora)
+    assert c["disponivel"] is False and "IA_TEXTO_TRANSFERENCIA_AUTORIZADA" in c["motivo"]
+    groq = _conf(ia_texto_provedor="openai", ia_texto_url="https://api.groq.com/openai/v1", ia_texto_transferencia_autorizada=False)
+    assert ia_texto.configuracao(groq)["disponivel"] is False
+    # local continua livre: Ollama no Docker e serviço compatível em localhost/rede privada
+    assert ia_texto.configuracao(_conf(ia_texto_provedor="ollama", ia_texto_transferencia_autorizada=False))["disponivel"] is True
+    for url in ("http://localhost:1234/v1", "http://192.168.0.10:8080/v1", "http://host.docker.internal:1234/v1"):
+        assert ia_texto.configuracao(_conf(ia_texto_provedor="openai", ia_texto_url=url,
+                                           ia_texto_transferencia_autorizada=False))["disponivel"] is True
+
+
+def test_anonimiza_identificadores_antes_de_enviar():
+    pedidos: list = []
+    cli = _cliente({"content": [{"type": "text", "text": "ok"}]}, guardar=pedidos)
+    texto = "Contato (81) 99876-5432, ana@ex.com, CPF 123.456.789-09, nascida em 03/04/1980. Jitter 1,2%."
+    ia_texto.gerar(_conf(ia_texto_provedor="anthropic", anthropic_api_key="sk"), "melhorar", texto, "relatorio", cliente=cli)
+    enviado = json.loads(pedidos[0].content)["messages"][0]["content"]
+    for dado in ("99876-5432", "ana@ex.com", "123.456.789-09", "03/04/1980"):
+        assert dado not in enviado
+    assert "[TELEFONE]" in enviado and "[DATA]" in enviado and "Jitter 1,2%" in enviado
+    # no Ollama local a data fica (não sai do computador), o resto sai igual
+    local: list = []
+    ia_texto.gerar(_conf(ia_texto_provedor="ollama"), "melhorar", texto, "relatorio",
+                   cliente=_cliente({"message": {"content": "ok"}}, guardar=local))
+    corpo = json.loads(local[0].content)["messages"][-1]["content"]
+    assert "03/04/1980" in corpo and "ana@ex.com" not in corpo

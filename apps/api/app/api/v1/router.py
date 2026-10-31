@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1 import (
     admin,
+    agenda_clinica,
     audio_assets,
     auth,
     practice,
@@ -33,6 +34,7 @@ api_router.include_router(vocal.router)
 api_router.include_router(voicecheck_diagnoses.router)
 api_router.include_router(voicecheck_enhance.router)
 api_router.include_router(voicecheck.router)
+api_router.include_router(agenda_clinica.router)
 api_router.include_router(voz_clinica.router)
 api_router.include_router(pratica_casa.router)
 api_router.include_router(admin.router)

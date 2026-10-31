@@ -131,11 +131,17 @@ async def local_upload_put(
     if declared_len and declared_len.isdigit() and int(declared_len) > settings.max_upload_bytes:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Arquivo muito grande")
 
-    body = await request.body()
+    # lê em blocos e para ao passar do limite: sem Content-Length (chunked) o corpo inteiro iria para a memória
+    partes: list[bytes] = []
+    total = 0
+    async for bloco in request.stream():
+        total += len(bloco)
+        if total > settings.max_upload_bytes:
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Arquivo muito grande")
+        partes.append(bloco)
+    body = b"".join(partes)
     if not body:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Corpo vazio")
-    if len(body) > settings.max_upload_bytes:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Arquivo muito grande")
 
     storage.put_bytes(key, body, ct)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

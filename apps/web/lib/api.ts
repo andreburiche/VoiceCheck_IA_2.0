@@ -66,6 +66,9 @@ export type User = {
   tem_foto?: boolean;
   /** pode abrir a avaliação clínica (fonoaudiólogo ou administrador) */
   acesso_clinico?: boolean;
+  /** Quando aceitou a Política de Privacidade (null = ainda não aceitou). */
+  privacidade_aceita_em?: string | null;
+  privacidade_versao?: string | null;
 };
 
 export const ROTULO_PERFIL: Record<PerfilProfissional, string> = {
@@ -283,7 +286,7 @@ export async function sha256Hex(file: File | Blob): Promise<string> {
 }
 
 export const authApi = {
-  register: (body: { email: string; password: string; name: string; perfil?: PerfilProfissional; registro?: string }) =>
+  register: (body: { email: string; password: string; name: string; perfil?: PerfilProfissional; registro?: string; aceite_privacidade?: boolean }) =>
     apiFetch<AuthResponse>("/api/v1/auth/register", { method: "POST", json: body }),
   login: (body: { email: string; password: string }) =>
     apiFetch<AuthResponse>("/api/v1/auth/login", { method: "POST", json: body }),
@@ -312,6 +315,7 @@ export type UsageSnapshot = {
 };
 
 export const perfilApi = {
+  aceitarPrivacidade: () => apiFetch<User>("/api/v1/users/me/aceite-privacidade", { method: "POST" }),
   salvar: (body: { name: string; perfil: PerfilProfissional | null } & PerfilDados) =>
     apiFetch<User>("/api/v1/users/me/perfil", { method: "PUT", json: body }),
   enviarFoto: (arquivo: Blob, nome = "foto.jpg") => {
@@ -339,6 +343,7 @@ export const systemApi = {
 };
 
 export const adminApi = {
+  conformidade: () => apiFetch<Record<string, unknown>>("/api/v1/admin/conformidade"),
   users: () =>
     apiFetch<{ items: Array<{ id: string; email: string; name: string; role: string; created_at: string }>; total: number }>(
       "/api/v1/admin/users",

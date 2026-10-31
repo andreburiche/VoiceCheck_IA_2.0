@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { AvisoPrivacidade } from "@/components/layout/aviso-privacidade";
 import { LocalStatusFooter } from "@/components/layout/local-status-footer";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
@@ -77,7 +78,10 @@ export function AppShell({ children, userName, isAdmin, acessoClinico }: AppShel
           sidebarCollapsed={collapsed}
           onSidebarCollapseToggle={() => onCollapsedChange(!collapsed)}
         />
-        <main className="flex-1 p-4 md:p-6 lg:p-8">{children}</main>
+        <main className="flex-1 p-4 md:p-6 lg:p-8">
+          <AvisoPrivacidade />
+          {children}
+        </main>
         {isAdmin ? <LocalStatusFooter /> : null}
       </div>
     </div>

@@ -41,6 +41,23 @@ def atualizar_perfil(entrada: PerfilEntrada, user: CurrentUser, db: DbSession) -
     return UserResponse.model_validate(user)
 
 
+@router.post("/me/aceite-privacidade", response_model=UserResponse, dependencies=[Depends(verify_csrf)])
+def aceitar_privacidade(request: Request, user: CurrentUser, db: DbSession) -> UserResponse:
+    """Registra o aceite da versão atual dos Termos e da Política de Privacidade (LGPD art. 8º e 9º)."""
+    from datetime import UTC, datetime
+
+    from app.api.v1.auth import VERSAO_PRIVACIDADE
+    from app.services.audit import write_audit
+
+    user.privacy_accepted_at = datetime.now(UTC)
+    user.privacy_version = VERSAO_PRIVACIDADE
+    write_audit(db, action="auth.aceite_privacidade", resource_type="user", resource_id=user.id, actor_id=user.id,
+                request=request, meta={"versao": VERSAO_PRIVACIDADE})
+    db.commit()
+    db.refresh(user)
+    return UserResponse.model_validate(user)
+
+
 @router.post("/me/foto", response_model=UserResponse, dependencies=[Depends(verify_csrf)])
 async def enviar_foto(request: Request, user: CurrentUser, db: DbSession, file: UploadFile = File(...)) -> UserResponse:
     """Foto do profissional (JPG, PNG ou WebP, até 5 MB). Substitui a anterior."""

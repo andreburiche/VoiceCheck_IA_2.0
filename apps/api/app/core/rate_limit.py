@@ -47,10 +47,12 @@ def client_ip(request: Request) -> str:
     return peer
 
 
-def enforce_rate_limit(request: Request, *, bucket: str, limit: int, window_sec: int) -> None:
+def enforce_rate_limit(request: Request, *, bucket: str, limit: int, window_sec: int, chave: str | None = None) -> None:
+    """Conta por IP; com `chave`, conta por ela (ex.: hash do e-mail) — vale para qualquer IP,
+    o que segura ataques distribuídos contra uma conta (credential stuffing por botnet)."""
     if limit <= 0:
         return
-    ip = client_ip(request)
+    ip = chave or client_ip(request)
     key = f"rl:{bucket}:{ip}"
     r = _get_redis()
     if r is not None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import shutil
+import logging
 import subprocess
 import time
 import wave
@@ -14,6 +15,9 @@ from typing import Any
 
 SAFE_JOB_ID = re.compile(r"^[a-f0-9-]{36}$", re.I)
 ALLOWED_EXT = {".mp3", ".wav", ".flac", ".m4a", ".mp4", ".mov"}
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -70,6 +74,15 @@ def job_dir(storage_root: Path, user_id: str, job_id: str) -> Path:
     return path
 
 
+#: O FFmpeg descobre o formato pelo conteúdo, não pela extensão: um ".mp3" que é na verdade uma
+#: playlist HLS ou uma lista "concat" faria o servidor buscar URLs ou ler outros arquivos (SSRF /
+#: leitura local). Só arquivos locais e só os formatos de mídia que o produto aceita.
+ENTRADA_SEGURA = [
+    "-protocol_whitelist", "file",
+    "-format_whitelist", "mov,mp4,m4a,3gp,3g2,mj2,matroska,webm,wav,w64,mp3,ogg,flac,aac,avi,aiff,caf",
+]
+
+
 def probe_media(path: Path) -> VoiceCheckProbe:
     try:
         result = subprocess.run(
@@ -81,6 +94,7 @@ def probe_media(path: Path) -> VoiceCheckProbe:
                 "json",
                 "-show_format",
                 "-show_streams",
+                *ENTRADA_SEGURA,
                 str(path),
             ],
             capture_output=True,
@@ -166,6 +180,7 @@ def extract_audio_wav(source: Path, dest: Path, *, sample_rate: int = 44100) -> 
     cmd = [
         "ffmpeg",
         "-y",
+        *ENTRADA_SEGURA,
         "-i",
         str(source),
         "-vn",
@@ -185,7 +200,9 @@ def extract_audio_wav(source: Path, dest: Path, *, sample_rate: int = 44100) -> 
         raise RuntimeError("FFmpeg excedeu o tempo limite") from exc
 
     if result.returncode != 0 or not dest.is_file():
-        raise RuntimeError(f"FFmpeg falhou ao extrair áudio: {(result.stderr or '')[-1200:]}")
+        # o stderr traz caminhos do servidor: vai para o log, não para o usuário
+        logger.warning("FFmpeg falhou ao extrair áudio: %s", (result.stderr or "")[-1200:])
+        raise RuntimeError("Não foi possível ler o áudio deste arquivo. Tente outro formato (WAV, MP3, MP4).")
     return dest
 
 

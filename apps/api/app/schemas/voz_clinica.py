@@ -238,6 +238,10 @@ class PacienteResumo(BaseModel):
     ultima: DataUtc
     #: Há cadastro (data de nascimento, contato...) para este paciente.
     cadastro: bool = False
+    #: Próxima consulta agendada (não cancelada) a partir de agora, se houver.
+    proxima_consulta: DataUtc | None = None
+    #: Consultas na agenda (todas as situações).
+    consultas: int = 0
 
 
 Sexo = Literal["feminino", "masculino", "outro"]
@@ -577,3 +581,50 @@ class EggEntrada(BaseModel):
         if self.ciclos > self.duracao_s * self.f0_media_hz * 1.5 + 5:
             raise ValueError("Mais ciclos do que cabem na duração e na F0 informadas")
         return self
+
+
+# --- Agenda de consultas ---------------------------------------------------------------------
+
+TipoConsulta = Literal["avaliacao", "terapia", "retorno", "reavaliacao", "outro"]
+ModalidadeConsulta = Literal["presencial", "online", "domiciliar"]
+SituacaoConsulta = Literal["agendada", "confirmada", "realizada", "faltou", "cancelada"]
+
+
+def _inicio_valido(d: datetime) -> datetime:
+    if d.tzinfo is None:
+        raise ValueError("Informe o horário com fuso (ex.: 2026-11-03T14:00:00-03:00)")
+    d = d.astimezone(timezone.utc)
+    if not (2000 <= d.year <= 2100):
+        raise ValueError("Data fora do intervalo aceito")
+    return d.replace(second=0, microsecond=0)
+
+
+class ConsultaEntrada(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    paciente: str = Field(min_length=1, max_length=120)
+    inicio: Annotated[datetime, AfterValidator(_inicio_valido)]
+    duracao_min: int = Field(default=50, ge=10, le=480)
+    tipo: TipoConsulta = "terapia"
+    modalidade: ModalidadeConsulta = "presencial"
+    situacao: SituacaoConsulta = "agendada"
+    observacoes: str | None = Field(default=None, max_length=2000)
+    #: Marcar mesmo que outro horário (não cancelado) se sobreponha.
+    permitir_conflito: bool = False
+
+
+class ConsultaOut(BaseModel):
+    id: str
+    paciente: str
+    inicio: DataUtc
+    fim: DataUtc
+    duracao_min: int
+    tipo: TipoConsulta
+    modalidade: ModalidadeConsulta
+    situacao: SituacaoConsulta
+    observacoes: str | None = None
+    atualizado_em: DataUtc
+
+
+class ConsultaLista(BaseModel):
+    items: list[ConsultaOut]

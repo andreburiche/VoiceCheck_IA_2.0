@@ -22,14 +22,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from sqlalchemy import delete, func, select
+from sqlalchemy import and_, case, delete, func, select
 
 from app.api.v1.voicecheck import _read_limited
 from app.core.config import get_settings
-from app.core.deps import CurrentUser, DbSession, require_clinico, verify_csrf
+from app.core.deps import CurrentUser, DbSession, require_clinico_registrado, verify_csrf
 from app.core.rate_limit import enforce_rate_limit
 from app.api.v1.pratica_casa import plano_out, sessoes_por_plano
-from app.models import ClinicalEvaluation, HomePracticePlan, User, VoicePatient
+from app.models import ClinicalAppointment, ClinicalEvaluation, HomePracticePlan, User, VoicePatient
 from app.schemas.voz_clinica import (
     AnamneseEntrada,
     AnotacaoEntrada,
@@ -65,6 +65,7 @@ from app.services.voz_clinica.audio import limitar_duracao
 from app.services.voz_clinica.cepstral import analisar_cepstral
 from app.services.voz_clinica.ddk import analisar_ddk
 from app.services.voz_clinica import ia_texto, manipulacao, midias
+from app.services.voz_clinica.acesso import rastro_paciente
 from app.services.voz_clinica.exclusao import apagar_ou_agendar, tentar_pendentes
 from app.services.voz_clinica.fala import analisar_fala
 from app.services.voz_clinica.fonetograma import resumir_campo, resumo_em_spl
@@ -77,7 +78,7 @@ from app.services.voz_clinica.protocolos import PROTOCOLOS, ErroProtocolo
 
 logger = logging.getLogger(__name__)
 # Dados de saúde de pacientes: só fonoaudiólogo (perfil) ou administrador.
-router = APIRouter(prefix="/voz-clinica", tags=["voz-clinica"], dependencies=[Depends(require_clinico)])
+router = APIRouter(prefix="/voz-clinica", tags=["voz-clinica"], dependencies=[Depends(require_clinico_registrado)])
 settings = get_settings()
 
 #: Gravação de vogal sustentada ou fala curta: 30 MB cobre ~5 min de WAV 48 kHz.
@@ -794,11 +795,37 @@ def listar_pacientes(user: CurrentUser, db: DbSession) -> PacienteLista:
         .limit(1000)
     ).all()
     cadastros = {p.name: p for p in db.scalars(select(VoicePatient).where(VoicePatient.owner_id == user.id)).all()}
+    agora = datetime.now(timezone.utc)
+    # agenda: quantas consultas e a próxima (não cancelada) de cada paciente
+    agenda: dict[str, tuple[int, datetime | None, datetime | None]] = {}
+    for n, total, proxima, criada in db.execute(
+        select(
+            ClinicalAppointment.patient_name,
+            func.count(ClinicalAppointment.id),
+            func.min(case((and_(ClinicalAppointment.starts_at >= agora,
+                                ClinicalAppointment.status.in_(("agendada", "confirmada"))),
+                           ClinicalAppointment.starts_at))),
+            func.max(ClinicalAppointment.created_at),
+        )
+        .where(ClinicalAppointment.owner_id == user.id)
+        .group_by(ClinicalAppointment.patient_name)
+    ).all():
+        agenda[n] = (total, proxima, criada)
     itens = [PacienteResumo(paciente=n, avaliacoes=c, ultima=u, cadastro=n in cadastros) for n, c, u in linhas]
     vistos = {i.paciente for i in itens}
-    # cadastrados que ainda não têm avaliação também aparecem na lista
+    # cadastrados (ou só agendados) que ainda não têm avaliação também aparecem na lista
     itens += [PacienteResumo(paciente=n, avaliacoes=0, ultima=p.updated_at, cadastro=True)
               for n, p in cadastros.items() if n not in vistos]
+    vistos |= set(cadastros)
+    itens += [PacienteResumo(paciente=n, avaliacoes=0, ultima=a[2] or agora, cadastro=False)
+              for n, a in agenda.items() if n not in vistos]
+    for i in itens:
+        if i.paciente in agenda:
+            total, proxima, _ = agenda[i.paciente]
+            # atribuição não passa pelo validador: o fuso (UTC) entra aqui, senão o navegador lê como hora local
+            i.consultas = total
+            if proxima is not None:
+                i.proxima_consulta = proxima.replace(tzinfo=timezone.utc) if proxima.tzinfo is None else proxima
     return PacienteLista(items=itens)
 
 
@@ -853,8 +880,7 @@ def _nome_obrigatorio(paciente: str | None) -> str:
 
 def _rastro(user_id: str, nome: str) -> str:
     """Identifica o paciente no log de auditoria sem gravar o nome (minimização)."""
-    # HMAC com segredo do servidor: sem o segredo, não dá para testar nomes num dicionário
-    return hmac.new(settings.jwt_secret.encode("utf-8"), f"{user_id}:{nome}".encode("utf-8"), hashlib.sha256).hexdigest()[:16]
+    return rastro_paciente(user_id, nome)
 
 
 def _dados_exportacao(db: DbSession, user: CurrentUser, nome: str) -> tuple[dict, list[ClinicalEvaluation], int]:
@@ -870,7 +896,12 @@ def _dados_exportacao(db: DbSession, user: CurrentUser, nome: str) -> tuple[dict
         .order_by(HomePracticePlan.created_at)
     ).all()
     cadastro = _cadastro(db, user, nome)
-    if not rows and not planos and cadastro is None:
+    consultas = db.scalars(
+        select(ClinicalAppointment)
+        .where(ClinicalAppointment.owner_id == user.id, ClinicalAppointment.patient_name == nome)
+        .order_by(ClinicalAppointment.starts_at)
+    ).all()
+    if not rows and not planos and cadastro is None and not consultas:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nada guardado para este paciente")
     total, ultima = sessoes_por_plano(db, user.id, [p.id for p in planos])
     corpo = {
@@ -882,6 +913,11 @@ def _dados_exportacao(db: DbSession, user: CurrentUser, nome: str) -> tuple[dict
         # o segredo dos links nunca é exportado (só o hash existe no banco, e ele também fica fora)
         "planos_pratica": [plano_out(p, total, ultima).model_dump(mode="json") for p in planos],
         "gravacoes_guardadas": sum(1 for r in rows if r.audio_key),
+        "consultas": [{
+            "inicio": (c.starts_at if c.starts_at.tzinfo else c.starts_at.replace(tzinfo=timezone.utc)).isoformat(),
+            "duracao_min": c.duration_min, "tipo": c.kind, "modalidade": c.modality, "situacao": c.status,
+            "observacoes": c.notes,
+        } for c in consultas],
     }
     return corpo, rows, len(planos)
 
@@ -1005,17 +1041,20 @@ def excluir_paciente(request: Request, user: CurrentUser, db: DbSession, pacient
     n_aval = db.execute(delete(ClinicalEvaluation).where(*filtro_aval)).rowcount or 0
     n_planos = db.execute(delete(HomePracticePlan).where(*filtro_plano)).rowcount or 0
     n_cad = db.execute(delete(VoicePatient).where(VoicePatient.owner_id == user.id, VoicePatient.name == nome)).rowcount or 0
-    if not n_aval and not n_planos and not n_cad:
+    n_cons = db.execute(delete(ClinicalAppointment).where(
+        ClinicalAppointment.owner_id == user.id, ClinicalAppointment.patient_name == nome)).rowcount or 0
+    if not n_aval and not n_planos and not n_cad and not n_cons:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nada guardado para este paciente")
     write_audit(
         db, action="voz_clinica.paciente_excluido", resource_type="paciente", actor_id=user.id, request=request,
-        meta={"paciente": _rastro(user.id, nome), "avaliacoes": n_aval, "planos": n_planos, "gravacoes": len(chaves)},
+        meta={"paciente": _rastro(user.id, nome), "avaliacoes": n_aval, "planos": n_planos, "gravacoes": len(chaves),
+              "consultas": n_cons},
     )
     db.commit()
     _apagar_audios(db, chaves)
     return {"avaliacoes_excluidas": n_aval, "planos_excluidos": n_planos, "gravacoes_excluidas": len(chaves),
-            "cadastro_excluido": bool(n_cad)}
+            "cadastro_excluido": bool(n_cad), "consultas_excluidas": n_cons}
 
 
 @router.get("/avaliacoes", response_model=AvaliacaoLista)

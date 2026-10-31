@@ -18,6 +18,7 @@ test.describe("smoke auth", () => {
     await fillControlled(page, "#name", "E2E User");
     await fillControlled(page, "#email", email);
     await fillControlled(page, "#password", "senha12345");
+    await page.getByTestId("register-aceite").check();
     await expect(page.locator("#name")).toHaveValue("E2E User");
 
     const registerResp = page.waitForResponse(

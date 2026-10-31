@@ -34,6 +34,8 @@ class RegisterRequest(BaseModel):
     perfil: Optional[PerfilProfissional] = None
     #: obrigatório para fonoaudiólogo (número do CRFa)
     registro: Optional[str] = Field(default=None, max_length=60)
+    #: Marcou "li e aceito os Termos e a Política de Privacidade" (fica registrado com a versão).
+    aceite_privacidade: bool = False
 
     @model_validator(mode="after")
     def _fono_com_registro(self) -> "RegisterRequest":
@@ -76,6 +78,9 @@ class UserResponse(BaseModel):
     tem_foto: bool = Field(default=False, validation_alias=AliasChoices("tem_foto", "has_photo"))
     #: pode abrir a avaliação clínica (fonoaudiólogo ou administrador)
     acesso_clinico: bool = Field(default=False, validation_alias=AliasChoices("acesso_clinico", "clinical_access"))
+    #: quando aceitou a Política de Privacidade (null = ainda não aceitou)
+    privacidade_aceita_em: Optional[datetime] = Field(default=None, validation_alias=AliasChoices("privacidade_aceita_em", "privacy_accepted_at"))
+    privacidade_versao: Optional[str] = Field(default=None, validation_alias=AliasChoices("privacidade_versao", "privacy_version"))
 
 
 class PerfilEntrada(BaseModel):

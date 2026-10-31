@@ -25,7 +25,10 @@ def write_audit(
     ip = None
     ua = None
     if request is not None:
-        ip = request.client.host if request.client else None
+        # IP real do cliente (atrás de proxy confiável), não o do proxy
+        from app.core.rate_limit import client_ip
+
+        ip = client_ip(request)[:64]
         ua = (request.headers.get("user-agent") or "")[:512] or None
 
     row = AuditLog(

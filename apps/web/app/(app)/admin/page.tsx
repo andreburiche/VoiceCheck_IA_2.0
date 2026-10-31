@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { PainelConformidade } from "@/components/admin/painel-conformidade";
 import { adminApi, authApi } from "@/lib/api";
 
 export default function AdminPage() {
@@ -40,6 +41,8 @@ export default function AdminPage() {
         <h1 className="font-display text-3xl font-bold tracking-[-0.03em] text-ink md:text-4xl">Administração</h1>
         <p className="mt-2 text-base text-ink-muted">Usuários, processamentos e registro de auditoria.</p>
       </div>
+
+      <PainelConformidade />
 
       <section className="space-y-2">
         <h2 className="font-display text-lg text-ink">Usuários ({users.data?.total ?? "…"})</h2>

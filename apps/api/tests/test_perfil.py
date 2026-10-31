@@ -90,3 +90,29 @@ def test_foto_do_profissional() -> None:
     assert c.post("/api/v1/users/me/foto", files={"file": ("x.png", b"GIF89a" + b"0" * 100, "image/png")}).status_code == 415
     assert c.request("DELETE", "/api/v1/users/me/foto").json()["tem_foto"] is False
     assert c.get("/api/v1/users/me/foto").status_code == 404
+
+
+def test_aceite_da_politica_de_privacidade_fica_registrado() -> None:
+    c, reg = _novo({"aceite_privacidade": True})
+    assert reg.status_code == 201
+    u = reg.json()["user"]
+    assert u["privacidade_aceita_em"] and u["privacidade_versao"]
+    c2, reg2 = _novo()
+    assert reg2.json()["user"]["privacidade_aceita_em"] is None
+    r = c2.post("/api/v1/users/me/aceite-privacidade")
+    assert r.status_code == 200 and r.json()["privacidade_aceita_em"] and r.json()["privacidade_versao"]
+
+
+def test_painel_de_conformidade_so_para_admin() -> None:
+    c, _ = _novo()
+    assert c.get("/api/v1/admin/conformidade").status_code == 403
+    adm = httpx.Client(base_url=BASE, timeout=60.0)
+    r = adm.post("/api/v1/auth/login", json={"email": "admin@estudio.local", "password": "senha12345"})
+    if r.status_code != 200:
+        pytest.skip("conta de teste do administrador indisponível")
+    adm.cookies.update(r.cookies)
+    m = adm.get("/api/v1/admin/conformidade")
+    assert m.status_code == 200, m.text
+    corpo = m.json()
+    assert {"acesso", "contas", "dados_de_pacientes"} <= set(corpo)
+    assert corpo["acesso"]["acessos_clinicos_registrados_7d"] >= 0

@@ -18,6 +18,7 @@ test.describe("smoke app autenticado", () => {
     await fillControlled(page, "#name", "E2E App");
     await fillControlled(page, "#email", email);
     await fillControlled(page, "#password", "senha12345");
+    await page.getByTestId("register-aceite").check();
     const reg = page.waitForResponse((r) => r.url().includes("/auth/register") && r.request().method() === "POST");
     await page.getByRole("button", { name: /^Cadastrar$/i }).click();
     expect((await reg).status()).toBe(201);

@@ -314,7 +314,16 @@ export type Avaliacao = {
   anotacao?: string | null;
 };
 
-export type PacienteResumo = { paciente: string; avaliacoes: number; ultima: string; cadastro?: boolean };
+export type PacienteResumo = {
+  paciente: string;
+  avaliacoes: number;
+  ultima: string;
+  cadastro?: boolean;
+  /** Próxima consulta agendada (não cancelada), ISO em UTC. */
+  proxima_consulta?: string | null;
+  /** Consultas na agenda (todas as situações). */
+  consultas?: number;
+};
 
 export type Sexo = "feminino" | "masculino" | "outro";
 /** Cadastro do paciente (só o nome é obrigatório). */
@@ -891,3 +900,57 @@ export const ROTULO_TAREFA: Record<TarefaFala, string> = {
   contagem: "Contagem",
   espontanea: "Fala espontânea",
 };
+
+// --- Agenda de consultas ------------------------------------------------------------------------
+
+export type TipoConsulta = "avaliacao" | "terapia" | "retorno" | "reavaliacao" | "outro";
+export type ModalidadeConsulta = "presencial" | "online" | "domiciliar";
+export type SituacaoConsulta = "agendada" | "confirmada" | "realizada" | "faltou" | "cancelada";
+
+export type Consulta = {
+  id: string;
+  paciente: string;
+  inicio: string;
+  fim: string;
+  duracao_min: number;
+  tipo: TipoConsulta;
+  modalidade: ModalidadeConsulta;
+  situacao: SituacaoConsulta;
+  observacoes: string | null;
+  atualizado_em: string;
+};
+
+export type EntradaConsulta = {
+  paciente: string;
+  /** ISO com fuso (ex.: 2026-11-03T14:00:00-03:00). */
+  inicio: string;
+  duracao_min: number;
+  tipo: TipoConsulta;
+  modalidade: ModalidadeConsulta;
+  situacao: SituacaoConsulta;
+  observacoes?: string | null;
+  permitir_conflito?: boolean;
+};
+
+const AGENDA = `${BASE}/agenda`;
+
+export function listarAgenda(de: Date, ate: Date) {
+  const q = new URLSearchParams({ de: de.toISOString(), ate: ate.toISOString() });
+  return apiFetch<{ items: Consulta[] }>(`${AGENDA}?${q}`);
+}
+
+export function consultasDoPaciente(paciente: string) {
+  return apiFetch<{ items: Consulta[] }>(AGENDA, { headers: cabecalhoPaciente(paciente) });
+}
+
+export function agendarConsulta(c: EntradaConsulta) {
+  return apiFetch<Consulta>(AGENDA, { method: "POST", json: c });
+}
+
+export function atualizarConsulta(id: string, c: EntradaConsulta) {
+  return apiFetch<Consulta>(`${AGENDA}/${encodeURIComponent(id)}`, { method: "PUT", json: c });
+}
+
+export function excluirConsulta(id: string) {
+  return apiFetch<void>(`${AGENDA}/${encodeURIComponent(id)}`, { method: "DELETE" });
+}

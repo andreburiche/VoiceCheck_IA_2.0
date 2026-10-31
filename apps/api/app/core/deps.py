@@ -64,6 +64,14 @@ def require_clinico(user: CurrentUser) -> User:
     )
 
 
+def require_clinico_registrado(request: Request, db: DbSession, user: Annotated[User, Depends(require_clinico)]) -> User:
+    """Como require_clinico, e registra o acesso no log de auditoria (LGPD art. 37)."""
+    from app.services.voz_clinica.acesso import registrar_acesso
+
+    registrar_acesso(request, db, user.id)
+    return user
+
+
 def verify_csrf(
     request: Request,
     em_csrf: Annotated[str | None, Cookie(alias=CSRF_COOKIE)] = None,

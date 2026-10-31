@@ -1,4 +1,5 @@
 import hashlib
+import html
 import logging
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -30,6 +31,8 @@ from app.services.mailer import mail_configured, send_mail
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+#: Versão da Política de Privacidade em vigor (muda quando o texto da página /privacidade mudar).
+VERSAO_PRIVACIDADE = "2026-10-31"
 settings = get_settings()
 
 
@@ -98,6 +101,8 @@ def register(payload: RegisterRequest, response: Response, db: DbSession, reques
         role=UserRole.user,
         profile_kind=payload.perfil,
         profile_data={"registro": payload.registro.strip()} if payload.registro and payload.registro.strip() else None,
+        privacy_accepted_at=datetime.now(UTC) if payload.aceite_privacidade else None,
+        privacy_version=VERSAO_PRIVACIDADE if payload.aceite_privacidade else None,
     )
     db.add(user)
     db.flush()
@@ -109,7 +114,7 @@ def register(payload: RegisterRequest, response: Response, db: DbSession, reques
         resource_id=user.id,
         actor_id=user.id,
         request=request,
-        meta={"email": user.email},
+        meta={"email": user.email, "aceite_privacidade": user.privacy_version},
     )
     db.commit()
     db.refresh(user)
@@ -121,11 +126,24 @@ def register(payload: RegisterRequest, response: Response, db: DbSession, reques
     return AuthResponse(user=UserResponse.model_validate(user), csrf_token=csrf)
 
 
+#: Hash bcrypt de uma senha aleatória: conferido quando o e-mail não existe, para o login levar o
+#: mesmo tempo com ou sem conta (sem isso, a demora revela quais e-mails estão cadastrados).
+_HASH_FICTICIO = hash_password(secrets.token_urlsafe(24))
+
+
+def _chave_conta(email: str) -> str:
+    return hashlib.sha256(email.lower().encode("utf-8")).hexdigest()[:32]
+
+
 @router.post("/login", response_model=AuthResponse)
 def login(payload: LoginRequest, response: Response, db: DbSession, request: Request) -> AuthResponse:
     _auth_rate_limit(request)
+    # por conta, de qualquer IP: 10 tentativas a cada 15 min (segura ataque distribuído a uma conta)
+    enforce_rate_limit(request, bucket="login_conta", limit=settings.rate_limit_login_conta, window_sec=900,
+                       chave=_chave_conta(payload.email))
     user = db.scalar(select(User).where(User.email == payload.email.lower(), User.deleted_at.is_(None)))
-    if not user or not verify_password(payload.password, user.password_hash):
+    senha_ok = verify_password(payload.password, user.password_hash if user else _HASH_FICTICIO)
+    if not user or not senha_ok:
         app_metrics.AUTH_LOGIN_FAILED.inc()
         write_audit(
             db,
@@ -210,7 +228,7 @@ def forgot_password(payload: ForgotPasswordRequest, db: DbSession, request: Requ
             "Se não foi você, ignore este e-mail — sua senha continua a mesma."
         ),
         html=(
-            f"<p>Olá, {user.name}!</p>"
+            f"<p>Olá, {html.escape(user.name)}!</p>"
             f"<p>Recebemos um pedido para criar uma nova senha. O link vale por {minutes} minutos.</p>"
             f'<p><a href="{link}" style="background:#20D9D2;color:#071018;padding:12px 20px;'
             'border-radius:999px;text-decoration:none;font-weight:600">Criar nova senha</a></p>'
@@ -220,10 +238,10 @@ def forgot_password(payload: ForgotPasswordRequest, db: DbSession, request: Requ
     dev_url = None
     if not sent:
         if settings.seed_dev_users:
-            logger.warning("Redefinição de senha (dev, sem SMTP) para %s: %s", user.email, link)
+            logger.warning("Redefinição de senha (dev, sem SMTP) para a conta %s: %s", user.id, link)
             dev_url = link
         else:
-            logger.error("SMTP não configurado: link de redefinição não enviado para %s", user.email)
+            logger.error("SMTP não configurado: link de redefinição não enviado (conta %s)", user.id)
     return ForgotPasswordResponse(message=FORGOT_MESSAGE, dev_reset_url=dev_url)
 
 
