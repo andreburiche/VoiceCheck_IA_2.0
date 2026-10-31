@@ -224,7 +224,7 @@ export function ImportWizard({ projectId, projectName, onComplete }: ImportWizar
           onDrop={onDrop}
           onClick={() => document.getElementById("import-file-input")?.click()}
           className={cn(
-            "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-16 text-center transition-all",
+            "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-16 text-center transition-[border-color,background-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
             dragOver
               ? "border-accent bg-accent/10 shadow-glow"
               : "border-accent/35 bg-canvas/40 hover:border-accent hover:bg-accent/5",

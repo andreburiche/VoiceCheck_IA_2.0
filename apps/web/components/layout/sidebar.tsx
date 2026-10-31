@@ -101,7 +101,7 @@ export function Sidebar({
 
       <nav
         className={cn(
-          "flex flex-1 flex-col overflow-y-auto overflow-x-hidden py-4",
+          "flex flex-1 flex-col overflow-y-auto overscroll-contain overflow-x-hidden py-4",
           rail ? "gap-4 px-1.5" : "gap-6 px-3",
         )}
         aria-label="Principal"

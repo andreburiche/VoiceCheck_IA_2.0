@@ -315,3 +315,13 @@ html.tema-transicao *::after {
 html[data-theme="light"] .nevoa-marca {
   opacity: 0.6;
 }
+
+/* Toque: sem a espera do duplo toque para zoom em botões e links */
+a,
+button,
+summary,
+label,
+[role="button"],
+[role="tab"] {
+  touch-action: manipulation;
+}

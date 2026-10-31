@@ -679,7 +679,7 @@ export function PracticeWorkspace({ projectId }: Props) {
           <div className="space-y-2" aria-live="polite">
             <div className="h-2 overflow-hidden rounded-full bg-canvas-overlay">
               <div
-                className="h-full rounded-full bg-accent transition-all duration-300"
+                className="h-full rounded-full bg-accent transition-[width] duration-300 motion-reduce:transition-none"
                 style={{ width: `${loadPct}%` }}
               />
             </div>

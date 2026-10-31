@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono, Manrope } from "next/font/google";
 
 import { Providers } from "@/components/providers";
@@ -36,6 +36,14 @@ export const metadata: Metadata = {
     icon: BRAND.markSrc,
     apple: BRAND.appleIconSrc,
   },
+};
+
+// Cor da barra do navegador no celular, igual ao fundo de cada tema
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#070B14" },
+    { media: "(prefers-color-scheme: light)", color: "#F1F4F8" },
+  ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

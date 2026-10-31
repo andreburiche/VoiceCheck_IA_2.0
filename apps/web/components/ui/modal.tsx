@@ -41,7 +41,7 @@ export function Modal({ onClose, labelledBy, className, children }: ModalProps) 
       onClick={(e) => {
         if (e.target === ref.current) onClose();
       }}
-      className="fixed inset-0 !m-auto h-fit max-h-[85vh] w-[calc(100%-2rem)] max-w-md overflow-y-auto rounded-2xl border border-line bg-canvas-raised p-0 text-ink shadow-[0_24px_60px_-20px_rgb(var(--c-sombra)/calc(0.8*var(--k-sombra)))] backdrop:bg-black/60"
+      className="fixed inset-0 !m-auto h-fit max-h-[85vh] w-[calc(100%-2rem)] max-w-md overflow-y-auto overscroll-contain rounded-2xl border border-line bg-canvas-raised p-0 text-ink shadow-[0_24px_60px_-20px_rgb(var(--c-sombra)/calc(0.8*var(--k-sombra)))] backdrop:bg-black/60"
     >
       <div className={cn("p-5", className)}>{children}</div>
     </dialog>
